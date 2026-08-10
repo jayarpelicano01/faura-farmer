@@ -1,0 +1,68 @@
+import { prisma } from '@faura-farmer/database';
+import { auth } from '@/lib/auth';
+import { updateCategorySchema } from '@/lib/validations';
+import { badRequest, notFound, ok, unauthorized } from '@/lib/http';
+
+export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
+  const session = await auth();
+  if (!session?.user?.id) return unauthorized();
+
+  const category = await prisma.category.findFirst({
+    where: { id, userId: session.user.id },
+  });
+  if (!category) return notFound('Category not found');
+
+  return ok(category);
+}
+
+export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
+  const session = await auth();
+  if (!session?.user?.id) return unauthorized();
+
+  const category = await prisma.category.findFirst({
+    where: { id, userId: session.user.id },
+  });
+  if (!category) return notFound('Category not found');
+
+  const body = await request.json().catch(() => null);
+  const parsed = updateCategorySchema.safeParse(body);
+  if (!parsed.success) {
+    return badRequest(parsed.error.issues[0]?.message ?? 'Invalid input');
+  }
+
+  if (parsed.data.parentId && parsed.data.parentId !== category.id) {
+    const parent = await prisma.category.findFirst({
+      where: { id: parsed.data.parentId, userId: session.user.id },
+      select: { id: true, type: true },
+    });
+    if (!parent) return badRequest('Parent category not found');
+    const effectiveType = parsed.data.type ?? category.type;
+    if (effectiveType !== parent.type) {
+      return badRequest('Child category must match parent type');
+    }
+  }
+
+  const updated = await prisma.category.update({
+    where: { id: category.id },
+    data: parsed.data,
+  });
+
+  return ok(updated);
+}
+
+export async function DELETE(_request: Request, { params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
+  const session = await auth();
+  if (!session?.user?.id) return unauthorized();
+
+  const category = await prisma.category.findFirst({
+    where: { id, userId: session.user.id },
+  });
+  if (!category) return notFound('Category not found');
+
+  await prisma.category.delete({ where: { id: category.id } });
+
+  return ok({ id: category.id, deleted: true });
+}

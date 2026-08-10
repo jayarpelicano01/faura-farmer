@@ -1,0 +1,167 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+enum AuthProvider {
+  email
+  google
+  facebook
+}
+
+enum AccountType {
+  bank
+  e_wallet
+  cash
+  credit_card
+  investment
+}
+
+enum CategoryType {
+  income
+  expense
+}
+
+enum TransactionType {
+  income
+  expense
+  transfer
+}
+
+enum Frequency {
+  weekly
+  monthly
+  yearly
+}
+
+model User {
+  id           String       @id @default(uuid()) @db.Uuid
+  email        String       @unique
+  passwordHash String?      @map("password_hash")
+  authProvider AuthProvider @default(email) @map("auth_provider")
+  providerId   String?      @map("provider_id")
+  avatarUrl    String?      @map("avatar_url")
+  createdAt    DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  accounts   Account[]
+  categories Category[]
+  budgets    Budget[]
+  goals      Goal[]
+
+  @@map("users")
+}
+
+model Account {
+  id                String      @id @default(uuid()) @db.Uuid
+  userId            String      @map("user_id") @db.Uuid
+  label             String
+  type              AccountType
+  institution       String?
+  externalAccountId String?     @map("external_account_id")
+  currency          String      @default("PHP")
+  startingBalance   Decimal     @default(0) @map("starting_balance") @db.Decimal(14, 2)
+  color             String?
+  icon              String?
+  isArchived        Boolean     @default(false) @map("is_archived")
+  createdAt         DateTime    @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  user           User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  transactions   Transaction[]
+  recurringRules RecurringRule[]
+
+  @@index([userId])
+  @@map("accounts")
+}
+
+model Category {
+  id        String       @id @default(uuid()) @db.Uuid
+  userId    String       @map("user_id") @db.Uuid
+  name      String
+  type      CategoryType
+  parentId  String?      @map("parent_id") @db.Uuid
+  icon      String?
+  color     String?
+
+  user             User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  parent           Category?       @relation("CategoryParent", fields: [parentId], references: [id], onDelete: SetNull)
+  children         Category[]      @relation("CategoryParent")
+  transactions     Transaction[]
+  budgets          Budget[]
+  recurringRules   RecurringRule[]
+
+  @@index([userId])
+  @@index([parentId])
+  @@map("categories")
+}
+
+model Transaction {
+  id                    String          @id @default(uuid()) @db.Uuid
+  accountId             String          @map("account_id") @db.Uuid
+  categoryId            String?         @map("category_id") @db.Uuid
+  amount                Decimal         @db.Decimal(14, 2)
+  type                  TransactionType
+  date                  DateTime        @db.Date
+  note                  String?
+  source                String          @default("manual")
+  externalTransactionId String?         @map("external_transaction_id")
+  recurringRuleId       String?         @map("recurring_rule_id") @db.Uuid
+  createdAt             DateTime        @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt             DateTime        @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  account  Account   @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  category Category? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+
+  @@index([accountId])
+  @@index([date])
+  @@map("transactions")
+}
+
+model RecurringRule {
+  id          String    @id @default(uuid()) @db.Uuid
+  accountId   String    @map("account_id") @db.Uuid
+  categoryId  String?   @map("category_id") @db.Uuid
+  label       String?
+  amount      Decimal   @db.Decimal(14, 2)
+  frequency   Frequency
+  nextDueDate DateTime  @map("next_due_date") @db.Date
+  isActive    Boolean   @default(true) @map("is_active")
+
+  account  Account   @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  category Category? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+
+  @@index([accountId])
+  @@map("recurring_rules")
+}
+
+model Budget {
+  id           String   @id @default(uuid()) @db.Uuid
+  userId       String   @map("user_id") @db.Uuid
+  categoryId   String   @map("category_id") @db.Uuid
+  monthlyLimit Decimal  @map("monthly_limit") @db.Decimal(14, 2)
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  category Category @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("budgets")
+}
+
+model Goal {
+  id            String    @id @default(uuid()) @db.Uuid
+  userId        String    @map("user_id") @db.Uuid
+  name          String
+  targetAmount  Decimal   @map("target_amount") @db.Decimal(14, 2)
+  currentAmount Decimal   @default(0) @map("current_amount") @db.Decimal(14, 2)
+  targetDate    DateTime? @map("target_date") @db.Date
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("goals")
+}

@@ -1,0 +1,25 @@
+{
+  "extends": "../../tsconfig.json",
+  "compilerOptions": {
+    "lib": ["dom", "dom.iterable", "esnext"],
+    "allowJs": true,
+    "noEmit": true,
+    "incremental": true,
+    "jsx": "preserve",
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "plugins": [{ "name": "next" }],
+    "paths": {
+      "@/*": ["./src/*"],
+      "@faura-farmer/config": ["../../packages/config/src/index.ts"],
+      "@faura-farmer/config/tailwind": ["../../packages/config/src/tailwind.config.ts"],
+      "@faura-farmer/config/tokens": ["../../packages/config/src/tokens.ts"],
+      "@faura-farmer/database": ["../../packages/database/src/index.ts"],
+      "@faura-farmer/types": ["../../packages/types/src/index.ts"]
+    }
+  },
+  "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx", ".next/types/**/*.ts"],
+  "exclude": ["node_modules"]
+}
