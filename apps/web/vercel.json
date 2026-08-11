@@ -1,6 +1,7 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "framework": "nextjs",
+  "regions": ["hnd1"],
   "buildCommand": "pnpm --filter @faura-farmer/database db:generate && next build",
   "installCommand": "pnpm install"
 }

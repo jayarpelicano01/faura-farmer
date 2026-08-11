@@ -22,14 +22,6 @@ export function toNumber(value: unknown): number {
   return Number.isFinite(n) ? n : 0;
 }
 
-export async function getUserAccountIds(userId: string): Promise<string[]> {
-  const accounts = await prisma.account.findMany({
-    where: { userId },
-    select: { id: true },
-  });
-  return accounts.map((a) => a.id);
-}
-
 export async function getAccountsWithBalance(userId: string): Promise<AccountWithBalance[]> {
   const accounts = await prisma.account.findMany({
     where: { userId },
@@ -41,7 +33,7 @@ export async function getAccountsWithBalance(userId: string): Promise<AccountWit
   const grouped = await prisma.transaction.groupBy({
     by: ['accountId', 'type'],
     where: {
-      accountId: { in: accounts.map((a) => a.id) },
+      account: { userId },
       type: { in: ['income', 'expense', 'transfer'] },
     },
     _sum: { amount: true },
@@ -63,17 +55,14 @@ export async function getAccountsWithBalance(userId: string): Promise<AccountWit
 }
 
 export async function getMonthTotals(userId: string, month: Date): Promise<MonthTotals> {
-  const accountIds = await getUserAccountIds(userId);
   const from = startOfMonth(month);
   const to = endOfMonth(month);
   const empty: MonthTotals = { income: '0', expense: '0', balance: '0' };
 
-  if (accountIds.length === 0) return empty;
-
   const grouped = await prisma.transaction.groupBy({
     by: ['type'],
     where: {
-      accountId: { in: accountIds },
+      account: { userId },
       type: { in: ['income', 'expense'] },
       date: { gte: from, lte: to },
     },
@@ -98,11 +87,8 @@ export async function getRecentTransactions(
   userId: string,
   limit = 8,
 ): Promise<Transaction[]> {
-  const accountIds = await getUserAccountIds(userId);
-  if (accountIds.length === 0) return [];
-
   const transactions = await prisma.transaction.findMany({
-    where: { accountId: { in: accountIds } },
+    where: { account: { userId } },
     include: { account: true, category: true },
     orderBy: [{ date: 'desc' }, { createdAt: 'desc' }],
     take: limit,
@@ -120,16 +106,13 @@ export async function getSpendingByCategory(
   userId: string,
   month: Date,
 ): Promise<SpendingByCategory[]> {
-  const accountIds = await getUserAccountIds(userId);
-  if (accountIds.length === 0) return [];
-
   const from = startOfMonth(month);
   const to = endOfMonth(month);
 
   const grouped = await prisma.transaction.groupBy({
     by: ['categoryId'],
     where: {
-      accountId: { in: accountIds },
+      account: { userId },
       type: 'expense',
       categoryId: { not: null },
       date: { gte: from, lte: to },
@@ -167,37 +150,37 @@ export async function getMonthlyTrend(
   userId: string,
   months: number,
 ): Promise<MonthlyTrendPoint[]> {
-  const accountIds = await getUserAccountIds(userId);
   const now = new Date();
-  const points: MonthlyTrendPoint[] = [];
+  const from = startOfMonth(subMonths(now, months - 1));
+  const to = endOfMonth(now);
 
+  const rows = await prisma.transaction.findMany({
+    where: {
+      account: { userId },
+      type: { in: ['income', 'expense'] },
+      date: { gte: from, lte: to },
+    },
+    select: { date: true, type: true, amount: true },
+  });
+
+  const buckets = new Map<string, { income: number; expense: number }>();
+  for (const row of rows) {
+    const key = format(row.date, 'yyyy-MM');
+    const bucket = buckets.get(key) ?? { income: 0, expense: 0 };
+    if (row.type === 'income') bucket.income += toNumber(row.amount);
+    else bucket.expense += toNumber(row.amount);
+    buckets.set(key, bucket);
+  }
+
+  const points: MonthlyTrendPoint[] = [];
   for (let i = months - 1; i >= 0; i--) {
     const month = startOfMonth(subMonths(now, i));
-    const from = month;
-    const to = endOfMonth(month);
-    let income = 0;
-    let expense = 0;
-
-    if (accountIds.length > 0) {
-      const grouped = await prisma.transaction.groupBy({
-        by: ['type'],
-        where: {
-          accountId: { in: accountIds },
-          type: { in: ['income', 'expense'] },
-          date: { gte: from, lte: to },
-        },
-        _sum: { amount: true },
-      });
-      for (const row of grouped) {
-        if (row.type === 'income') income = toNumber(row._sum.amount);
-        else expense = toNumber(row._sum.amount);
-      }
-    }
-
+    const key = format(month, 'yyyy-MM');
+    const bucket = buckets.get(key) ?? { income: 0, expense: 0 };
     points.push({
       month: format(month, 'MMM'),
-      income: String(income),
-      expense: String(expense),
+      income: String(bucket.income),
+      expense: String(bucket.expense),
     });
   }
 

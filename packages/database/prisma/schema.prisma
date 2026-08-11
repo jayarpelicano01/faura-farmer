@@ -119,6 +119,8 @@ model Transaction {
 
   @@index([accountId])
   @@index([date])
+  @@index([accountId, date])
+  @@index([accountId, type, date])
   @@map("transactions")
 }
 

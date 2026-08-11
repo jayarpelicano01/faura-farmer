@@ -1,10 +1,16 @@
 import { auth } from '@/lib/auth';
 import { redirect } from 'next/navigation';
+import dynamic from 'next/dynamic';
 import { format } from 'date-fns';
 import { getMonthlyTrend, getSpendingByCategory } from '@/lib/queries';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { SpendingBarChart } from '@/components/reports/spending-bar-chart';
-import { TrendLineChart } from '@/components/reports/trend-line-chart';
+
+const SpendingBarChart = dynamic(() =>
+  import('@/components/reports/spending-bar-chart').then((m) => m.SpendingBarChart),
+);
+const TrendLineChart = dynamic(() =>
+  import('@/components/reports/trend-line-chart').then((m) => m.TrendLineChart),
+);
 
 interface ReportsPageProps {
   searchParams: Promise<{ month?: string }>;
