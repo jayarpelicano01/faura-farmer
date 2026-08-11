@@ -8,14 +8,12 @@ import {
   PiggyBank,
   Tags,
   ChartColumn,
-  LogOut,
 } from 'lucide-react';
-import { signOut } from 'next-auth/react';
 import { cn } from '@/lib/utils';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 import { ThemeToggle } from '@/components/theme-toggle';
+import { UserMenu } from '@/components/dashboard/user-menu';
 
 const navItems = [
   { href: '/', label: 'Dashboard', icon: LayoutDashboard, exact: true },
@@ -45,23 +43,16 @@ export function Sidebar({ user }: SidebarProps) {
 
   return (
     <aside className="border-b border-border bg-card md:flex md:w-64 md:flex-col md:border-b-0 md:border-r">
-      <div className="flex items-center justify-between px-4 py-5 md:px-6">
-        <Link href="/" className="font-display text-lg font-semibold text-charcoal_blue">
+      <div className="flex items-center justify-between gap-2 px-4 py-5 md:px-6">
+        <Link href="/" className="font-display text-lg font-semibold text-foreground">
           Faura-Farmer
         </Link>
-        <div className="flex items-center gap-1 md:hidden">
+        <div className="flex items-center gap-2 md:hidden">
           <ThemeToggle />
-          <Button
-            variant="ghost"
-            size="icon"
-            aria-label="Sign out"
-            onClick={() => signOut({ callbackUrl: '/login' })}
-          >
-            <LogOut className="h-4 w-4" />
-          </Button>
+          <UserMenu user={user} />
         </div>
       </div>
-      <nav className="flex gap-1 overflow-x-auto px-4 pb-3 md:flex-1 md:flex-col md:gap-1 md:px-4 md:pb-0">
+      <nav className="flex gap-2 overflow-x-auto px-4 pb-3 md:flex-1 md:flex-col md:gap-1 md:px-4 md:pb-0">
         {navItems.map((item) => {
           const active = item.exact
             ? pathname === item.href
@@ -96,16 +87,9 @@ export function Sidebar({ user }: SidebarProps) {
               <p className="truncate text-xs text-muted-foreground">{user.email}</p>
             </div>
           </div>
-          <div className="flex items-center">
+          <div className="flex items-center gap-1">
             <ThemeToggle />
-            <Button
-              variant="ghost"
-              size="icon"
-              aria-label="Sign out"
-              onClick={() => signOut({ callbackUrl: '/login' })}
-            >
-              <LogOut className="h-4 w-4" />
-            </Button>
+            <UserMenu user={user} />
           </div>
         </div>
       </div>

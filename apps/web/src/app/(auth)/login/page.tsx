@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation';
 import { signIn } from 'next-auth/react';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
-import { loginSchema, type RegisterInput } from '@/lib/validations';
+import { loginSchema, type LoginInput } from '@/lib/validations';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -25,9 +25,9 @@ export default function LoginPage() {
     register,
     handleSubmit,
     formState: { errors },
-  } = useForm<RegisterInput>({ resolver: zodResolver(loginSchema) });
+  } = useForm<LoginInput>({ resolver: zodResolver(loginSchema) });
 
-  async function onSubmit(values: RegisterInput) {
+  async function onSubmit(values: LoginInput) {
     setLoading(true);
     setError(null);
     const result = await signIn('credentials', {
@@ -70,7 +70,15 @@ export default function LoginPage() {
             {errors.email && <p className="text-sm text-expense">{errors.email.message}</p>}
           </div>
           <div className="space-y-2">
-            <Label htmlFor="password">Password</Label>
+            <div className="flex items-center justify-between">
+              <Label htmlFor="password">Password</Label>
+              <Link
+                href="/forgot-password"
+                className="text-sm font-medium text-primary hover:underline"
+              >
+                Forgot password?
+              </Link>
+            </div>
             <Input
               id="password"
               type="password"
@@ -78,9 +86,7 @@ export default function LoginPage() {
               autoComplete="current-password"
               {...register('password')}
             />
-            {errors.password && (
-              <p className="text-sm text-expense">{errors.password.message}</p>
-            )}
+            {errors.password && <p className="text-sm text-expense">{errors.password.message}</p>}
           </div>
           <Button type="submit" className="w-full" disabled={loading}>
             {loading ? 'Signing in…' : 'Sign in'}

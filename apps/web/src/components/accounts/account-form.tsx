@@ -174,7 +174,7 @@ export function AccountForm({ open, onOpenChange, onSaved, initial }: AccountFor
                 </FormItem>
               )}
             />
-            <div className="grid grid-cols-2 items-end gap-4">
+            <div className="space-y-4">
               <FormField
                 control={form.control}
                 name="startingBalance"

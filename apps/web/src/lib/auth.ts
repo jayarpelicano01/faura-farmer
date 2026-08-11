@@ -31,7 +31,8 @@ const providers: Provider[] = [
       return {
         id: user.id,
         email: user.email,
-        name: user.email.split('@')[0],
+        name: user.name ?? user.email.split('@')[0],
+        username: user.username,
         authProvider: user.authProvider,
         avatarUrl: user.avatarUrl,
       };

@@ -1,16 +1,8 @@
 import Link from 'next/link';
-import { ArrowDownToLine, ArrowUpFromLine, CirclePlus, PieChart, PiggyBank } from 'lucide-react';
-import { formatMoney, formatDate, toNumber } from '@/lib/format';
+import { PiggyBank } from 'lucide-react';
+import { formatMoney, toNumber } from '@/lib/format';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table';
+import { TransactionList } from '@/components/transactions/transaction-list';
 import type { AccountWithBalance, MonthTotals, Transaction } from '@faura-farmer/types';
 
 export function BalanceCards({
@@ -109,81 +101,11 @@ export function RecentTransactions({ transactions }: { transactions: Transaction
         </Link>
       </CardHeader>
       <CardContent>
-        {transactions.length === 0 ? (
-          <p className="text-sm text-muted-foreground">No transactions recorded yet.</p>
-        ) : (
-          <Table className="min-w-[480px]">
-            <TableHeader>
-              <TableRow>
-                <TableHead>Date</TableHead>
-                <TableHead>Account</TableHead>
-                <TableHead className="hidden md:table-cell">Category</TableHead>
-                <TableHead className="hidden md:table-cell">Type</TableHead>
-                <TableHead className="text-right">Amount</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {transactions.map((tx) => (
-                <TableRow key={tx.id}>
-                  <TableCell className="text-muted-foreground">{formatDate(tx.date)}</TableCell>
-                  <TableCell className="font-medium text-foreground">
-                    {tx.account?.label}
-                  </TableCell>
-                  <TableCell className="hidden text-muted-foreground md:table-cell">
-                    {tx.category?.name ?? '—'}
-                  </TableCell>
-                  <TableCell className="hidden md:table-cell">
-                    <Badge variant={tx.type === 'income' ? 'income' : tx.type === 'expense' ? 'expense' : 'muted'}>
-                      {tx.type}
-                    </Badge>
-                  </TableCell>
-                  <TableCell
-                    className={
-                      tx.type === 'income'
-                        ? 'text-right font-semibold text-income'
-                        : tx.type === 'expense'
-                          ? 'text-right font-semibold text-expense'
-                          : 'text-right font-semibold text-foreground'
-                    }
-                  >
-                    {tx.type === 'income' ? '+' : tx.type === 'expense' ? '−' : ''}
-                    {formatMoney(tx.amount, tx.account?.currency ?? 'PHP')}
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        )}
-      </CardContent>
-    </Card>
-  );
-}
-
-export function QuickActions() {
-  const actions = [
-    { href: '/transactions?new=1', label: 'Add transaction', icon: ArrowUpFromLine },
-    { href: '/accounts?new=1', label: 'Add account', icon: CirclePlus },
-    { href: '/categories?new=1', label: 'Add category', icon: PieChart },
-    { href: '/transactions', label: 'Log income', icon: ArrowUpFromLine },
-    { href: '/transactions?type=expense', label: 'Log expense', icon: ArrowDownToLine },
-  ];
-
-  return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="font-display text-lg">Quick actions</CardTitle>
-      </CardHeader>
-      <CardContent className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-        {actions.map((action) => (
-          <Link
-            key={action.label}
-            href={action.href}
-            className="flex items-center gap-2 rounded-md border border-border bg-background px-3 py-2.5 text-sm font-medium text-foreground transition-colors hover:bg-accent"
-          >
-            <action.icon className="h-4 w-4 text-primary" />
-            {action.label}
-          </Link>
-        ))}
+        <TransactionList
+          transactions={transactions}
+          variant="recent"
+          emptyMessage="No transactions recorded yet."
+        />
       </CardContent>
     </Card>
   );

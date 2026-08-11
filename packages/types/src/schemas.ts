@@ -6,12 +6,56 @@ import {
   FREQUENCIES,
 } from './models';
 
-export const registerSchema = z.object({
-  email: z.string().trim().email('Enter a valid email address').max(255),
-  password: z.string().min(8, 'Password must be at least 8 characters').max(128),
+const emailField = z.string().trim().email('Enter a valid email address').max(255);
+
+const strongPassword = z
+  .string()
+  .min(8, 'Password must be at least 8 characters')
+  .max(128)
+  .regex(/[a-z]/, 'Password must include a lowercase letter')
+  .regex(/[A-Z]/, 'Password must include an uppercase letter')
+  .regex(/[0-9]/, 'Password must include a number')
+  .regex(/[^A-Za-z0-9]/, 'Password must include a special character');
+
+export const loginSchema = z.object({
+  email: emailField,
+  password: z.string().min(1, 'Password is required').max(128),
 });
 
-export const loginSchema = registerSchema;
+export const registerSchema = z
+  .object({
+    email: emailField,
+    password: strongPassword,
+    passwordConfirm: z.string(),
+    name: z.string().trim().max(120).optional(),
+  })
+  .refine((data) => data.password === data.passwordConfirm, {
+    message: 'Passwords do not match',
+    path: ['passwordConfirm'],
+  });
+
+export const updateProfileSchema = z.object({
+  name: z.string().trim().max(120).optional().nullable(),
+  username: z
+    .string()
+    .trim()
+    .min(3, 'Username must be at least 3 characters')
+    .max(30, 'Username must be at most 30 characters')
+    .regex(/^[a-zA-Z0-9_.-]+$/, 'Username can only contain letters, numbers, dots, dashes and underscores')
+    .optional()
+    .nullable(),
+});
+
+export const changePasswordSchema = z
+  .object({
+    currentPassword: z.string().min(1, 'Current password is required'),
+    newPassword: strongPassword,
+    confirmPassword: z.string(),
+  })
+  .refine((data) => data.newPassword === data.confirmPassword, {
+    message: 'Passwords do not match',
+    path: ['confirmPassword'],
+  });
 
 export const accountSchema = z.object({
   label: z.string().trim().min(1, 'Label is required').max(120),
@@ -58,8 +102,8 @@ export const transactionListQuerySchema = z.object({
   from: z.coerce.date().optional(),
   to: z.coerce.date().optional(),
   q: z.string().trim().max(120).optional(),
-  limit: z.coerce.number().int().min(1).max(100).default(50),
-  cursor: z.string().uuid().optional(),
+  page: z.coerce.number().int().min(1).default(1),
+  perPage: z.coerce.number().int().min(1).max(100).default(10),
 });
 
 export const accountType = z.enum(ACCOUNT_TYPES);
@@ -68,6 +112,9 @@ export const transactionType = z.enum(TRANSACTION_TYPES);
 export const frequency = z.enum(FREQUENCIES);
 
 export type RegisterInput = z.infer<typeof registerSchema>;
+export type LoginInput = z.infer<typeof loginSchema>;
+export type UpdateProfileInput = z.infer<typeof updateProfileSchema>;
+export type ChangePasswordInput = z.infer<typeof changePasswordSchema>;
 export type AccountInput = z.infer<typeof accountSchema>;
 export type CreateAccountInput = z.infer<typeof createAccountSchema>;
 export type UpdateAccountInput = z.infer<typeof updateAccountSchema>;

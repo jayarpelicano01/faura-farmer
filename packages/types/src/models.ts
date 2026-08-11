@@ -22,6 +22,8 @@ export interface User {
   passwordHash?: string | null;
   authProvider: AuthProvider;
   providerId?: string | null;
+  name?: string | null;
+  username?: string | null;
   avatarUrl?: string | null;
   createdAt: Date;
 }

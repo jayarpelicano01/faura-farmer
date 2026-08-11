@@ -2,18 +2,15 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Pencil, Plus, Search, Trash2 } from 'lucide-react';
-import type { Account, Category, Transaction, TransactionType } from '@faura-farmer/types';
+import { Plus, Search } from 'lucide-react';
+import type { Account, Category, Transaction } from '@faura-farmer/types';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { TransactionList } from '@/components/transactions/transaction-list';
 import { apiFetch } from '@/lib/api';
-import { formatDate, formatMoney } from '@/lib/format';
-import { TYPE_BADGE_VARIANT } from '@/lib/meta';
 import { TransactionForm, type TransactionFormValues } from './transaction-form';
 
 interface TransactionsManagerProps {
@@ -23,8 +20,12 @@ interface TransactionsManagerProps {
 
 interface ListResponse {
   items: Transaction[];
-  nextCursor: string | null;
+  total: number;
+  page: number;
+  perPage: number;
 }
+
+const PAGE_SIZE_OPTIONS = [5, 10, 15, 20];
 
 function buildQuery(params: Record<string, string | undefined>): string {
   const url = new URLSearchParams();
@@ -47,10 +48,12 @@ export function TransactionsManager({ accounts, categories }: TransactionsManage
   const [to, setTo] = useState<string>(() => searchParams.get('to') ?? '');
 
   const [items, setItems] = useState<Transaction[]>([]);
-  const [nextCursor, setNextCursor] = useState<string | null>(null);
+  const [total, setTotal] = useState(0);
+  const [page, setPage] = useState(1);
+  const [perPage, setPerPage] = useState(5);
   const [loading, setLoading] = useState(true);
 
-  const [dialogOpen, setDialogOpen] = useState(false);
+  const [dialogOpen, setDialogOpen] = useState(() => searchParams.get('new') === '1');
   const [editing, setEditing] = useState<TransactionFormValues | null>(null);
 
   const filterKey = `${q}|${type}|${accountId}|${categoryId}|${from}|${to}`;
@@ -66,43 +69,40 @@ export function TransactionsManager({ accounts, categories }: TransactionsManage
     };
     const qs = buildQuery(params);
     router.replace(qs ? `/transactions${qs}` : '/transactions', { scroll: false });
-    load({ reset: true });
+    setPage(1);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filterKey]);
 
-  const load = useCallback(
-    async (opts: { cursor?: string | null; reset?: boolean } = {}) => {
-      setLoading(true);
-      try {
-        const params: Record<string, string> = { limit: '20' };
-        if (q) params.q = q;
-        if (type !== 'all') params.type = type;
-        if (accountId !== 'all') params.accountId = accountId;
-        if (categoryId !== 'all') params.categoryId = categoryId;
-        if (from) params.from = from;
-        if (to) params.to = to;
-        if (opts.cursor) params.cursor = opts.cursor;
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const params: Record<string, string> = {
+        page: String(page),
+        perPage: String(perPage),
+      };
+      if (q) params.q = q;
+      if (type !== 'all') params.type = type;
+      if (accountId !== 'all') params.accountId = accountId;
+      if (categoryId !== 'all') params.categoryId = categoryId;
+      if (from) params.from = from;
+      if (to) params.to = to;
 
-        const data = await apiFetch<ListResponse>(`/api/transactions${buildQuery(params)}`);
-        if (opts.reset || !opts.cursor) {
-          setItems(data.items);
-        } else {
-          setItems((prev) => [...prev, ...data.items]);
-        }
-        setNextCursor(data.nextCursor);
-      } catch (error) {
-        console.error(error);
-      } finally {
-        setLoading(false);
-      }
-    },
-    [q, type, accountId, categoryId, from, to],
-  );
+      const data = await apiFetch<ListResponse>(`/api/transactions${buildQuery(params)}`);
+      setItems(data.items);
+      setTotal(data.total);
+    } catch (error) {
+      console.error(error);
+    } finally {
+      setLoading(false);
+    }
+  }, [q, type, accountId, categoryId, from, to, page, perPage]);
 
   useEffect(() => {
-    load({ reset: true });
+    load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [load]);
+
+  const totalPages = Math.max(1, Math.ceil(total / perPage));
 
   const filteredAccounts = accounts.filter((a) => !a.isArchived || a.id === accountId);
 
@@ -128,7 +128,8 @@ export function TransactionsManager({ accounts, categories }: TransactionsManage
     if (!window.confirm('Delete this transaction?')) return;
     try {
       await apiFetch(`/api/transactions/${tx.id}`, { method: 'DELETE' });
-      load({ reset: true });
+      setPage(1);
+      load();
     } catch (error) {
       console.error(error);
     }
@@ -221,84 +222,58 @@ export function TransactionsManager({ accounts, categories }: TransactionsManage
 
       <Card>
         <CardContent className="p-0">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Date</TableHead>
-                <TableHead>Account</TableHead>
-                <TableHead>Category</TableHead>
-                <TableHead>Note</TableHead>
-                <TableHead>Type</TableHead>
-                <TableHead className="text-right">Amount</TableHead>
-                <TableHead className="w-[1%]"></TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {loading && items.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={7} className="py-10 text-center text-muted-foreground">
-                    Loading…
-                  </TableCell>
-                </TableRow>
-              ) : items.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={7} className="py-10 text-center text-muted-foreground">
-                    No transactions match your filters.
-                  </TableCell>
-                </TableRow>
-              ) : (
-                items.map((tx) => (
-                  <TableRow key={tx.id}>
-                    <TableCell className="text-muted-foreground">{formatDate(tx.date)}</TableCell>
-                    <TableCell className="font-medium text-foreground">
-                      {tx.account?.label}
-                    </TableCell>
-                    <TableCell className="text-muted-foreground">{tx.category?.name ?? '—'}</TableCell>
-                    <TableCell className="max-w-[160px] truncate text-muted-foreground">
-                      {tx.note || '—'}
-                    </TableCell>
-                    <TableCell>
-                      <Badge variant={TYPE_BADGE_VARIANT[(tx.type as TransactionType) ?? 'expense']}>
-                        {tx.type}
-                      </Badge>
-                    </TableCell>
-                    <TableCell
-                      className={
-                        tx.type === 'income'
-                          ? 'text-right font-semibold text-income'
-                          : tx.type === 'expense'
-                            ? 'text-right font-semibold text-expense'
-                            : 'text-right font-semibold text-foreground'
-                      }
-                    >
-                      {tx.type === 'income' ? '+' : tx.type === 'expense' ? '−' : ''}
-                      {formatMoney(tx.amount, tx.account?.currency ?? 'PHP')}
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex items-center gap-1">
-                        <Button variant="ghost" size="icon" onClick={() => openEdit(tx)}>
-                          <Pencil className="h-4 w-4" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="text-expense"
-                          onClick={() => handleDelete(tx)}
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ))
-              )}
-            </TableBody>
-          </Table>
-          {nextCursor && (
-            <div className="flex justify-center p-4">
-              <Button variant="outline" onClick={() => load({ cursor: nextCursor })} disabled={loading}>
-                {loading ? 'Loading…' : 'Load more'}
-              </Button>
+          <TransactionList
+            variant="full"
+            transactions={items}
+            loading={loading}
+            emptyMessage="No transactions match your filters."
+            onEdit={openEdit}
+            onDelete={handleDelete}
+          />
+          {total > 0 && (
+            <div className="flex flex-col items-center justify-between gap-3 border-t border-border p-4 sm:flex-row">
+              <p className="text-sm text-muted-foreground">
+                {total} transaction{total === 1 ? '' : 's'}
+              </p>
+              <div className="flex flex-wrap items-center gap-2">
+                <Select
+                  value={String(perPage)}
+                  onValueChange={(value) => {
+                    setPerPage(Number(value));
+                    setPage(1);
+                  }}
+                >
+                  <SelectTrigger className="w-[120px] bg-background">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {PAGE_SIZE_OPTIONS.map((size) => (
+                      <SelectItem key={size} value={String(size)}>
+                        {size} per page
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={loading || page <= 1}
+                  onClick={() => setPage((p) => Math.max(1, p - 1))}
+                >
+                  Previous
+                </Button>
+                <span className="text-sm text-muted-foreground">
+                  Page {page} of {totalPages}
+                </span>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={loading || page >= totalPages}
+                  onClick={() => setPage((p) => p + 1)}
+                >
+                  Next
+                </Button>
+              </div>
             </div>
           )}
         </CardContent>
@@ -307,7 +282,10 @@ export function TransactionsManager({ accounts, categories }: TransactionsManage
       <TransactionForm
         open={dialogOpen}
         onOpenChange={setDialogOpen}
-        onSaved={() => load({ reset: true })}
+        onSaved={() => {
+          setPage(1);
+          load();
+        }}
         accounts={accounts.map((a) => ({ id: a.id, label: a.label, currency: a.currency }))}
         categories={categories}
         initial={editing}

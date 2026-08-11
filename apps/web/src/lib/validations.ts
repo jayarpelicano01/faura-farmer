@@ -1,6 +1,8 @@
 export {
   registerSchema,
   loginSchema,
+  updateProfileSchema,
+  changePasswordSchema,
   createAccountSchema,
   updateAccountSchema,
   createCategorySchema,
@@ -12,6 +14,9 @@ export {
 
 export type {
   RegisterInput,
+  LoginInput,
+  UpdateProfileInput,
+  ChangePasswordInput,
   CreateAccountInput,
   UpdateAccountInput,
   CreateCategoryInput,

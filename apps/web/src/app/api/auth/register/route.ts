@@ -20,8 +20,13 @@ export async function POST(request: Request) {
   const passwordHash = await bcrypt.hash(parsed.data.password, 10);
 
   const user = await prisma.user.create({
-    data: { email, passwordHash, authProvider: 'email' },
-    select: { id: true, email: true, createdAt: true },
+    data: {
+      email,
+      passwordHash,
+      authProvider: 'email',
+      name: parsed.data.name?.trim() || null,
+    },
+    select: { id: true, email: true, name: true, createdAt: true },
   });
 
   return Response.json({ user }, { status: 201 });

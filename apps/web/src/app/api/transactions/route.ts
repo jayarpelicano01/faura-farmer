@@ -15,7 +15,7 @@ export async function GET(request: Request) {
   if (!parsedQuery.success) {
     return badRequest(parsedQuery.error.issues[0]?.message ?? 'Invalid query');
   }
-  const { accountId, categoryId, type, from, to, q, limit, cursor } = parsedQuery.data;
+  const { accountId, categoryId, type, from, to, q, page, perPage } = parsedQuery.data;
 
   const userAccounts = await prisma.account.findMany({
     where: { userId },
@@ -24,7 +24,7 @@ export async function GET(request: Request) {
   const accountIds = userAccounts.map((a) => a.id);
 
   if (accountIds.length === 0) {
-    return ok({ items: [], nextCursor: null });
+    return ok({ items: [], total: 0, page, perPage });
   }
 
   const where: Record<string, unknown> = { accountId: { in: accountIds } };
@@ -40,23 +40,18 @@ export async function GET(request: Request) {
     where.OR = [{ note: { contains: q, mode: 'insensitive' } }];
   }
 
-  const items = await prisma.transaction.findMany({
-    where,
-    include: { account: true, category: true },
-    orderBy: [{ date: 'desc' }, { createdAt: 'desc' }],
-    take: limit + 1,
-    ...(cursor ? { skip: 1, cursor: { id: cursor } } : {}),
-  });
+  const [items, total] = await Promise.all([
+    prisma.transaction.findMany({
+      where,
+      include: { account: true, category: true },
+      orderBy: [{ date: 'desc' }, { createdAt: 'desc' }],
+      skip: (page - 1) * perPage,
+      take: perPage,
+    }),
+    prisma.transaction.count({ where }),
+  ]);
 
-  let nextCursor: string | null = null;
-  let pageItems = items;
-  if (items.length > limit) {
-    const extra = items[limit];
-    nextCursor = extra?.id ?? null;
-    pageItems = items.slice(0, limit);
-  }
-
-  return ok({ items: pageItems, nextCursor });
+  return ok({ items, total, page, perPage });
 }
 
 export async function POST(request: Request) {

@@ -68,6 +68,16 @@ export default function RegisterPage() {
             <p className="rounded-md bg-expense/15 px-3 py-2 text-sm text-expense">{error}</p>
           )}
           <div className="space-y-2">
+            <Label htmlFor="name">Name</Label>
+            <Input
+              id="name"
+              type="text"
+              placeholder="Your name"
+              autoComplete="name"
+              {...register('name')}
+            />
+          </div>
+          <div className="space-y-2">
             <Label htmlFor="email">Email</Label>
             <Input
               id="email"
@@ -83,12 +93,29 @@ export default function RegisterPage() {
             <Input
               id="password"
               type="password"
-              placeholder="At least 8 characters"
+              placeholder="Create a strong password"
               autoComplete="new-password"
               {...register('password')}
             />
-            {errors.password && (
+            {errors.password ? (
               <p className="text-sm text-expense">{errors.password.message}</p>
+            ) : (
+              <p className="text-xs text-muted-foreground">
+                At least 8 characters with an uppercase, lowercase, number and special character.
+              </p>
+            )}
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="passwordConfirm">Confirm password</Label>
+            <Input
+              id="passwordConfirm"
+              type="password"
+              placeholder="Re-enter your password"
+              autoComplete="new-password"
+              {...register('passwordConfirm')}
+            />
+            {errors.passwordConfirm && (
+              <p className="text-sm text-expense">{errors.passwordConfirm.message}</p>
             )}
           </div>
           <Button type="submit" className="w-full" disabled={loading}>
