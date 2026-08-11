@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { useSearchParams } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { FolderPlus, Pencil, Plus, Trash2 } from 'lucide-react';
 import type { Category, CategoryType } from '@faura-farmer/types';
 import { Button } from '@/components/ui/button';
@@ -115,12 +115,33 @@ function CategoryColumn({
 }
 
 export function CategoriesManager() {
+  const router = useRouter();
   const searchParams = useSearchParams();
   const [tree, setTree] = useState<CategoryTree>({ income: [], expense: [] });
   const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(() => searchParams.get('new') === '1');
   const [editing, setEditing] = useState<CategoryFormValues | null>(null);
   const [formType, setFormType] = useState<CategoryType>('expense');
+
+  const newParam = searchParams.get('new');
+
+  useEffect(() => {
+    if (newParam === '1') {
+      setEditing(null);
+      setDialogOpen(true);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [newParam]);
+
+  function handleOpenChange(open: boolean) {
+    setDialogOpen(open);
+    if (!open && newParam) {
+      const params = new URLSearchParams(searchParams.toString());
+      params.delete('new');
+      const qs = params.toString();
+      router.replace(qs ? `/categories?${qs}` : '/categories', { scroll: false });
+    }
+  }
 
   const load = useCallback(async () => {
     try {
@@ -214,7 +235,7 @@ export function CategoriesManager() {
 
       <CategoryForm
         open={dialogOpen}
-        onOpenChange={setDialogOpen}
+        onOpenChange={handleOpenChange}
         onSaved={load}
         initial={editing}
         parents={parents}

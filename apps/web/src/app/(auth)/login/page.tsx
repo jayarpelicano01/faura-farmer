@@ -226,7 +226,7 @@ export default function AuthPage() {
               className={cn(
                 'rounded-md px-4 py-2 font-display text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
                 mode === 'login'
-                  ? 'bg-primary text-primary-foreground'
+                  ? 'bg-primary-solid text-primary-solid-foreground'
                   : 'text-muted-foreground hover:text-foreground',
               )}
             >
@@ -240,7 +240,7 @@ export default function AuthPage() {
               className={cn(
                 'rounded-md px-4 py-2 font-display text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
                 mode === 'register'
-                  ? 'bg-primary text-primary-foreground'
+                  ? 'bg-primary-solid text-primary-solid-foreground'
                   : 'text-muted-foreground hover:text-foreground',
               )}
             >

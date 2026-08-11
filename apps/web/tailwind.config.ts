@@ -10,6 +10,8 @@ const semanticColors = {
   primary: {
     DEFAULT: 'hsl(var(--primary))',
     foreground: 'hsl(var(--primary-foreground))',
+    solid: 'hsl(var(--primary-solid))',
+    'solid-foreground': 'hsl(var(--primary-solid-foreground))',
   },
   secondary: {
     DEFAULT: 'hsl(var(--secondary))',

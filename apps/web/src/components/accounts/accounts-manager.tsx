@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { useSearchParams } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { Archive, ArchiveRestore, Pencil, PiggyBank, Plus, Trash2 } from 'lucide-react';
 import type { AccountWithBalance } from '@faura-farmer/types';
 import { Button } from '@/components/ui/button';
@@ -20,11 +20,32 @@ const TYPE_LABELS: Record<string, string> = {
 };
 
 export function AccountsManager() {
+  const router = useRouter();
   const searchParams = useSearchParams();
   const [accounts, setAccounts] = useState<AccountWithBalance[]>([]);
   const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(() => searchParams.get('new') === '1');
   const [editing, setEditing] = useState<AccountFormValues | null>(null);
+
+  const newParam = searchParams.get('new');
+
+  useEffect(() => {
+    if (newParam === '1') {
+      setEditing(null);
+      setDialogOpen(true);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [newParam]);
+
+  function handleOpenChange(open: boolean) {
+    setDialogOpen(open);
+    if (!open && newParam) {
+      const params = new URLSearchParams(searchParams.toString());
+      params.delete('new');
+      const qs = params.toString();
+      router.replace(qs ? `/accounts?${qs}` : '/accounts', { scroll: false });
+    }
+  }
 
   const load = useCallback(async () => {
     try {
@@ -90,7 +111,7 @@ export function AccountsManager() {
             Your bank accounts, e-wallets, cash, cards and investments.
           </p>
         </div>
-        <Button onClick={openCreate}>
+        <Button onClick={openCreate} className="ml-auto">
           <Plus className="h-4 w-4" />
           New account
         </Button>
@@ -162,7 +183,7 @@ export function AccountsManager() {
 
       <AccountForm
         open={dialogOpen}
-        onOpenChange={setDialogOpen}
+        onOpenChange={handleOpenChange}
         onSaved={load}
         initial={editing}
       />

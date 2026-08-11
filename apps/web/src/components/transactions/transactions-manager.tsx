@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Plus, Search } from 'lucide-react';
+import { Plus, ChevronDown, Filter, Search } from 'lucide-react';
 import type { Account, Category, Transaction } from '@faura-farmer/types';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -11,6 +11,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { TransactionList } from '@/components/transactions/transaction-list';
 import { apiFetch } from '@/lib/api';
+import { cn } from '@/lib/utils';
 import { TransactionForm, type TransactionFormValues } from './transaction-form';
 
 interface TransactionsManagerProps {
@@ -41,7 +42,7 @@ export function TransactionsManager({ accounts, categories }: TransactionsManage
   const searchParams = useSearchParams();
 
   const [q, setQ] = useState(() => searchParams.get('q') ?? '');
-  const [type, setType] = useState<string>(() => searchParams.get('type') ?? 'all');
+  const [type, setType] = useState<string>('all');
   const [accountId, setAccountId] = useState<string>(() => searchParams.get('accountId') ?? 'all');
   const [categoryId, setCategoryId] = useState<string>(() => searchParams.get('categoryId') ?? 'all');
   const [from, setFrom] = useState<string>(() => searchParams.get('from') ?? '');
@@ -53,6 +54,7 @@ export function TransactionsManager({ accounts, categories }: TransactionsManage
   const [perPage, setPerPage] = useState(5);
   const [loading, setLoading] = useState(true);
 
+  const [filterOpen, setFilterOpen] = useState(false);
   const [dialogOpen, setDialogOpen] = useState(() => searchParams.get('new') === '1');
   const [editing, setEditing] = useState<TransactionFormValues | null>(null);
 
@@ -106,8 +108,41 @@ export function TransactionsManager({ accounts, categories }: TransactionsManage
 
   const filteredAccounts = accounts.filter((a) => !a.isArchived || a.id === accountId);
 
-  function openCreate() {
-    setEditing(null);
+  const newParam = searchParams.get('new');
+  const typeParam = searchParams.get('type');
+
+  useEffect(() => {
+    if (newParam !== '1') return;
+    const valid: Transaction['type'][] = ['income', 'expense', 'transfer'];
+    const preset = valid.includes(typeParam as Transaction['type'])
+      ? (typeParam as Transaction['type'])
+      : undefined;
+    openCreate(preset);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [newParam, typeParam]);
+
+  function handleOpenChange(open: boolean) {
+    setDialogOpen(open);
+    if (!open && newParam) {
+      const params = new URLSearchParams(searchParams.toString());
+      params.delete('new');
+      const qs = params.toString();
+      router.replace(qs ? `/transactions?${qs}` : '/transactions', { scroll: false });
+    }
+  }
+
+  function openCreate(preset?: Transaction['type']) {
+    setEditing(
+      preset
+        ? {
+            accountId: '',
+            amount: '',
+            type: preset,
+            date: new Date().toISOString(),
+            note: null,
+          }
+        : null,
+    );
     setDialogOpen(true);
   }
 
@@ -144,14 +179,14 @@ export function TransactionsManager({ accounts, categories }: TransactionsManage
           </h1>
           <p className="mt-1 text-sm text-muted-foreground">Search, filter and record transactions.</p>
         </div>
-        <Button onClick={openCreate}>
+        <Button onClick={() => openCreate()} className="ml-auto">
           <Plus className="h-4 w-4" />
           New transaction
         </Button>
       </div>
 
       <Card>
-        <CardContent className="space-y-4 p-4">
+        <CardContent className="space-y-3 p-4">
           <div className="relative">
             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
             <Input
@@ -161,7 +196,29 @@ export function TransactionsManager({ accounts, categories }: TransactionsManage
               onChange={(e) => setQ(e.target.value)}
             />
           </div>
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
+          <div className="sm:hidden">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="w-full justify-between text-foreground"
+              onClick={() => setFilterOpen((value) => !value)}
+            >
+              <span className="flex items-center gap-2">
+                <Filter className="h-4 w-4 text-primary" />
+                Filters
+              </span>
+              <ChevronDown
+                className={cn('h-4 w-4 transition-transform', filterOpen && 'rotate-180')}
+              />
+            </Button>
+          </div>
+          <div
+            className={cn(
+              'grid gap-4 sm:grid-cols-2 lg:grid-cols-5',
+              !filterOpen && 'hidden sm:grid',
+            )}
+          >
             <div className="space-y-1.5">
               <Label>Type</Label>
               <Select value={type} onValueChange={setType}>
@@ -281,7 +338,7 @@ export function TransactionsManager({ accounts, categories }: TransactionsManage
 
       <TransactionForm
         open={dialogOpen}
-        onOpenChange={setDialogOpen}
+        onOpenChange={handleOpenChange}
         onSaved={() => {
           setPage(1);
           load();

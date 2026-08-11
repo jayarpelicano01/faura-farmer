@@ -5,20 +5,21 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
   ArrowDownToLine,
+  ArrowLeftRight,
   ArrowUpFromLine,
-  CirclePlus,
   PieChart,
   PiggyBank,
+  Plus,
   X,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 const actions = [
-  { href: '/transactions?new=1', label: 'Add transaction', icon: CirclePlus },
+  { href: '/transactions?new=1&type=income', label: 'Log income', icon: ArrowUpFromLine },
+  { href: '/transactions?new=1&type=expense', label: 'Log expense', icon: ArrowDownToLine },
+  { href: '/transactions?new=1&type=transfer', label: 'Log transfer', icon: ArrowLeftRight },
   { href: '/accounts?new=1', label: 'Add account', icon: PiggyBank },
   { href: '/categories?new=1', label: 'Add category', icon: PieChart },
-  { href: '/transactions?type=income', label: 'Log income', icon: ArrowUpFromLine },
-  { href: '/transactions?type=expense', label: 'Log expense', icon: ArrowDownToLine },
 ];
 
 export function FloatingActions() {
@@ -53,11 +54,11 @@ export function FloatingActions() {
         aria-expanded={open}
         onClick={() => setOpen((value) => !value)}
         className={cn(
-          'flex h-14 w-14 items-center justify-center rounded-full text-primary-foreground shadow-lg transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ring-offset-2 ring-offset-background',
-          open ? 'bg-expense hover:bg-expense/90' : 'bg-primary hover:bg-primary/90',
+          'flex h-14 w-14 items-center justify-center rounded-full border border-white/40 text-primary-solid-foreground shadow-lg transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ring-offset-2 ring-offset-background',
+          open ? 'bg-expense hover:bg-expense/90' : 'bg-primary-solid hover:bg-primary-solid/90',
         )}
       >
-        {open ? <X className="h-6 w-6" /> : <CirclePlus className="h-6 w-6" />}
+        {open ? <X className="h-6 w-6" /> : <Plus className="h-7 w-7" />}
       </button>
     </div>
   );

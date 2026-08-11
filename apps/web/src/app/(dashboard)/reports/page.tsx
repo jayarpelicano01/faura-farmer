@@ -56,7 +56,7 @@ export default async function ReportsPage({ searchParams }: ReportsPageProps) {
           />
           <button
             type="submit"
-            className="h-10 rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground hover:bg-primary/90"
+            className="h-10 rounded-md bg-primary-solid px-4 text-sm font-medium text-primary-solid-foreground hover:bg-primary-solid/90"
           >
             Apply
           </button>
