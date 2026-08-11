@@ -18,14 +18,13 @@
     --muted-foreground: 201 19% 42%;
     --accent: 211 85% 94%;
     --accent-foreground: 211 91% 22%;
-    --destructive: 6 51% 50%;
-    --destructive-foreground: 0 0% 100%;
     --border: 198 16% 78%;
     --input: 198 19% 64%;
     --ring: 211 91% 30%;
     --radius: 0.75rem;
     --income: 167 76% 25%;
-    --expense: 6 51% 46%;
+    --expense: 211 72% 26%;
+    --destructive: 211 78% 20%;
   }
 
   .dark {
@@ -43,14 +42,13 @@
     --muted-foreground: 198 19% 64%;
     --accent: 211 80% 18%;
     --accent-foreground: 211 85% 90%;
-    --destructive: 6 51% 55%;
-    --destructive-foreground: 0 0% 100%;
     --border: 210 24% 22%;
     --input: 206 21% 26%;
     --ring: 211 92% 58%;
     --radius: 0.75rem;
     --income: 167 70% 45%;
-    --expense: 6 60% 60%;
+    --expense: 211 48% 42%;
+    --destructive: 211 60% 36%;
   }
 }
 

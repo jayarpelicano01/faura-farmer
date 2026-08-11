@@ -22,6 +22,10 @@ export const metadata: Metadata = {
     template: '%s · Faura-Farmer',
   },
   description: 'A personal finance tracker: accounts, transactions, categories and reports.',
+  icons: {
+    icon: '/favicon.png',
+    apple: '/favicon.png',
+  },
 };
 
 export default function RootLayout({

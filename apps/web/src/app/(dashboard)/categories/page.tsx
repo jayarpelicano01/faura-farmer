@@ -1,5 +1,10 @@
+import { Suspense } from 'react';
 import { CategoriesManager } from '@/components/categories/categories-manager';
 
 export default function CategoriesPage() {
-  return <CategoriesManager />;
+  return (
+    <Suspense fallback={null}>
+      <CategoriesManager />
+    </Suspense>
+  );
 }

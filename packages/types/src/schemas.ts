@@ -62,7 +62,12 @@ export const accountSchema = z.object({
   type: z.enum(ACCOUNT_TYPES),
   institution: z.string().trim().max(120).optional().nullable(),
   currency: z.string().trim().min(3).max(8).default('PHP'),
-  startingBalance: z.coerce.number().min(-999999999999).max(999999999999).default(0),
+  startingBalance: z
+    .coerce
+    .number()
+    .min(0, 'Starting balance cannot be negative')
+    .max(999999999999)
+    .default(0),
   color: z.string().trim().max(40).optional().nullable(),
   icon: z.string().trim().max(40).optional().nullable(),
 });

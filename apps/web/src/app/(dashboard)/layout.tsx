@@ -1,6 +1,7 @@
 import { redirect } from 'next/navigation';
 import { auth } from '@/lib/auth';
 import { Sidebar } from '@/components/dashboard/sidebar';
+import { FloatingActions } from '@/components/dashboard/floating-actions';
 
 export default async function DashboardLayout({
   children,
@@ -22,6 +23,7 @@ export default async function DashboardLayout({
         }}
       />
       <main className="flex-1 px-4 py-6 sm:px-6 md:px-8 md:py-8">{children}</main>
+      <FloatingActions />
     </div>
   );
 }

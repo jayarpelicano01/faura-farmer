@@ -1,14 +1,11 @@
 import { auth } from '@/lib/auth';
 import { redirect } from 'next/navigation';
-import Link from 'next/link';
-import { CirclePlus } from 'lucide-react';
 import {
   getAccountsWithBalance,
   getMonthTotals,
   getRecentTransactions,
 } from '@/lib/queries';
 import { toNumber } from '@/lib/format';
-import { Button } from '@/components/ui/button';
 import {
   AccountSummary,
   BalanceCards,
@@ -29,19 +26,11 @@ export default async function DashboardPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h1 className="font-display text-2xl font-semibold text-foreground md:text-3xl">
-            Dashboard
-          </h1>
-          <p className="mt-1 text-sm text-muted-foreground">Here&apos;s your money at a glance.</p>
-        </div>
-        <Button asChild>
-          <Link href="/transactions?new=1">
-            <CirclePlus className="h-4 w-4" />
-            Add transaction
-          </Link>
-        </Button>
+      <div>
+        <h1 className="font-display text-2xl font-semibold text-foreground md:text-3xl">
+          Dashboard
+        </h1>
+        <p className="mt-1 text-sm text-muted-foreground">Here&apos;s your money at a glance.</p>
       </div>
       <BalanceCards totalBalance={totalBalance} monthTotals={monthTotals} />
       <div className="grid gap-6 lg:grid-cols-3">

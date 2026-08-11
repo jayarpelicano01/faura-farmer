@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import Image from 'next/image';
 import { usePathname } from 'next/navigation';
 import {
   ArrowLeftRight,
@@ -44,7 +45,18 @@ export function Sidebar({ user }: SidebarProps) {
   return (
     <aside className="border-b border-border bg-card md:flex md:w-64 md:flex-col md:border-b-0 md:border-r">
       <div className="flex items-center justify-between gap-2 px-4 py-5 md:px-6">
-        <Link href="/" className="font-display text-lg font-semibold text-foreground">
+        <Link
+          href="/"
+          className="flex items-center gap-2 font-display text-lg font-semibold text-foreground"
+        >
+          <Image
+            src="/favicon.png"
+            alt="Faura-Farmer logo"
+            width={28}
+            height={28}
+            className="rounded-md"
+            priority
+          />
           Faura-Farmer
         </Link>
         <div className="flex items-center gap-2 md:hidden">

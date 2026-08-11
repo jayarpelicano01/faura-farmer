@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { Archive, ArchiveRestore, Pencil, PiggyBank, Plus, Trash2 } from 'lucide-react';
 import type { AccountWithBalance } from '@faura-farmer/types';
 import { Button } from '@/components/ui/button';
@@ -19,9 +20,10 @@ const TYPE_LABELS: Record<string, string> = {
 };
 
 export function AccountsManager() {
+  const searchParams = useSearchParams();
   const [accounts, setAccounts] = useState<AccountWithBalance[]>([]);
   const [loading, setLoading] = useState(true);
-  const [dialogOpen, setDialogOpen] = useState(false);
+  const [dialogOpen, setDialogOpen] = useState(() => searchParams.get('new') === '1');
   const [editing, setEditing] = useState<AccountFormValues | null>(null);
 
   const load = useCallback(async () => {

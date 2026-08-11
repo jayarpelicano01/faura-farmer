@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { FolderPlus, Pencil, Plus, Trash2 } from 'lucide-react';
 import type { Category, CategoryType } from '@faura-farmer/types';
 import { Button } from '@/components/ui/button';
@@ -114,9 +115,10 @@ function CategoryColumn({
 }
 
 export function CategoriesManager() {
+  const searchParams = useSearchParams();
   const [tree, setTree] = useState<CategoryTree>({ income: [], expense: [] });
   const [loading, setLoading] = useState(true);
-  const [dialogOpen, setDialogOpen] = useState(false);
+  const [dialogOpen, setDialogOpen] = useState(() => searchParams.get('new') === '1');
   const [editing, setEditing] = useState<CategoryFormValues | null>(null);
   const [formType, setFormType] = useState<CategoryType>('expense');
 
