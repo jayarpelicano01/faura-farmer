@@ -28,18 +28,20 @@ export default async function DashboardPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="font-display text-2xl font-semibold text-gunmetal md:text-3xl">
+        <h1 className="font-display text-2xl font-semibold text-foreground md:text-3xl">
           Dashboard
         </h1>
-        <p className="mt-1 text-sm text-slate_grey">Here&apos;s your money at a glance.</p>
+        <p className="mt-1 text-sm text-muted-foreground">Here&apos;s your money at a glance.</p>
       </div>
       <BalanceCards totalBalance={totalBalance} monthTotals={monthTotals} />
       <QuickActions />
       <div className="grid gap-6 lg:grid-cols-3">
-        <div className="lg:col-span-2">
+        <div className="min-w-0 lg:col-span-2">
           <RecentTransactions transactions={recent} />
         </div>
-        <AccountSummary accounts={accounts} />
+        <div className="min-w-0">
+          <AccountSummary accounts={accounts} />
+        </div>
       </div>
     </div>
   );

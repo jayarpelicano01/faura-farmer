@@ -10,6 +10,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { ColorPicker } from '@/components/ui/color-picker';
 import { apiFetch } from '@/lib/api';
 
 export interface CategoryFormValues {
@@ -143,7 +144,7 @@ export function CategoryForm({ open, onOpenChange, onSaved, initial, parents }: 
                   <FormItem>
                     <FormLabel>Color</FormLabel>
                     <FormControl>
-                      <Input type="color" className="h-10 w-full p-1" {...field} value={field.value ?? '#adb5bd'} />
+                      <ColorPicker value={field.value ?? '#adb5bd'} onChange={field.onChange} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>

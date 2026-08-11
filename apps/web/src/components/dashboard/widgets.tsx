@@ -24,17 +24,17 @@ export function BalanceCards({
     <div className="grid gap-4 sm:grid-cols-3">
       <Card>
         <CardHeader>
-          <CardTitle className="font-display text-sm text-slate_grey">Total balance</CardTitle>
+          <CardTitle className="font-display text-sm text-muted-foreground">Total balance</CardTitle>
         </CardHeader>
         <CardContent>
-          <p className="font-display text-2xl font-semibold text-carbon_black">
+          <p className="font-display text-2xl font-semibold text-foreground">
             {formatMoney(totalBalance)}
           </p>
         </CardContent>
       </Card>
       <Card>
         <CardHeader>
-          <CardTitle className="font-display text-sm text-slate_grey">Income this month</CardTitle>
+          <CardTitle className="font-display text-sm text-muted-foreground">Income this month</CardTitle>
         </CardHeader>
         <CardContent>
           <p className="font-display text-2xl font-semibold text-income">
@@ -44,7 +44,7 @@ export function BalanceCards({
       </Card>
       <Card>
         <CardHeader>
-          <CardTitle className="font-display text-sm text-slate_grey">Expense this month</CardTitle>
+          <CardTitle className="font-display text-sm text-muted-foreground">Expense this month</CardTitle>
         </CardHeader>
         <CardContent>
           <p className="font-display text-2xl font-semibold text-expense">
@@ -67,14 +67,14 @@ export function AccountSummary({ accounts }: { accounts: AccountWithBalance[] })
       </CardHeader>
       <CardContent className="space-y-2">
         {accounts.length === 0 ? (
-          <p className="text-sm text-slate_grey">
+          <p className="text-sm text-muted-foreground">
             No accounts yet. Add your first account to get started.
           </p>
         ) : (
           accounts.map((account) => (
             <div
               key={account.id}
-              className="flex items-center justify-between rounded-md border border-alabaster_grey bg-background px-3 py-2.5"
+              className="flex items-center justify-between rounded-md border border-border bg-background px-3 py-2.5"
             >
               <div className="flex items-center gap-3">
                 <div
@@ -84,11 +84,11 @@ export function AccountSummary({ accounts }: { accounts: AccountWithBalance[] })
                   <PiggyBank className="h-4 w-4 text-white" />
                 </div>
                 <div>
-                  <p className="text-sm font-medium text-carbon_black">{account.label}</p>
-                  <p className="text-xs text-slate_grey">{account.type}</p>
+                  <p className="text-sm font-medium text-foreground">{account.label}</p>
+                  <p className="text-xs text-muted-foreground">{account.type}</p>
                 </div>
               </div>
-              <p className="font-display text-sm font-semibold text-carbon_black">
+              <p className="font-display text-sm font-semibold text-foreground">
                 {formatMoney(account.balance, account.currency)}
               </p>
             </div>
@@ -110,27 +110,29 @@ export function RecentTransactions({ transactions }: { transactions: Transaction
       </CardHeader>
       <CardContent>
         {transactions.length === 0 ? (
-          <p className="text-sm text-slate_grey">No transactions recorded yet.</p>
+          <p className="text-sm text-muted-foreground">No transactions recorded yet.</p>
         ) : (
-          <Table>
+          <Table className="min-w-[480px]">
             <TableHeader>
               <TableRow>
                 <TableHead>Date</TableHead>
                 <TableHead>Account</TableHead>
-                <TableHead>Category</TableHead>
-                <TableHead>Type</TableHead>
+                <TableHead className="hidden md:table-cell">Category</TableHead>
+                <TableHead className="hidden md:table-cell">Type</TableHead>
                 <TableHead className="text-right">Amount</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {transactions.map((tx) => (
                 <TableRow key={tx.id}>
-                  <TableCell className="text-slate_grey">{formatDate(tx.date)}</TableCell>
-                  <TableCell className="font-medium text-carbon_black">
+                  <TableCell className="text-muted-foreground">{formatDate(tx.date)}</TableCell>
+                  <TableCell className="font-medium text-foreground">
                     {tx.account?.label}
                   </TableCell>
-                  <TableCell className="text-slate_grey">{tx.category?.name ?? '—'}</TableCell>
-                  <TableCell>
+                  <TableCell className="hidden text-muted-foreground md:table-cell">
+                    {tx.category?.name ?? '—'}
+                  </TableCell>
+                  <TableCell className="hidden md:table-cell">
                     <Badge variant={tx.type === 'income' ? 'income' : tx.type === 'expense' ? 'expense' : 'muted'}>
                       {tx.type}
                     </Badge>
@@ -141,7 +143,7 @@ export function RecentTransactions({ transactions }: { transactions: Transaction
                         ? 'text-right font-semibold text-income'
                         : tx.type === 'expense'
                           ? 'text-right font-semibold text-expense'
-                          : 'text-right font-semibold text-carbon_black'
+                          : 'text-right font-semibold text-foreground'
                     }
                   >
                     {tx.type === 'income' ? '+' : tx.type === 'expense' ? '−' : ''}
@@ -176,7 +178,7 @@ export function QuickActions() {
           <Link
             key={action.label}
             href={action.href}
-            className="flex items-center gap-2 rounded-md border border-alabaster_grey bg-background px-3 py-2.5 text-sm font-medium text-carbon_black transition-colors hover:bg-accent"
+            className="flex items-center gap-2 rounded-md border border-border bg-background px-3 py-2.5 text-sm font-medium text-foreground transition-colors hover:bg-accent"
           >
             <action.icon className="h-4 w-4 text-primary" />
             {action.label}

@@ -83,8 +83,8 @@ export function AccountsManager() {
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="font-display text-2xl font-semibold text-gunmetal md:text-3xl">Accounts</h1>
-          <p className="mt-1 text-sm text-slate_grey">
+          <h1 className="font-display text-2xl font-semibold text-foreground md:text-3xl">Accounts</h1>
+          <p className="mt-1 text-sm text-muted-foreground">
             Your bank accounts, e-wallets, cash, cards and investments.
           </p>
         </div>
@@ -95,10 +95,10 @@ export function AccountsManager() {
       </div>
 
       {loading ? (
-        <p className="text-sm text-slate_grey">Loading accounts…</p>
+        <p className="text-sm text-muted-foreground">Loading accounts…</p>
       ) : accounts.length === 0 ? (
         <Card>
-          <CardContent className="p-8 text-center text-sm text-slate_grey">
+          <CardContent className="p-8 text-center text-sm text-muted-foreground">
             No accounts yet. Create your first one to start tracking.
           </CardContent>
         </Card>
@@ -119,8 +119,8 @@ export function AccountsManager() {
                       <PiggyBank className="h-5 w-5 text-white" />
                     </div>
                     <div>
-                      <p className="font-medium text-carbon_black">{account.label}</p>
-                      <p className="text-xs text-slate_grey">
+                      <p className="font-medium text-foreground">{account.label}</p>
+                      <p className="text-xs text-muted-foreground">
                         {TYPE_LABELS[account.type] ?? account.type}
                         {account.institution ? ` · ${account.institution}` : ''}
                       </p>
@@ -128,13 +128,13 @@ export function AccountsManager() {
                   </div>
                   {account.isArchived && <Badge variant="muted">Archived</Badge>}
                 </div>
-                <p className="mt-4 font-display text-xl font-semibold text-carbon_black">
+                <p className="mt-4 font-display text-xl font-semibold text-foreground">
                   {formatMoney(account.balance, account.currency)}
                 </p>
-                <p className="text-xs text-slate_grey">
+                <p className="text-xs text-muted-foreground">
                   Starting {formatMoney(account.startingBalance, account.currency)}
                 </p>
-                <div className="mt-4 flex items-center gap-2 border-t border-alabaster_grey pt-3">
+                <div className="mt-4 flex items-center gap-2 border-t border-border pt-3">
                   <Button variant="outline" size="sm" onClick={() => openEdit(account)}>
                     <Pencil className="h-3.5 w-3.5" />
                     Edit

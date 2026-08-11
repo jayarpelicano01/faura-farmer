@@ -138,10 +138,10 @@ export function TransactionsManager({ accounts, categories }: TransactionsManage
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="font-display text-2xl font-semibold text-gunmetal md:text-3xl">
+          <h1 className="font-display text-2xl font-semibold text-foreground md:text-3xl">
             Transactions
           </h1>
-          <p className="mt-1 text-sm text-slate_grey">Search, filter and record transactions.</p>
+          <p className="mt-1 text-sm text-muted-foreground">Search, filter and record transactions.</p>
         </div>
         <Button onClick={openCreate}>
           <Plus className="h-4 w-4" />
@@ -152,7 +152,7 @@ export function TransactionsManager({ accounts, categories }: TransactionsManage
       <Card>
         <CardContent className="space-y-4 p-4">
           <div className="relative">
-            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-pale_slate_deep" />
+            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
             <Input
               className="pl-9"
               placeholder="Search by note…"
@@ -236,25 +236,25 @@ export function TransactionsManager({ accounts, categories }: TransactionsManage
             <TableBody>
               {loading && items.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={7} className="py-10 text-center text-slate_grey">
+                  <TableCell colSpan={7} className="py-10 text-center text-muted-foreground">
                     Loading…
                   </TableCell>
                 </TableRow>
               ) : items.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={7} className="py-10 text-center text-slate_grey">
+                  <TableCell colSpan={7} className="py-10 text-center text-muted-foreground">
                     No transactions match your filters.
                   </TableCell>
                 </TableRow>
               ) : (
                 items.map((tx) => (
                   <TableRow key={tx.id}>
-                    <TableCell className="text-slate_grey">{formatDate(tx.date)}</TableCell>
-                    <TableCell className="font-medium text-carbon_black">
+                    <TableCell className="text-muted-foreground">{formatDate(tx.date)}</TableCell>
+                    <TableCell className="font-medium text-foreground">
                       {tx.account?.label}
                     </TableCell>
-                    <TableCell className="text-slate_grey">{tx.category?.name ?? '—'}</TableCell>
-                    <TableCell className="max-w-[160px] truncate text-slate_grey">
+                    <TableCell className="text-muted-foreground">{tx.category?.name ?? '—'}</TableCell>
+                    <TableCell className="max-w-[160px] truncate text-muted-foreground">
                       {tx.note || '—'}
                     </TableCell>
                     <TableCell>
@@ -268,7 +268,7 @@ export function TransactionsManager({ accounts, categories }: TransactionsManage
                           ? 'text-right font-semibold text-income'
                           : tx.type === 'expense'
                             ? 'text-right font-semibold text-expense'
-                            : 'text-right font-semibold text-carbon_black'
+                            : 'text-right font-semibold text-foreground'
                       }
                     >
                       {tx.type === 'income' ? '+' : tx.type === 'expense' ? '−' : ''}

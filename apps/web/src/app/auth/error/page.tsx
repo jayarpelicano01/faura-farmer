@@ -9,7 +9,7 @@ export default function AuthErrorPage() {
         <CardTitle className="font-display text-xl">Sign-in error</CardTitle>
       </CardHeader>
       <CardContent>
-        <p className="text-sm text-slate_grey">
+        <p className="text-sm text-muted-foreground">
           Something went wrong while signing you in. This usually happens when an OAuth
           provider isn&apos;t configured yet.
         </p>

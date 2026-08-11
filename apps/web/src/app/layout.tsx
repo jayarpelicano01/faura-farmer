@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import { Albert_Sans, Unbounded } from 'next/font/google';
 import './globals.css';
 import { SessionProvider } from '@/components/providers/session-provider';
+import { ThemeProvider } from '@/components/providers/theme-provider';
 
 const unbounded = Unbounded({
   variable: '--font-unbounded',
@@ -29,10 +30,13 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`${unbounded.variable} ${albertSans.variable}`}
+      className={`dark ${unbounded.variable} ${albertSans.variable}`}
+      suppressHydrationWarning
     >
       <body>
-        <SessionProvider>{children}</SessionProvider>
+        <ThemeProvider>
+          <SessionProvider>{children}</SessionProvider>
+        </ThemeProvider>
       </body>
     </html>
   );

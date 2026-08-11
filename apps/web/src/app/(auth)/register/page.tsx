@@ -125,7 +125,7 @@ export default function RegisterPage() {
           </CardFooter>
         </>
       )}
-      <CardFooter className="justify-center pt-4 text-sm text-slate_grey">
+      <CardFooter className="justify-center pt-4 text-sm text-muted-foreground">
         Already have an account?{' '}
         <Link href="/login" className="ml-1 font-medium text-primary hover:underline">
           Sign in

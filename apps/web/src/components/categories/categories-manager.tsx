@@ -29,14 +29,14 @@ function CategoryRow({
   return (
     <div className="space-y-1">
       <div
-        className="group flex items-center gap-2 rounded-md border border-alabaster_grey bg-background px-3 py-2"
+        className="group flex items-center gap-2 rounded-md border border-border bg-background px-3 py-2"
         style={{ marginLeft: depth * 20 }}
       >
         <span
           className="h-3 w-3 shrink-0 rounded-full"
           style={{ backgroundColor: category.color ?? '#adb5bd' }}
         />
-        <span className="flex-1 text-sm font-medium text-carbon_black">{category.name}</span>
+        <span className="flex-1 text-sm font-medium text-foreground">{category.name}</span>
         <span className="flex items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100">
           <Button variant="ghost" size="icon" onClick={() => onAddChild(category)} title="Add sub-category">
             <FolderPlus className="h-3.5 w-3.5" />
@@ -95,7 +95,7 @@ function CategoryColumn({
       </CardHeader>
       <CardContent className="space-y-1">
         {categories.length === 0 ? (
-          <p className="text-sm text-slate_grey">No {title.toLowerCase()} categories yet.</p>
+          <p className="text-sm text-muted-foreground">No {title.toLowerCase()} categories yet.</p>
         ) : (
           categories.map((category) => (
             <CategoryRow
@@ -177,14 +177,14 @@ export function CategoriesManager() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="font-display text-2xl font-semibold text-gunmetal md:text-3xl">Categories</h1>
-        <p className="mt-1 text-sm text-slate_grey">
+        <h1 className="font-display text-2xl font-semibold text-foreground md:text-3xl">Categories</h1>
+        <p className="mt-1 text-sm text-muted-foreground">
           Organize income and expenses. Sub-categories are optional.
         </p>
       </div>
 
       {loading ? (
-        <p className="text-sm text-slate_grey">Loading categories…</p>
+        <p className="text-sm text-muted-foreground">Loading categories…</p>
       ) : (
         <div className="grid gap-6 lg:grid-cols-2">
           <CategoryColumn

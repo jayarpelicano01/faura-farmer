@@ -38,13 +38,13 @@ export default async function ReportsPage({ searchParams }: ReportsPageProps) {
     <div className="space-y-6">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h1 className="font-display text-2xl font-semibold text-gunmetal md:text-3xl">Reports</h1>
-          <p className="mt-1 text-sm text-slate_grey">
+          <h1 className="font-display text-2xl font-semibold text-foreground md:text-3xl">Reports</h1>
+          <p className="mt-1 text-sm text-muted-foreground">
             Spending by category and your last six months of income vs expenses.
           </p>
         </div>
         <form action="/reports" method="get" className="flex items-center gap-2">
-          <label htmlFor="month" className="text-sm font-medium text-slate_grey">
+          <label htmlFor="month" className="text-sm font-medium text-muted-foreground">
             Month
           </label>
           <input
@@ -52,7 +52,7 @@ export default async function ReportsPage({ searchParams }: ReportsPageProps) {
             name="month"
             type="month"
             defaultValue={monthValue}
-            className="h-10 rounded-md border border-pale_slate bg-background px-3 text-sm text-carbon_black focus:outline-none focus:ring-2 focus:ring-ring"
+            className="h-10 rounded-md border border-input bg-background px-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
           />
           <button
             type="submit"
@@ -70,7 +70,7 @@ export default async function ReportsPage({ searchParams }: ReportsPageProps) {
         </CardHeader>
         <CardContent>
           {spending.length === 0 ? (
-            <p className="py-12 text-center text-sm text-slate_grey">
+            <p className="py-12 text-center text-sm text-muted-foreground">
               No expenses recorded for this month yet.
             </p>
           ) : (

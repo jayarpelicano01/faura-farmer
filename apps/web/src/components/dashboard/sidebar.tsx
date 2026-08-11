@@ -15,6 +15,7 @@ import { cn } from '@/lib/utils';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
+import { ThemeToggle } from '@/components/theme-toggle';
 
 const navItems = [
   { href: '/', label: 'Dashboard', icon: LayoutDashboard, exact: true },
@@ -43,11 +44,22 @@ export function Sidebar({ user }: SidebarProps) {
     .toUpperCase();
 
   return (
-    <aside className="border-b border-alabaster_grey bg-platinum/60 md:flex md:w-64 md:flex-col md:border-b-0 md:border-r">
-      <div className="flex items-center justify-between px-6 py-5">
-        <Link href="/" className="font-display text-lg font-semibold text-gunmetal">
+    <aside className="border-b border-border bg-card md:flex md:w-64 md:flex-col md:border-b-0 md:border-r">
+      <div className="flex items-center justify-between px-4 py-5 md:px-6">
+        <Link href="/" className="font-display text-lg font-semibold text-charcoal_blue">
           Faura-Farmer
         </Link>
+        <div className="flex items-center gap-1 md:hidden">
+          <ThemeToggle />
+          <Button
+            variant="ghost"
+            size="icon"
+            aria-label="Sign out"
+            onClick={() => signOut({ callbackUrl: '/login' })}
+          >
+            <LogOut className="h-4 w-4" />
+          </Button>
+        </div>
       </div>
       <nav className="flex gap-1 overflow-x-auto px-4 pb-3 md:flex-1 md:flex-col md:gap-1 md:px-4 md:pb-0">
         {navItems.map((item) => {
@@ -62,7 +74,7 @@ export function Sidebar({ user }: SidebarProps) {
                 'flex shrink-0 items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors',
                 active
                   ? 'bg-primary/10 text-primary'
-                  : 'text-slate_grey hover:bg-accent hover:text-carbon_black',
+                  : 'text-muted-foreground hover:bg-accent hover:text-foreground',
               )}
             >
               <item.icon className="h-4 w-4" />
@@ -80,18 +92,21 @@ export function Sidebar({ user }: SidebarProps) {
               <AvatarFallback>{initials}</AvatarFallback>
             </Avatar>
             <div className="min-w-0">
-              <p className="truncate text-sm font-medium text-carbon_black">{user.name}</p>
-              <p className="truncate text-xs text-slate_grey">{user.email}</p>
+              <p className="truncate text-sm font-medium text-foreground">{user.name}</p>
+              <p className="truncate text-xs text-muted-foreground">{user.email}</p>
             </div>
           </div>
-          <Button
-            variant="ghost"
-            size="icon"
-            aria-label="Sign out"
-            onClick={() => signOut({ callbackUrl: '/login' })}
-          >
-            <LogOut className="h-4 w-4" />
-          </Button>
+          <div className="flex items-center">
+            <ThemeToggle />
+            <Button
+              variant="ghost"
+              size="icon"
+              aria-label="Sign out"
+              onClick={() => signOut({ callbackUrl: '/login' })}
+            >
+              <LogOut className="h-4 w-4" />
+            </Button>
+          </div>
         </div>
       </div>
     </aside>
