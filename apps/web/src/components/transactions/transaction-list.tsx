@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { ChevronDown, Pencil, Trash2 } from 'lucide-react';
-import type { Transaction } from '@faura-farmer/types';
+import type { BudgetBucket, Transaction } from '@faura-farmer/types';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
@@ -15,7 +15,7 @@ import {
 } from '@/components/ui/table';
 import { cn } from '@/lib/utils';
 import { formatDate, formatMoney } from '@/lib/format';
-import { TYPE_BADGE_VARIANT } from '@/lib/meta';
+import { BUCKET_BADGE_COLOR, BUCKET_META, TYPE_BADGE_VARIANT } from '@/lib/meta';
 
 interface TransactionListProps {
   transactions: Transaction[];
@@ -24,6 +24,21 @@ interface TransactionListProps {
   onDelete?: (tx: Transaction) => void;
   loading?: boolean;
   emptyMessage?: string;
+  getBucket?: (tx: Transaction) => BudgetBucket | null;
+}
+
+function BucketTag({ bucket }: { bucket: BudgetBucket | null }) {
+  if (!bucket) return null;
+  const meta = BUCKET_META[bucket];
+  return (
+    <span className="ml-2 inline-flex items-center gap-1 align-middle text-xs text-muted-foreground">
+      <span
+        className="h-2 w-2 shrink-0 rounded-full"
+        style={{ backgroundColor: BUCKET_BADGE_COLOR[bucket] }}
+      />
+      {meta.label}
+    </span>
+  );
 }
 
 function sign(type: Transaction['type']): string {
@@ -47,11 +62,13 @@ function MobileItem({
   variant,
   onEdit,
   onDelete,
+  bucket,
 }: {
   tx: Transaction;
   variant: 'recent' | 'full';
   onEdit?: (tx: Transaction) => void;
   onDelete?: (tx: Transaction) => void;
+  bucket: BudgetBucket | null;
 }) {
   const [open, setOpen] = useState(false);
 
@@ -102,7 +119,10 @@ function MobileItem({
             </div>
             <div className="flex items-center justify-between gap-4">
               <dt className="text-muted-foreground">Category</dt>
-              <dd className="text-foreground">{tx.category?.name ?? '—'}</dd>
+              <dd className="flex items-center gap-1 text-foreground">
+                {tx.category?.name ?? '—'}
+                <BucketTag bucket={bucket} />
+              </dd>
             </div>
             <div className="flex items-center justify-between gap-4">
               <dt className="text-muted-foreground">Date</dt>
@@ -149,10 +169,14 @@ export function TransactionList({
   onDelete,
   loading,
   emptyMessage = 'No transactions.',
+  getBucket,
 }: TransactionListProps) {
   if (loading && transactions.length === 0) {
     return <p className="py-10 text-center text-sm text-muted-foreground">Loading…</p>;
   }
+
+  const bucketOf = (tx: Transaction): BudgetBucket | null =>
+    getBucket?.(tx) ?? tx.bucket ?? tx.category?.bucket ?? null;
 
   const actionCols = variant === 'full' && (onEdit || onDelete);
   const colSpan = (variant === 'full' ? 6 : 5) + (actionCols ? 1 : 0);
@@ -170,6 +194,7 @@ export function TransactionList({
               variant={variant}
               onEdit={onEdit}
               onDelete={onDelete}
+              bucket={bucketOf(tx)}
             />
           ))
         )}
@@ -204,6 +229,7 @@ export function TransactionList({
                   </TableCell>
                   <TableCell className="text-muted-foreground">
                     {tx.category?.name ?? '—'}
+                    <BucketTag bucket={bucketOf(tx)} />
                   </TableCell>
                   {variant === 'full' && (
                     <TableCell className="max-w-[160px] truncate text-muted-foreground">

@@ -41,6 +41,7 @@ export async function POST(request: Request) {
       parentId: parsed.data.parentId ?? null,
       icon: parsed.data.icon ?? null,
       color: parsed.data.color ?? null,
+      bucket: parsed.data.bucket ?? null,
     },
   });
 

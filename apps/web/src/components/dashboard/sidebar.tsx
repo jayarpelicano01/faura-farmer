@@ -45,7 +45,7 @@ export function Sidebar({ user }: SidebarProps) {
     .toUpperCase();
 
   return (
-    <aside className="border-b border-border bg-card md:flex md:w-64 md:flex-col md:border-b-0 md:border-r">
+    <aside className="border-b border-border bg-card md:sticky md:top-0 md:h-screen md:flex md:w-64 md:flex-col md:overflow-hidden md:border-b-0 md:border-r">
       <div className="flex items-center justify-between gap-2 px-4 py-5 md:px-6">
         <Link
           href="/"
@@ -66,7 +66,7 @@ export function Sidebar({ user }: SidebarProps) {
           <UserMenu user={user} />
         </div>
       </div>
-      <nav className="flex gap-2 overflow-x-auto px-4 pb-3 md:flex-1 md:flex-col md:gap-1 md:px-4 md:pb-0">
+      <nav className="flex gap-2 overflow-x-auto px-4 pb-3 md:flex-1 md:flex-col md:gap-1 md:overflow-y-auto md:px-4 md:pb-0">
         {navItems.map((item) => {
           const active = item.exact
             ? pathname === item.href

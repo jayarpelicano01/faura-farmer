@@ -2,6 +2,7 @@ import { auth } from '@/lib/auth';
 import { redirect } from 'next/navigation';
 import {
   getAccountsWithBalance,
+  getBucketAllocation,
   getBudgetsWithProgress,
   getMonthTotals,
   getRecentTransactions,
@@ -11,6 +12,7 @@ import {
   AccountSummary,
   BalanceCards,
   BudgetOverview,
+  MonthlyBudgetOverview,
   RecentTransactions,
 } from '@/components/dashboard/widgets';
 
@@ -18,11 +20,12 @@ export default async function DashboardPage() {
   const session = await auth();
   if (!session?.user?.id) redirect('/login');
 
-  const [accounts, monthTotals, recent, budgets] = await Promise.all([
+  const [accounts, monthTotals, recent, budgets, allocation] = await Promise.all([
     getAccountsWithBalance(session.user.id),
     getMonthTotals(session.user.id, new Date()),
     getRecentTransactions(session.user.id, 5),
     getBudgetsWithProgress(session.user.id, new Date()),
+    getBucketAllocation(session.user.id, new Date()),
   ]);
 
   const totalBalance = accounts.reduce((sum, account) => sum + toNumber(account.balance), 0);
@@ -44,6 +47,7 @@ export default async function DashboardPage() {
           <AccountSummary accounts={accounts} />
         </div>
       </div>
+      <MonthlyBudgetOverview allocation={allocation} />
       <BudgetOverview budgets={budgets} />
     </div>
   );

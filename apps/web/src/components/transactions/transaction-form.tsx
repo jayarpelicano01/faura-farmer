@@ -4,20 +4,21 @@ import { useEffect, useState } from 'react';
 import { z } from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
-import type { Category } from '@faura-farmer/types';
+import { BUDGET_BUCKETS, type BudgetBucket, type Category } from '@faura-farmer/types';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Select, SelectContent, SelectItem, SelectItemText, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { apiFetch } from '@/lib/api';
-import { categoriesByType } from '@/lib/meta';
+import { categoriesByType, BUCKET_BADGE_COLOR, BUCKET_META, resolveCategoryBucket } from '@/lib/meta';
 import type { SelectAccount } from '@/lib/meta';
 
 const formSchema = z.object({
   accountId: z.string().min(1, 'Account is required'),
   categoryId: z.string().nullable().optional(),
+  bucket: z.enum(BUDGET_BUCKETS).nullable().optional(),
   amount: z
     .string()
     .min(1, 'Amount is required')
@@ -35,6 +36,7 @@ export interface TransactionFormValues {
   id?: string;
   accountId: string;
   categoryId?: string | null;
+  bucket?: BudgetBucket | null;
   amount: string | number;
   type: 'income' | 'expense' | 'transfer';
   date: string;
@@ -72,6 +74,7 @@ export function TransactionForm({
     defaultValues: {
       accountId: '',
       categoryId: null,
+      bucket: null,
       amount: '',
       type: 'expense',
       date: new Date().toISOString().slice(0, 10),
@@ -80,19 +83,28 @@ export function TransactionForm({
   });
 
   const watchType = form.watch('type');
+  const watchCategoryId = form.watch('categoryId');
 
   useEffect(() => {
     if (!open) return;
     form.reset({
       accountId: initial?.accountId ?? accounts[0]?.id ?? '',
       categoryId: initial?.categoryId ?? null,
+      bucket: initial?.bucket ?? null,
       amount: String(initial?.amount ?? ''),
       type: initial?.type ?? 'expense',
       date: initial?.date ? toDateInputValue(initial.date) : new Date().toISOString().slice(0, 10),
       note: initial?.note ?? '',
     });
     setSubmitError(null);
-  }, [open, initial, accounts, form]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, initial, form]);
+
+  useEffect(() => {
+    if (watchType !== 'expense') {
+      form.setValue('bucket', null);
+    }
+  }, [watchType, form]);
 
   async function onSubmit(values: FormValues) {
     setSaving(true);
@@ -101,6 +113,7 @@ export function TransactionForm({
       const payload = {
         accountId: values.accountId,
         categoryId: values.categoryId ? values.categoryId : null,
+        bucket: values.bucket ?? null,
         amount: Number(values.amount),
         type: values.type,
         date: new Date(values.date),
@@ -221,11 +234,19 @@ export function TransactionForm({
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="none">Uncategorized</SelectItem>
-                        {categoriesByType(categories, watchType ?? 'expense').map((category) => (
-                          <SelectItem key={category.id} value={category.id}>
-                            {category.name}
-                          </SelectItem>
-                        ))}
+                        {categoriesByType(categories, watchType ?? 'expense').map((category) => {
+                          const bucket = resolveCategoryBucket(categories, category);
+                          return (
+                            <SelectItem key={category.id} value={category.id}>
+                              <SelectItemText>{category.name}</SelectItemText>
+                              {bucket && (
+                                <span className="ml-2 text-xs font-normal text-muted-foreground">
+                                  {BUCKET_META[bucket].label}
+                                </span>
+                              )}
+                            </SelectItem>
+                          );
+                        })}
                       </SelectContent>
                     </Select>
                   </FormControl>
@@ -233,6 +254,58 @@ export function TransactionForm({
                 </FormItem>
               )}
             />
+            {(watchType ?? 'expense') === 'expense' && (
+              <FormField
+                control={form.control}
+                name="bucket"
+                render={({ field }) => {
+                  const selectedCategory = categories.find((c) => c.id === watchCategoryId);
+                  const autoBucket = selectedCategory
+                    ? resolveCategoryBucket(categories, selectedCategory)
+                    : null;
+                  return (
+                    <FormItem>
+                      <FormLabel>50 / 30 / 20 bucket</FormLabel>
+                      <FormControl>
+                        <Select
+                          value={field.value ?? 'auto'}
+                          onValueChange={(value) => field.onChange(value === 'auto' ? null : value)}
+                        >
+                          <SelectTrigger className="bg-background">
+                            <SelectValue placeholder="Auto (from category)" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="auto">
+                              <span
+                                className="mr-2 h-2.5 w-2.5 shrink-0 rounded-full"
+                                style={{
+                                  backgroundColor: autoBucket
+                                    ? BUCKET_BADGE_COLOR[autoBucket]
+                                    : 'transparent',
+                                }}
+                              />
+                              <SelectItemText>
+                                {autoBucket ? `Auto (${BUCKET_META[autoBucket].label})` : 'Auto (from category)'}
+                              </SelectItemText>
+                            </SelectItem>
+                            {BUDGET_BUCKETS.map((bucket) => (
+                              <SelectItem key={bucket} value={bucket}>
+                                <span
+                                  className="mr-2 h-2.5 w-2.5 shrink-0 rounded-full"
+                                  style={{ backgroundColor: BUCKET_BADGE_COLOR[bucket] }}
+                                />
+                                <SelectItemText>{BUCKET_META[bucket].label}</SelectItemText>
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  );
+                }}
+              />
+            )}
             <FormField
               control={form.control}
               name="amount"

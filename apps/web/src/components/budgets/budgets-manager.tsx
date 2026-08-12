@@ -11,6 +11,7 @@ import { apiFetch } from '@/lib/api';
 import { formatMoney, toNumber } from '@/lib/format';
 import { cn } from '@/lib/utils';
 import { BudgetForm, type BudgetFormValues } from './budget-form';
+import { MonthlyBudgetGuide } from './monthly-budget-guide';
 
 export function BudgetsManager() {
   const router = useRouter();
@@ -82,13 +83,13 @@ export function BudgetsManager() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <div>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="min-w-0 flex-1">
           <h1 className="font-display text-2xl font-semibold text-foreground md:text-3xl">
             Budgets
           </h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            Monthly limits per expense category, with live progress against this month&apos;s spending.
+            Plan your household spending with a 50 / 30 / 20 budget and per-category monthly limits.
           </p>
         </div>
         <Button onClick={openCreate}>
@@ -96,6 +97,8 @@ export function BudgetsManager() {
           New budget
         </Button>
       </div>
+
+      <MonthlyBudgetGuide budgets={budgets} />
 
       {loading ? (
         <p className="text-sm text-muted-foreground">Loading budgets…</p>

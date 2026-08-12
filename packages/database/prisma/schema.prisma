@@ -28,6 +28,12 @@ enum CategoryType {
   expense
 }
 
+enum BudgetBucket {
+  needs
+  wants
+  savings
+}
+
 enum TransactionType {
   income
   expense
@@ -55,6 +61,7 @@ model User {
   categories Category[]
   budgets    Budget[]
   goals      Goal[]
+  monthlyBudget MonthlyBudget?
 
   @@map("users")
 }
@@ -89,6 +96,7 @@ model Category {
   parentId  String?      @map("parent_id") @db.Uuid
   icon      String?
   color     String?
+  bucket    BudgetBucket?
 
   user             User            @relation(fields: [userId], references: [id], onDelete: Cascade)
   parent           Category?       @relation("CategoryParent", fields: [parentId], references: [id], onDelete: SetNull)
@@ -106,6 +114,7 @@ model Transaction {
   id                    String          @id @default(uuid()) @db.Uuid
   accountId             String          @map("account_id") @db.Uuid
   categoryId            String?         @map("category_id") @db.Uuid
+  bucket                BudgetBucket?
   amount                Decimal         @db.Decimal(14, 2)
   type                  TransactionType
   date                  DateTime        @db.Date
@@ -170,4 +179,15 @@ model Goal {
 
   @@index([userId])
   @@map("goals")
+}
+
+model MonthlyBudget {
+  id     String  @id @default(uuid()) @db.Uuid
+  userId String  @map("user_id") @db.Uuid
+  amount Decimal @db.Decimal(14, 2)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId])
+  @@map("monthly_budgets")
 }

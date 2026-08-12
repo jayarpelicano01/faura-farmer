@@ -4,6 +4,9 @@ export type AccountType = (typeof ACCOUNT_TYPES)[number];
 export const CATEGORY_TYPES = ['income', 'expense'] as const;
 export type CategoryType = (typeof CATEGORY_TYPES)[number];
 
+export const BUDGET_BUCKETS = ['needs', 'wants', 'savings'] as const;
+export type BudgetBucket = (typeof BUDGET_BUCKETS)[number];
+
 export const TRANSACTION_TYPES = ['income', 'expense', 'transfer'] as const;
 export type TransactionType = (typeof TRANSACTION_TYPES)[number];
 
@@ -55,6 +58,7 @@ export interface Category {
   parentId?: string | null;
   icon?: string | null;
   color?: string | null;
+  bucket?: BudgetBucket | null;
   children?: Category[];
 }
 
@@ -62,6 +66,7 @@ export interface Transaction {
   id: string;
   accountId: string;
   categoryId?: string | null;
+  bucket?: BudgetBucket | null;
   amount: string;
   type: TransactionType;
   date: Date;
@@ -105,6 +110,28 @@ export interface BudgetWithCategory extends Budget {
   remaining: string;
   progress: number;
   over: boolean;
+}
+
+export interface MonthlyBudget {
+  id: string;
+  userId: string;
+  amount: string;
+}
+
+export interface BucketPoint {
+  bucket: BudgetBucket;
+  target: string;
+  spent: string;
+  remaining: string;
+  progress: number;
+  over: boolean;
+}
+
+export interface BucketAllocation {
+  amount: string;
+  persisted: boolean;
+  buckets: BucketPoint[];
+  unallocated: string;
 }
 
 export interface Goal {

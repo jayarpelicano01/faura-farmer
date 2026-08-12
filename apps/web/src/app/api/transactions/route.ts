@@ -83,6 +83,7 @@ export async function POST(request: Request) {
     data: {
       accountId: parsed.data.accountId,
       categoryId: parsed.data.categoryId ?? null,
+      bucket: parsed.data.bucket ?? null,
       amount: parsed.data.amount,
       type: parsed.data.type,
       date: parsed.data.date,

@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import {
   ACCOUNT_TYPES,
+  BUDGET_BUCKETS,
   CATEGORY_TYPES,
   TRANSACTION_TYPES,
   FREQUENCIES,
@@ -83,6 +84,7 @@ export const categorySchema = z.object({
   parentId: z.string().uuid().optional().nullable(),
   icon: z.string().trim().max(40).optional().nullable(),
   color: z.string().trim().max(40).optional().nullable(),
+  bucket: z.enum(BUDGET_BUCKETS).optional().nullable(),
 });
 
 export const createCategorySchema = categorySchema;
@@ -96,9 +98,14 @@ export const budgetSchema = z.object({
 export const createBudgetSchema = budgetSchema;
 export const updateBudgetSchema = budgetSchema.partial();
 
+export const monthlyBudgetSchema = z.object({
+  amount: z.coerce.number().positive('Monthly budget must be positive').max(999999999999),
+});
+
 export const transactionSchema = z.object({
   accountId: z.string().uuid('Account is required'),
   categoryId: z.string().uuid().optional().nullable(),
+  bucket: z.enum(BUDGET_BUCKETS).optional().nullable(),
   amount: z.coerce.number().positive('Amount must be positive').max(999999999999),
   type: z.enum(TRANSACTION_TYPES),
   date: z.coerce.date(),
@@ -135,6 +142,7 @@ export type CreateCategoryInput = z.infer<typeof createCategorySchema>;
 export type UpdateCategoryInput = z.infer<typeof updateCategorySchema>;
 export type CreateBudgetInput = z.infer<typeof createBudgetSchema>;
 export type UpdateBudgetInput = z.infer<typeof updateBudgetSchema>;
+export type MonthlyBudgetInput = z.infer<typeof monthlyBudgetSchema>;
 export type CreateTransactionInput = z.infer<typeof createTransactionSchema>;
 export type UpdateTransactionInput = z.infer<typeof updateTransactionSchema>;
 export type TransactionListQuery = z.infer<typeof transactionListQuerySchema>;

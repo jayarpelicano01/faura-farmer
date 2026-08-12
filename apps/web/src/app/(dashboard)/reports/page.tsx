@@ -2,7 +2,8 @@ import { auth } from '@/lib/auth';
 import { redirect } from 'next/navigation';
 import dynamic from 'next/dynamic';
 import { format } from 'date-fns';
-import { getMonthlyTrend, getSpendingByCategory } from '@/lib/queries';
+import { getBucketAllocation, getMonthlyTrend, getSpendingByCategory } from '@/lib/queries';
+import { BucketBreakdown } from '@/components/budgets/bucket-breakdown';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 
 const SpendingBarChart = dynamic(() =>
@@ -27,9 +28,10 @@ export default async function ReportsPage({ searchParams }: ReportsPageProps) {
     if (!Number.isNaN(parsed.getTime())) selectedMonth = parsed;
   }
 
-  const [spending, trend] = await Promise.all([
+  const [spending, trend, allocation] = await Promise.all([
     getSpendingByCategory(session.user.id, selectedMonth),
     getMonthlyTrend(session.user.id, 6),
+    getBucketAllocation(session.user.id, selectedMonth),
   ]);
 
   const monthValue = format(selectedMonth, 'yyyy-MM');
@@ -76,6 +78,16 @@ export default async function ReportsPage({ searchParams }: ReportsPageProps) {
           ) : (
             <SpendingBarChart data={spending} />
           )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="font-display text-lg">Monthly budget breakdown</CardTitle>
+          <CardDescription>Needs / Wants / Savings allocation for {format(selectedMonth, 'MMMM yyyy')}</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <BucketBreakdown allocation={allocation} />
         </CardContent>
       </Card>
 

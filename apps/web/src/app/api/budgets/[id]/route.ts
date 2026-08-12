@@ -2,6 +2,7 @@ import { prisma } from '@faura-farmer/database';
 import { auth } from '@/lib/auth';
 import { updateBudgetSchema } from '@/lib/validations';
 import { badRequest, notFound, ok, unauthorized } from '@/lib/http';
+import { findConflictingBudget } from '@/lib/queries';
 
 export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -27,14 +28,12 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     if (!category) return badRequest('Category not found');
     if (category.type !== 'expense') return badRequest('Budgets can only be set on expense categories');
 
-    const existing = await prisma.budget.findFirst({
-      where: {
-        userId: session.user.id,
-        categoryId: parsed.data.categoryId,
-        NOT: { id: budget.id },
-      },
-    });
-    if (existing) return badRequest('A budget for this category already exists');
+    const conflict = await findConflictingBudget(session.user.id, parsed.data.categoryId, budget.id);
+    if (conflict) {
+      return badRequest(
+        `A budget already exists for a parent or sub-category of "${conflict.categoryName}"`,
+      );
+    }
   }
 
   const updated = await prisma.budget.update({

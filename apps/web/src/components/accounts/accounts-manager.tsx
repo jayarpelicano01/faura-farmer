@@ -105,13 +105,13 @@ export function AccountsManager() {
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
+        <div className="min-w-0 flex-1">
           <h1 className="font-display text-2xl font-semibold text-foreground md:text-3xl">Accounts</h1>
           <p className="mt-1 text-sm text-muted-foreground">
             Your bank accounts, e-wallets, cash, cards and investments.
           </p>
         </div>
-        <Button onClick={openCreate} className="ml-auto">
+        <Button onClick={openCreate}>
           <Plus className="h-4 w-4" />
           New account
         </Button>

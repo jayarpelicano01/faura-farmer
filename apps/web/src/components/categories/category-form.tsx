@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
 import { createCategorySchema, type CreateCategoryInput } from '@/lib/validations';
-import { CATEGORY_TYPES, type CategoryType } from '@faura-farmer/types';
+import { BUDGET_BUCKETS, CATEGORY_TYPES, type CategoryType } from '@faura-farmer/types';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
@@ -19,6 +19,7 @@ export interface CategoryFormValues {
   type: CategoryType;
   parentId?: string | null;
   color?: string | null;
+  bucket?: string | null;
 }
 
 interface CategoryFormProps {
@@ -40,6 +41,7 @@ export function CategoryForm({ open, onOpenChange, onSaved, initial, parents }: 
       type: 'expense',
       parentId: null,
       color: '#adb5bd',
+      bucket: null,
     },
   });
 
@@ -52,6 +54,7 @@ export function CategoryForm({ open, onOpenChange, onSaved, initial, parents }: 
       type: (initial?.type as CreateCategoryInput['type']) ?? 'expense',
       parentId: initial?.parentId ?? null,
       color: initial?.color ?? '#adb5bd',
+      bucket: (initial?.bucket as CreateCategoryInput['bucket']) ?? null,
     });
     setSubmitError(null);
   }, [open, initial, form]);
@@ -179,6 +182,36 @@ export function CategoryForm({ open, onOpenChange, onSaved, initial, parents }: 
                 </FormItem>
               )}
             />
+            {watchType === 'expense' && (
+              <FormField
+                control={form.control}
+                name="bucket"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>50 / 30 / 20 bucket</FormLabel>
+                    <FormControl>
+                      <Select
+                        value={field.value ?? 'none'}
+                        onValueChange={(value) => field.onChange(value === 'none' ? null : value)}
+                      >
+                        <SelectTrigger className="bg-background">
+                          <SelectValue placeholder="Select a bucket" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="none">None — not tracked</SelectItem>
+                          {BUDGET_BUCKETS.map((bucket) => (
+                            <SelectItem key={bucket} value={bucket}>
+                              {bucket === 'needs' ? 'Needs' : bucket === 'wants' ? 'Wants' : 'Savings'}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            )}
             <DialogFooter>
               <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
                 Cancel

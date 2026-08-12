@@ -12,6 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { TransactionList } from '@/components/transactions/transaction-list';
 import { apiFetch } from '@/lib/api';
 import { cn } from '@/lib/utils';
+import { resolveTransactionBucket } from '@/lib/meta';
 import { TransactionForm, type TransactionFormValues } from './transaction-form';
 
 interface TransactionsManagerProps {
@@ -136,6 +137,7 @@ export function TransactionsManager({ accounts, categories }: TransactionsManage
       preset
         ? {
             accountId: '',
+            bucket: null,
             amount: '',
             type: preset,
             date: new Date().toISOString(),
@@ -151,6 +153,7 @@ export function TransactionsManager({ accounts, categories }: TransactionsManage
       id: tx.id,
       accountId: tx.accountId,
       categoryId: tx.categoryId,
+      bucket: tx.bucket,
       amount: String(tx.amount),
       type: tx.type,
       date: tx.date instanceof Date ? tx.date.toISOString() : new Date(tx.date).toISOString(),
@@ -173,13 +176,13 @@ export function TransactionsManager({ accounts, categories }: TransactionsManage
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
+        <div className="min-w-0 flex-1">
           <h1 className="font-display text-2xl font-semibold text-foreground md:text-3xl">
             Transactions
           </h1>
           <p className="mt-1 text-sm text-muted-foreground">Search, filter and record transactions.</p>
         </div>
-        <Button onClick={() => openCreate()} className="ml-auto">
+        <Button onClick={() => openCreate()}>
           <Plus className="h-4 w-4" />
           New transaction
         </Button>
@@ -286,6 +289,7 @@ export function TransactionsManager({ accounts, categories }: TransactionsManage
             emptyMessage="No transactions match your filters."
             onEdit={openEdit}
             onDelete={handleDelete}
+            getBucket={(tx) => resolveTransactionBucket(categories, tx)}
           />
           {total > 0 && (
             <div className="flex flex-col items-center justify-between gap-3 border-t border-border p-4 sm:flex-row">

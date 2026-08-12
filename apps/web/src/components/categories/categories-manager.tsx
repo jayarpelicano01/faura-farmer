@@ -172,6 +172,7 @@ export function CategoriesManager() {
       type: category.type,
       parentId: category.parentId,
       color: category.color,
+      bucket: category.bucket,
     });
     setDialogOpen(true);
   }

@@ -4,12 +4,42 @@ import { formatMoney, toNumber } from '@/lib/format';
 import { cn } from '@/lib/utils';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { TransactionList } from '@/components/transactions/transaction-list';
+import { BucketBreakdown } from '@/components/budgets/bucket-breakdown';
 import type {
   AccountWithBalance,
   BudgetWithCategory,
+  BucketAllocation,
   MonthTotals,
   Transaction,
 } from '@faura-farmer/types';
+
+export function MonthlyBudgetOverview({ allocation }: { allocation: BucketAllocation }) {
+  const amount = toNumber(allocation.amount);
+  return (
+    <Card>
+      <CardHeader className="flex flex-row items-center justify-between">
+        <CardTitle className="flex items-center gap-2 font-display text-lg">
+          <PiggyBank className="h-4 w-4 text-muted-foreground" />
+          Monthly budget
+        </CardTitle>
+        <Link href="/budgets" className="text-sm font-medium text-primary hover:underline">
+          Manage
+        </Link>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <div>
+          <p className="font-display text-2xl font-semibold text-foreground">{formatMoney(amount)}</p>
+          <p className="mt-1 text-xs text-muted-foreground">
+            {allocation.persisted
+              ? '~50 / 30 / 20 split across needs, wants, and savings.'
+              : 'Defaults to this month&apos;s income until you set a value on the budgets page.'}
+          </p>
+        </div>
+        <BucketBreakdown allocation={allocation} compact />
+      </CardContent>
+    </Card>
+  );
+}
 
 export function BalanceCards({
   totalBalance,
