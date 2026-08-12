@@ -88,6 +88,14 @@ export const categorySchema = z.object({
 export const createCategorySchema = categorySchema;
 export const updateCategorySchema = categorySchema.partial();
 
+export const budgetSchema = z.object({
+  categoryId: z.string().uuid('Category is required'),
+  monthlyLimit: z.coerce.number().positive('Monthly limit must be positive').max(999999999999),
+});
+
+export const createBudgetSchema = budgetSchema;
+export const updateBudgetSchema = budgetSchema.partial();
+
 export const transactionSchema = z.object({
   accountId: z.string().uuid('Account is required'),
   categoryId: z.string().uuid().optional().nullable(),
@@ -125,6 +133,8 @@ export type CreateAccountInput = z.infer<typeof createAccountSchema>;
 export type UpdateAccountInput = z.infer<typeof updateAccountSchema>;
 export type CreateCategoryInput = z.infer<typeof createCategorySchema>;
 export type UpdateCategoryInput = z.infer<typeof updateCategorySchema>;
+export type CreateBudgetInput = z.infer<typeof createBudgetSchema>;
+export type UpdateBudgetInput = z.infer<typeof updateBudgetSchema>;
 export type CreateTransactionInput = z.infer<typeof createTransactionSchema>;
 export type UpdateTransactionInput = z.infer<typeof updateTransactionSchema>;
 export type TransactionListQuery = z.infer<typeof transactionListQuerySchema>;

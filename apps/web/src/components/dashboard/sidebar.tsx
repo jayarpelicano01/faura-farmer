@@ -9,6 +9,7 @@ import {
   PiggyBank,
   Tags,
   ChartColumn,
+  Wallet,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -21,6 +22,7 @@ const navItems = [
   { href: '/accounts', label: 'Accounts', icon: PiggyBank },
   { href: '/transactions', label: 'Transactions', icon: ArrowLeftRight },
   { href: '/categories', label: 'Categories', icon: Tags },
+  { href: '/budgets', label: 'Budgets', icon: Wallet },
   { href: '/reports', label: 'Reports', icon: ChartColumn },
 ];
 

@@ -10,6 +10,7 @@ import {
   PieChart,
   PiggyBank,
   Plus,
+  Wallet,
   X,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -20,6 +21,7 @@ const actions = [
   { href: '/transactions?new=1&type=transfer', label: 'Log transfer', icon: ArrowLeftRight },
   { href: '/accounts?new=1', label: 'Add account', icon: PiggyBank },
   { href: '/categories?new=1', label: 'Add category', icon: PieChart },
+  { href: '/budgets?new=1', label: 'New budget', icon: Wallet },
 ];
 
 export function FloatingActions() {
@@ -54,8 +56,8 @@ export function FloatingActions() {
         aria-expanded={open}
         onClick={() => setOpen((value) => !value)}
         className={cn(
-          'flex h-14 w-14 items-center justify-center rounded-full border border-white/40 text-primary-solid-foreground shadow-lg transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ring-offset-2 ring-offset-background',
-          open ? 'bg-expense hover:bg-expense/90' : 'bg-primary-solid hover:bg-primary-solid/90',
+          'flex h-14 w-14 items-center justify-center rounded-full  text-primary-solid-foreground shadow-lg transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
+          open ? 'bg-expense hover:bg-expense/90' : 'bg-primary-solid hover:bg-primary-solid/70',
         )}
       >
         {open ? <X className="h-6 w-6" /> : <Plus className="h-7 w-7" />}

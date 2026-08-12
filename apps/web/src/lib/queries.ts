@@ -1,6 +1,7 @@
 import { prisma } from '@faura-farmer/database';
 import type {
   AccountWithBalance,
+  BudgetWithCategory,
   Category,
   MonthTotals,
   MonthlyTrendPoint,
@@ -144,6 +145,60 @@ export async function getSpendingByCategory(
     })
     .filter((c): c is SpendingByCategory => c !== null)
     .sort((a, b) => toNumber(b.amount) - toNumber(a.amount));
+}
+
+export async function getBudgetsWithProgress(
+  userId: string,
+  month: Date,
+): Promise<BudgetWithCategory[]> {
+  const from = startOfMonth(month);
+  const to = endOfMonth(month);
+
+  const budgets = await prisma.budget.findMany({
+    where: { userId },
+    include: {
+      category: { select: { id: true, name: true, color: true, type: true } },
+    },
+    orderBy: { createdAt: 'asc' },
+  });
+
+  if (budgets.length === 0) return [];
+
+  const categoryIds = budgets.map((b) => b.categoryId);
+
+  const grouped = await prisma.transaction.groupBy({
+    by: ['categoryId'],
+    where: {
+      account: { userId },
+      type: 'expense',
+      categoryId: { in: categoryIds },
+      date: { gte: from, lte: to },
+    },
+    _sum: { amount: true },
+  });
+
+  const spentByCategory = new Map<string, number>();
+  for (const row of grouped) {
+    if (row.categoryId) spentByCategory.set(row.categoryId, toNumber(row._sum.amount));
+  }
+
+  return budgets.map<BudgetWithCategory>((budget) => {
+    const spent = spentByCategory.get(budget.categoryId) ?? 0;
+    const limit = toNumber(budget.monthlyLimit);
+    const progress = limit > 0 ? (spent / limit) * 100 : 0;
+    return {
+      id: budget.id,
+      userId: budget.userId,
+      categoryId: budget.categoryId,
+      monthlyLimit: String(budget.monthlyLimit),
+      createdAt: budget.createdAt,
+      category: budget.category,
+      spent: String(spent),
+      remaining: String(limit - spent),
+      progress,
+      over: spent > limit,
+    };
+  });
 }
 
 export async function getMonthlyTrend(

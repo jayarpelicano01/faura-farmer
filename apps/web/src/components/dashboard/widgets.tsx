@@ -1,9 +1,15 @@
 import Link from 'next/link';
-import { PiggyBank } from 'lucide-react';
+import { PiggyBank, TriangleAlert, Wallet } from 'lucide-react';
 import { formatMoney, toNumber } from '@/lib/format';
+import { cn } from '@/lib/utils';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { TransactionList } from '@/components/transactions/transaction-list';
-import type { AccountWithBalance, MonthTotals, Transaction } from '@faura-farmer/types';
+import type {
+  AccountWithBalance,
+  BudgetWithCategory,
+  MonthTotals,
+  Transaction,
+} from '@faura-farmer/types';
 
 export function BalanceCards({
   totalBalance,
@@ -106,6 +112,75 @@ export function RecentTransactions({ transactions }: { transactions: Transaction
           variant="recent"
           emptyMessage="No transactions recorded yet."
         />
+      </CardContent>
+    </Card>
+  );
+}
+
+export function BudgetOverview({ budgets }: { budgets: BudgetWithCategory[] }) {
+  const top = [...budgets]
+    .sort((a, b) => Number(b.over) - Number(a.over) || b.progress - a.progress)
+    .slice(0, 4);
+
+  return (
+    <Card>
+      <CardHeader className="flex flex-row items-center justify-between">
+        <CardTitle className="flex items-center gap-2 font-display text-lg">
+          <Wallet className="h-4 w-4 text-muted-foreground" />
+          Budgets
+        </CardTitle>
+        <Link href="/budgets" className="text-sm font-medium text-primary hover:underline">
+          Manage
+        </Link>
+      </CardHeader>
+      <CardContent>
+        {top.length === 0 ? (
+          <p className="text-sm text-muted-foreground">
+            No budgets yet. Set a monthly limit on an expense category.
+          </p>
+        ) : (
+          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+            {top.map((budget) => {
+              const limit = toNumber(budget.monthlyLimit);
+              const spent = toNumber(budget.spent);
+              const pct = Math.min(budget.progress, 100);
+              return (
+                <div
+                  key={budget.id}
+                  className="space-y-2 rounded-md border border-border bg-background p-3"
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex min-w-0 items-center gap-2">
+                      <span
+                        className="h-2.5 w-2.5 shrink-0 rounded-full"
+                        style={{ backgroundColor: budget.category.color ?? '#adb5bd' }}
+                      />
+                      <span className="truncate text-sm font-medium text-foreground">
+                        {budget.category.name}
+                      </span>
+                    </div>
+                    {budget.over && (
+                      <TriangleAlert className="h-4 w-4 shrink-0 text-expense" aria-label="Over budget" />
+                    )}
+                  </div>
+                  <div className="h-1.5 overflow-hidden rounded-full bg-accent">
+                    <div
+                      className={cn(
+                        'h-full rounded-full',
+                        budget.over ? 'bg-expense' : 'bg-income',
+                      )}
+                      style={{ width: `${pct}%` }}
+                    />
+                  </div>
+                  <div className="flex items-baseline justify-between text-xs">
+                    <span className="font-semibold text-foreground">{formatMoney(spent)}</span>
+                    <span className="text-muted-foreground">of {formatMoney(limit)}</span>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
       </CardContent>
     </Card>
   );

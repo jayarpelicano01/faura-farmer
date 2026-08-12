@@ -94,6 +94,19 @@ export interface Budget {
   createdAt: Date;
 }
 
+export interface BudgetWithCategory extends Budget {
+  category: {
+    id: string;
+    name: string;
+    color?: string | null;
+    type: CategoryType;
+  };
+  spent: string;
+  remaining: string;
+  progress: number;
+  over: boolean;
+}
+
 export interface Goal {
   id: string;
   userId: string;
