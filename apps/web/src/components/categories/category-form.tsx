@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { toast } from 'sonner';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
 import { createCategorySchema, type CreateCategoryInput } from '@/lib/validations';
@@ -71,11 +72,13 @@ export function CategoryForm({ open, onOpenChange, onSaved, initial, parents }: 
           method: 'PATCH',
           body: JSON.stringify(payload),
         });
+        toast.success('Category updated');
       } else {
         await apiFetch('/api/categories', {
           method: 'POST',
           body: JSON.stringify(payload),
         });
+        toast.success('Category created');
       }
       onOpenChange(false);
       await onSaved();

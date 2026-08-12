@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { toast } from 'sonner';
 import { useRouter } from 'next/navigation';
 import { useSession } from 'next-auth/react';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -32,11 +32,6 @@ export function ProfileForm({ user }: { user: ProfileUser }) {
   const { update } = useSession();
   const isEmailAccount = user.authProvider === 'email';
 
-  const [profileMessage, setProfileMessage] = useState<string | null>(null);
-  const [profileError, setProfileError] = useState<string | null>(null);
-  const [passwordMessage, setPasswordMessage] = useState<string | null>(null);
-  const [passwordError, setPasswordError] = useState<string | null>(null);
-
   const profileForm = useForm<UpdateProfileInput>({
     resolver: zodResolver(updateProfileSchema),
     defaultValues: {
@@ -55,8 +50,6 @@ export function ProfileForm({ user }: { user: ProfileUser }) {
   });
 
   async function onSaveProfile(values: UpdateProfileInput) {
-    setProfileMessage(null);
-    setProfileError(null);
     try {
       await apiFetch('/api/profile', {
         method: 'PATCH',
@@ -68,25 +61,23 @@ export function ProfileForm({ user }: { user: ProfileUser }) {
         username: values.username ?? null,
       });
       router.refresh();
-      setProfileMessage('Profile updated.');
+      toast.success('Profile updated');
     } catch (error) {
-      setProfileError(error instanceof Error ? error.message : 'Failed to update profile.');
+      toast.error(error instanceof Error ? error.message : 'Failed to update profile.');
     }
   }
 
   async function onChangePassword(values: ChangePasswordInput) {
-    setPasswordMessage(null);
-    setPasswordError(null);
     try {
       await apiFetch('/api/profile/password', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(values),
       });
-      setPasswordMessage('Password updated.');
+      toast.success('Password updated');
       passwordForm.reset({ currentPassword: '', newPassword: '', confirmPassword: '' });
     } catch (error) {
-      setPasswordError(error instanceof Error ? error.message : 'Failed to update password.');
+      toast.error(error instanceof Error ? error.message : 'Failed to update password.');
     }
   }
 
@@ -98,16 +89,6 @@ export function ProfileForm({ user }: { user: ProfileUser }) {
         </CardHeader>
         <form onSubmit={profileForm.handleSubmit(onSaveProfile)} noValidate>
           <CardContent className="space-y-4">
-            {profileError && (
-              <p className="rounded-md bg-expense/15 px-3 py-2 text-sm text-expense">
-                {profileError}
-              </p>
-            )}
-            {profileMessage && (
-              <p className="rounded-md bg-income/15 px-3 py-2 text-sm text-income">
-                {profileMessage}
-              </p>
-            )}
             <div className="space-y-2">
               <Label htmlFor="name">Name</Label>
               <Input
@@ -154,16 +135,6 @@ export function ProfileForm({ user }: { user: ProfileUser }) {
           </CardHeader>
           <form onSubmit={passwordForm.handleSubmit(onChangePassword)} noValidate>
             <CardContent className="space-y-4">
-              {passwordError && (
-                <p className="rounded-md bg-expense/15 px-3 py-2 text-sm text-expense">
-                  {passwordError}
-                </p>
-              )}
-              {passwordMessage && (
-                <p className="rounded-md bg-income/15 px-3 py-2 text-sm text-income">
-                  {passwordMessage}
-                </p>
-              )}
               <Separator className="mb-4" />
               <div className="space-y-2">
                 <Label htmlFor="currentPassword">Current password</Label>

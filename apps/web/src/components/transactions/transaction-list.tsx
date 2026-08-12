@@ -16,6 +16,7 @@ import {
 import { cn } from '@/lib/utils';
 import { formatDate, formatMoney } from '@/lib/format';
 import { BUCKET_BADGE_COLOR, BUCKET_META, TYPE_BADGE_VARIANT } from '@/lib/meta';
+import { Skeleton } from '@/components/ui/skeleton';
 
 interface TransactionListProps {
   transactions: Transaction[];
@@ -171,15 +172,87 @@ export function TransactionList({
   emptyMessage = 'No transactions.',
   getBucket,
 }: TransactionListProps) {
+  const actionCols = variant === 'full' && (onEdit || onDelete);
+  const colSpan = (variant === 'full' ? 6 : 5) + (actionCols ? 1 : 0);
+
   if (loading && transactions.length === 0) {
-    return <p className="py-10 text-center text-sm text-muted-foreground">Loading…</p>;
+    const rows = Array.from({ length: 5 });
+    return (
+      <>
+        <div className="space-y-2 p-3 md:hidden">
+          {rows.map((_, index) => (
+            <div
+              key={index}
+              className="flex items-center justify-between gap-3 rounded-md border border-border bg-background px-3 py-2.5"
+            >
+              <div className="flex min-w-0 items-center gap-3">
+                <Skeleton className="h-9 w-9 rounded-full" />
+                <div className="space-y-2">
+                  <Skeleton className="h-4 w-28" />
+                  <Skeleton className="h-3 w-20" />
+                </div>
+              </div>
+              <Skeleton className="h-4 w-16" />
+            </div>
+          ))}
+        </div>
+        <div className="hidden md:block">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Date</TableHead>
+                <TableHead>Account</TableHead>
+                <TableHead>Category</TableHead>
+                {variant === 'full' && <TableHead>Note</TableHead>}
+                <TableHead>Type</TableHead>
+                <TableHead className="text-right">Amount</TableHead>
+                {actionCols && <TableHead className="w-[1%]"></TableHead>}
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {rows.map((_, index) => (
+                <TableRow key={index}>
+                  <TableCell>
+                    <Skeleton className="h-4 w-20" />
+                  </TableCell>
+                  <TableCell>
+                    <Skeleton className="h-4 w-28" />
+                  </TableCell>
+                  <TableCell>
+                    <Skeleton className="h-4 w-32" />
+                  </TableCell>
+                  {variant === 'full' && (
+                    <TableCell>
+                      <Skeleton className="h-4 w-24" />
+                    </TableCell>
+                  )}
+                  <TableCell>
+                    <Skeleton className="h-5 w-14 rounded-full" />
+                  </TableCell>
+                  <TableCell className="text-right">
+                    <div className="flex justify-end">
+                      <Skeleton className="h-4 w-20" />
+                    </div>
+                  </TableCell>
+                  {actionCols && (
+                    <TableCell>
+                      <div className="flex items-center gap-1">
+                        <Skeleton className="h-8 w-8 rounded-md" />
+                        <Skeleton className="h-8 w-8 rounded-md" />
+                      </div>
+                    </TableCell>
+                  )}
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </div>
+      </>
+    );
   }
 
   const bucketOf = (tx: Transaction): BudgetBucket | null =>
     getBucket?.(tx) ?? tx.bucket ?? tx.category?.bucket ?? null;
-
-  const actionCols = variant === 'full' && (onEdit || onDelete);
-  const colSpan = (variant === 'full' ? 6 : 5) + (actionCols ? 1 : 0);
 
   return (
     <>

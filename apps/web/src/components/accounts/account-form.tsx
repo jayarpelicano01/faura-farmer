@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { toast } from 'sonner';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
 import { createAccountSchema, type CreateAccountInput } from '@/lib/validations';
@@ -76,11 +77,13 @@ export function AccountForm({ open, onOpenChange, onSaved, initial }: AccountFor
           method: 'PATCH',
           body: JSON.stringify(values),
         });
+        toast.success('Account updated');
       } else {
         await apiFetch('/api/accounts', {
           method: 'POST',
           body: JSON.stringify(values),
         });
+        toast.success('Account created');
       }
       onOpenChange(false);
       await onSaved();

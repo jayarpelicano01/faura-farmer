@@ -1,12 +1,15 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
+import { toast } from 'sonner';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { FolderPlus, Pencil, Plus, Trash2 } from 'lucide-react';
 import type { Category, CategoryType } from '@faura-farmer/types';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { apiFetch } from '@/lib/api';
+import { Skeleton } from '@/components/ui/skeleton';
 import { CategoryForm, type CategoryFormValues } from './category-form';
 
 interface CategoryTree {
@@ -122,6 +125,7 @@ export function CategoriesManager() {
   const [dialogOpen, setDialogOpen] = useState(() => searchParams.get('new') === '1');
   const [editing, setEditing] = useState<CategoryFormValues | null>(null);
   const [formType, setFormType] = useState<CategoryType>('expense');
+  const [pendingDelete, setPendingDelete] = useState<Category | null>(null);
 
   const newParam = searchParams.get('new');
 
@@ -149,6 +153,7 @@ export function CategoriesManager() {
       setTree(data);
     } catch (error) {
       console.error(error);
+      toast.error('Failed to load categories');
     } finally {
       setLoading(false);
     }
@@ -183,13 +188,19 @@ export function CategoriesManager() {
     setDialogOpen(true);
   }
 
-  async function handleDelete(category: Category) {
-    if (!window.confirm(`Delete "${category.name}"?`)) return;
+  function handleDelete(category: Category) {
+    setPendingDelete(category);
+  }
+
+  async function confirmDelete() {
+    if (!pendingDelete) return;
     try {
-      await apiFetch(`/api/categories/${category.id}`, { method: 'DELETE' });
+      await apiFetch(`/api/categories/${pendingDelete.id}`, { method: 'DELETE' });
+      toast.success('Category deleted');
       load();
     } catch (error) {
       console.error(error);
+      toast.error('Failed to delete category');
     }
   }
 
@@ -208,7 +219,35 @@ export function CategoriesManager() {
       </div>
 
       {loading ? (
-        <p className="text-sm text-muted-foreground">Loading categories…</p>
+        <div className="grid gap-6 lg:grid-cols-2">
+          {['Income', 'Expense'].map((title) => (
+            <Card key={title}>
+              <CardHeader>
+                <div className="flex items-center justify-between">
+                  <Skeleton className="h-5 w-24" />
+                  <Skeleton className="h-9 w-9 rounded-md" />
+                </div>
+              </CardHeader>
+              <CardContent className="space-y-2">
+                {Array.from({ length: 4 }).map((_, index) => (
+                  <div key={index} className="flex items-center justify-between rounded-md border border-border bg-background px-3 py-3">
+                    <div className="flex items-center gap-3">
+                      <Skeleton className="h-8 w-8 rounded-full" />
+                      <div className="space-y-2">
+                        <Skeleton className="h-4 w-28" />
+                        <Skeleton className="h-3 w-16" />
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <Skeleton className="h-8 w-8 rounded-md" />
+                      <Skeleton className="h-8 w-8 rounded-md" />
+                    </div>
+                  </div>
+                ))}
+              </CardContent>
+            </Card>
+          ))}
+        </div>
       ) : (
         <div className="grid gap-6 lg:grid-cols-2">
           <CategoryColumn
@@ -233,6 +272,20 @@ export function CategoriesManager() {
           />
         </div>
       )}
+
+      <ConfirmDialog
+        open={pendingDelete !== null}
+        onOpenChange={(open) => !open && setPendingDelete(null)}
+        title="Delete category"
+        description={
+          pendingDelete
+            ? `Delete "${pendingDelete.name}"? Its sub-categories will be removed too. This cannot be undone.`
+            : undefined
+        }
+        confirmLabel="Delete"
+        destructive
+        onConfirm={confirmDelete}
+      />
 
       <CategoryForm
         open={dialogOpen}

@@ -18,6 +18,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
 import { cn } from '@/lib/utils';
+import { Spinner } from '@/components/ui/spinner';
 
 const googleEnabled = process.env.NEXT_PUBLIC_GOOGLE_ENABLED === 'true';
 const facebookEnabled = process.env.NEXT_PUBLIC_FACEBOOK_ENABLED === 'true';
@@ -89,6 +90,7 @@ function LoginForm() {
           {errors.password && <p className="text-sm text-expense">{errors.password.message}</p>}
         </div>
         <Button type="submit" className="w-full" disabled={loading}>
+          {loading && <Spinner />}
           {loading ? 'Signing in…' : 'Sign in'}
         </Button>
       </CardContent>
@@ -195,6 +197,7 @@ function RegisterForm() {
           )}
         </div>
         <Button type="submit" className="w-full" disabled={loading}>
+          {loading && <Spinner />}
           {loading ? 'Creating account…' : 'Create account'}
         </Button>
       </CardContent>

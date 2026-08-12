@@ -1,15 +1,18 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
+import { toast } from 'sonner';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Pencil, Plus, Trash2, TriangleAlert } from 'lucide-react';
 import type { BudgetWithCategory, Category } from '@faura-farmer/types';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { apiFetch } from '@/lib/api';
 import { formatMoney, toNumber } from '@/lib/format';
 import { cn } from '@/lib/utils';
+import { Skeleton } from '@/components/ui/skeleton';
 import { BudgetForm, type BudgetFormValues } from './budget-form';
 import { MonthlyBudgetGuide } from './monthly-budget-guide';
 
@@ -21,6 +24,7 @@ export function BudgetsManager() {
   const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(() => searchParams.get('new') === '1');
   const [editing, setEditing] = useState<BudgetFormValues | null>(null);
+  const [pendingDelete, setPendingDelete] = useState<BudgetWithCategory | null>(null);
 
   const newParam = searchParams.get('new');
 
@@ -52,6 +56,7 @@ export function BudgetsManager() {
       setCategories(categoryData.expense);
     } catch (error) {
       console.error(error);
+      toast.error('Failed to load budgets');
     } finally {
       setLoading(false);
     }
@@ -71,13 +76,15 @@ export function BudgetsManager() {
     setDialogOpen(true);
   }
 
-  async function handleDelete(budget: BudgetWithCategory) {
-    if (!window.confirm(`Delete budget for "${budget.category.name}"?`)) return;
+  async function handleDelete() {
+    if (!pendingDelete) return;
     try {
-      await apiFetch(`/api/budgets/${budget.id}`, { method: 'DELETE' });
+      await apiFetch(`/api/budgets/${pendingDelete.id}`, { method: 'DELETE' });
+      toast.success('Budget deleted');
       load();
     } catch (error) {
       console.error(error);
+      toast.error('Failed to delete budget');
     }
   }
 
@@ -101,7 +108,28 @@ export function BudgetsManager() {
       <MonthlyBudgetGuide budgets={budgets} />
 
       {loading ? (
-        <p className="text-sm text-muted-foreground">Loading budgets…</p>
+        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+          {Array.from({ length: 6 }).map((_, index) => (
+            <Card key={index}>
+              <CardHeader className="flex flex-row items-start justify-between gap-2">
+                <div className="flex min-w-0 items-center gap-3">
+                  <Skeleton className="h-9 w-9 rounded-full" />
+                  <div className="space-y-2">
+                    <Skeleton className="h-4 w-24" />
+                    <Skeleton className="h-3 w-32" />
+                  </div>
+                </div>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <Skeleton className="h-2 w-full rounded-full" />
+                <div className="flex items-baseline justify-between">
+                  <Skeleton className="h-4 w-20" />
+                  <Skeleton className="h-3 w-16" />
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
       ) : budgets.length === 0 ? (
         <Card>
           <CardContent className="py-12 text-center">
@@ -146,7 +174,7 @@ export function BudgetsManager() {
                       variant="ghost"
                       size="icon"
                       className="text-expense"
-                      onClick={() => handleDelete(budget)}
+                      onClick={() => setPendingDelete(budget)}
                       title="Delete"
                     >
                       <Trash2 className="h-3.5 w-3.5" />
@@ -179,6 +207,20 @@ export function BudgetsManager() {
           })}
         </div>
       )}
+
+      <ConfirmDialog
+        open={pendingDelete !== null}
+        onOpenChange={(open) => !open && setPendingDelete(null)}
+        title="Delete budget"
+        description={
+          pendingDelete
+            ? `Delete the monthly budget for "${pendingDelete.category.name}"? This cannot be undone.`
+            : undefined
+        }
+        confirmLabel="Delete"
+        destructive
+        onConfirm={handleDelete}
+      />
 
       <BudgetForm
         open={dialogOpen}

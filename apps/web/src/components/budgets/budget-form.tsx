@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { toast } from 'sonner';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
 import { createBudgetSchema, type CreateBudgetInput } from '@/lib/validations';
@@ -64,11 +65,13 @@ export function BudgetForm({
           method: 'PATCH',
           body: JSON.stringify(values),
         });
+        toast.success('Budget updated');
       } else {
         await apiFetch('/api/budgets', {
           method: 'POST',
           body: JSON.stringify(values),
         });
+        toast.success('Budget created');
       }
       onOpenChange(false);
       await onSaved();

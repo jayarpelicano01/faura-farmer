@@ -1,14 +1,17 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
+import { toast } from 'sonner';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Archive, ArchiveRestore, Pencil, PiggyBank, Plus, Trash2 } from 'lucide-react';
 import type { AccountWithBalance } from '@faura-farmer/types';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { apiFetch } from '@/lib/api';
 import { formatMoney } from '@/lib/format';
+import { Skeleton } from '@/components/ui/skeleton';
 import { AccountForm, type AccountFormValues } from './account-form';
 
 const TYPE_LABELS: Record<string, string> = {
@@ -26,6 +29,7 @@ export function AccountsManager() {
   const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(() => searchParams.get('new') === '1');
   const [editing, setEditing] = useState<AccountFormValues | null>(null);
+  const [pendingDelete, setPendingDelete] = useState<AccountWithBalance | null>(null);
 
   const newParam = searchParams.get('new');
 
@@ -53,6 +57,7 @@ export function AccountsManager() {
       setAccounts(data);
     } catch (error) {
       console.error(error);
+      toast.error('Failed to load accounts');
     } finally {
       setLoading(false);
     }
@@ -86,19 +91,23 @@ export function AccountsManager() {
         method: 'PATCH',
         body: JSON.stringify({ isArchived: !account.isArchived }),
       });
+      toast.success(account.isArchived ? 'Account restored' : 'Account archived');
       load();
     } catch (error) {
       console.error(error);
+      toast.error('Failed to update account');
     }
   }
 
-  async function handleDelete(account: AccountWithBalance) {
-    if (!window.confirm(`Delete "${account.label}"? This also removes its transactions.`)) return;
+  async function handleDelete() {
+    if (!pendingDelete) return;
     try {
-      await apiFetch(`/api/accounts/${account.id}`, { method: 'DELETE' });
+      await apiFetch(`/api/accounts/${pendingDelete.id}`, { method: 'DELETE' });
+      toast.success('Account deleted');
       load();
     } catch (error) {
       console.error(error);
+      toast.error('Failed to delete account');
     }
   }
 
@@ -118,7 +127,29 @@ export function AccountsManager() {
       </div>
 
       {loading ? (
-        <p className="text-sm text-muted-foreground">Loading accounts…</p>
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {Array.from({ length: 6 }).map((_, index) => (
+            <Card key={index}>
+              <CardContent className="p-5">
+                <div className="flex items-start justify-between">
+                  <div className="flex items-center gap-3">
+                    <Skeleton className="h-10 w-10 rounded-full" />
+                    <div className="space-y-2">
+                      <Skeleton className="h-4 w-28" />
+                      <Skeleton className="h-3 w-20" />
+                    </div>
+                  </div>
+                </div>
+                <Skeleton className="mt-4 h-7 w-32" />
+                <Skeleton className="mt-2 h-3 w-24" />
+                <div className="mt-4 flex items-center gap-2 border-t border-border pt-3">
+                  <Skeleton className="h-9 w-16 rounded-md" />
+                  <Skeleton className="h-9 w-20 rounded-md" />
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
       ) : accounts.length === 0 ? (
         <Card>
           <CardContent className="p-8 text-center text-sm text-muted-foreground">
@@ -170,7 +201,7 @@ export function AccountsManager() {
                     variant="ghost"
                     size="sm"
                     className="ml-auto text-expense"
-                    onClick={() => handleDelete(account)}
+                    onClick={() => setPendingDelete(account)}
                   >
                     <Trash2 className="h-3.5 w-3.5" />
                   </Button>
@@ -180,6 +211,20 @@ export function AccountsManager() {
           ))}
         </div>
       )}
+
+      <ConfirmDialog
+        open={pendingDelete !== null}
+        onOpenChange={(open) => !open && setPendingDelete(null)}
+        title="Delete account"
+        description={
+          pendingDelete
+            ? `Delete "${pendingDelete.label}"? This also removes its transactions. This cannot be undone.`
+            : undefined
+        }
+        confirmLabel="Delete"
+        destructive
+        onConfirm={handleDelete}
+      />
 
       <AccountForm
         open={dialogOpen}

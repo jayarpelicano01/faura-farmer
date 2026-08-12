@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { toast } from 'sonner';
 import { z } from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
@@ -124,11 +125,13 @@ export function TransactionForm({
           method: 'PATCH',
           body: JSON.stringify(payload),
         });
+        toast.success('Transaction updated');
       } else {
         await apiFetch('/api/transactions', {
           method: 'POST',
           body: JSON.stringify(payload),
         });
+        toast.success('Transaction added');
       }
       onOpenChange(false);
       await onSaved();

@@ -19,6 +19,7 @@ import {
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
 import { apiFetch } from '@/lib/api';
+import { toast } from 'sonner';
 import { formatMoney, toNumber } from '@/lib/format';
 import { BucketBreakdown } from './bucket-breakdown';
 
@@ -43,6 +44,7 @@ export function MonthlyBudgetGuide({ budgets }: MonthlyBudgetGuideProps) {
       setAllocation(data);
     } catch (error) {
       console.error(error);
+      toast.error('Failed to load the monthly budget');
     }
   }, []);
 
@@ -68,6 +70,7 @@ export function MonthlyBudgetGuide({ budgets }: MonthlyBudgetGuideProps) {
       });
       setAllocation(data);
       setEditOpen(false);
+      toast.success('Monthly budget updated');
     } catch (error) {
       setSubmitError(error instanceof Error ? error.message : 'Failed to save monthly budget');
     } finally {

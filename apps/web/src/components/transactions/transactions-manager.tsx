@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
+import { toast } from 'sonner';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Plus, ChevronDown, Filter, Search } from 'lucide-react';
 import type { Account, Category, Transaction } from '@faura-farmer/types';
@@ -9,8 +10,10 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { TransactionList } from '@/components/transactions/transaction-list';
 import { apiFetch } from '@/lib/api';
+import { formatMoney } from '@/lib/format';
 import { cn } from '@/lib/utils';
 import { resolveTransactionBucket } from '@/lib/meta';
 import { TransactionForm, type TransactionFormValues } from './transaction-form';
@@ -54,6 +57,7 @@ export function TransactionsManager({ accounts, categories }: TransactionsManage
   const [page, setPage] = useState(1);
   const [perPage, setPerPage] = useState(5);
   const [loading, setLoading] = useState(true);
+  const [pendingDelete, setPendingDelete] = useState<Transaction | null>(null);
 
   const [filterOpen, setFilterOpen] = useState(false);
   const [dialogOpen, setDialogOpen] = useState(() => searchParams.get('new') === '1');
@@ -95,6 +99,7 @@ export function TransactionsManager({ accounts, categories }: TransactionsManage
       setTotal(data.total);
     } catch (error) {
       console.error(error);
+      toast.error('Failed to load transactions');
     } finally {
       setLoading(false);
     }
@@ -162,14 +167,16 @@ export function TransactionsManager({ accounts, categories }: TransactionsManage
     setDialogOpen(true);
   }
 
-  async function handleDelete(tx: Transaction) {
-    if (!window.confirm('Delete this transaction?')) return;
+  async function handleDelete() {
+    if (!pendingDelete) return;
     try {
-      await apiFetch(`/api/transactions/${tx.id}`, { method: 'DELETE' });
+      await apiFetch(`/api/transactions/${pendingDelete.id}`, { method: 'DELETE' });
+      toast.success('Transaction deleted');
       setPage(1);
       load();
     } catch (error) {
       console.error(error);
+      toast.error('Failed to delete transaction');
     }
   }
 
@@ -288,7 +295,7 @@ export function TransactionsManager({ accounts, categories }: TransactionsManage
             loading={loading}
             emptyMessage="No transactions match your filters."
             onEdit={openEdit}
-            onDelete={handleDelete}
+            onDelete={(tx) => setPendingDelete(tx)}
             getBucket={(tx) => resolveTransactionBucket(categories, tx)}
           />
           {total > 0 && (
@@ -339,6 +346,28 @@ export function TransactionsManager({ accounts, categories }: TransactionsManage
           )}
         </CardContent>
       </Card>
+
+      <ConfirmDialog
+        open={pendingDelete !== null}
+        onOpenChange={(open) => !open && setPendingDelete(null)}
+        title="Delete transaction"
+        description={
+          pendingDelete
+            ? `Delete the ${
+                pendingDelete.type === 'transfer'
+                  ? 'transfer'
+                  : pendingDelete.type
+              } of ${
+                pendingDelete.amount != null
+                  ? formatMoney(pendingDelete.amount, pendingDelete.account?.currency ?? 'PHP')
+                  : ''
+              }? This cannot be undone.`
+            : undefined
+        }
+        confirmLabel="Delete"
+        destructive
+        onConfirm={handleDelete}
+      />
 
       <TransactionForm
         open={dialogOpen}

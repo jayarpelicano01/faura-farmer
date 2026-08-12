@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Spinner } from '@/components/ui/spinner';
 
 const forgotSchema = z.object({
   email: z.string().trim().email('Enter a valid email address'),
@@ -75,6 +76,7 @@ export default function ForgotPasswordPage() {
             {errors.email && <p className="text-sm text-expense">{errors.email.message}</p>}
           </div>
           <Button type="submit" className="w-full" disabled={loading}>
+            {loading && <Spinner />}
             {loading ? 'Sending…' : 'Send reset instructions'}
           </Button>
         </CardContent>
