@@ -4,6 +4,7 @@
 
 > A personal finance tracker — monorepo with a typed Next.js app, Prisma data layer, and OAuth auth.
 
+[![Live Demo](https://img.shields.io/badge/live-faura--farmer.vercel.app-FFD700)](https://faura-farmer.vercel.app)
 [![Next.js](https://img.shields.io/badge/Next.js-15-black)](https://nextjs.org)
 [![React](https://img.shields.io/badge/React-19-61dafb)](https://react.dev)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5-3178c6)](https://www.typescriptlang.org)
@@ -72,6 +73,10 @@ pnpm dev
 ```
 
 Open [http://localhost:3000](http://localhost:3000).
+
+## Deployment
+
+Live at [faura-farmer.vercel.app](https://faura-farmer.vercel.app) (Vercel). To redeploy: push to GitHub and import the repo in [Vercel](https://vercel.com), then set the environment variables from `.env.example`.
 
 ## Commands
 
