@@ -15,6 +15,9 @@ export {
   createTransactionSchema,
   updateTransactionSchema,
   transactionListQuerySchema,
+  createRecurringRuleSchema,
+  updateRecurringRuleSchema,
+  recurringOccurrenceSchema,
 } from '@faura-farmer/types';
 
 export type {
@@ -34,4 +37,7 @@ export type {
   CreateTransactionInput,
   UpdateTransactionInput,
   TransactionListQuery,
+  CreateRecurringRuleInput,
+  UpdateRecurringRuleInput,
+  RecurringOccurrenceInput,
 } from '@faura-farmer/types';

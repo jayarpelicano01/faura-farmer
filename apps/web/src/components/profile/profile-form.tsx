@@ -1,8 +1,9 @@
 'use client';
 
+import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
-import { useRouter } from 'next/navigation';
-import { signOut, useSession } from 'next-auth/react';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { signIn, signOut, useSession } from 'next-auth/react';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
 import {
@@ -16,21 +17,47 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
+import { Spinner } from '@/components/ui/spinner';
 import { apiFetch } from '@/lib/api';
+
+type OAuthProvider = 'google' | 'facebook';
 
 interface ProfileUser {
   id: string;
   email: string;
   name: string | null;
   username: string | null;
-  authProvider: string;
   avatarUrl: string | null;
+  hasPassword: boolean;
+  connections: string[];
 }
+
+const connectionOptions: Array<{ provider: OAuthProvider; label: string; enabled: boolean }> = [
+  {
+    provider: 'google',
+    label: 'Google',
+    enabled: process.env.NEXT_PUBLIC_GOOGLE_ENABLED === 'true',
+  },
+  {
+    provider: 'facebook',
+    label: 'Facebook',
+    enabled: process.env.NEXT_PUBLIC_FACEBOOK_ENABLED === 'true',
+  },
+];
 
 export function ProfileForm({ user }: { user: ProfileUser }) {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { update } = useSession();
-  const isEmailAccount = user.authProvider === 'email';
+  const [connectionAction, setConnectionAction] = useState<OAuthProvider | null>(null);
+  const [connectionError, setConnectionError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const connected = searchParams.get('connection');
+    if (connected !== 'google' && connected !== 'facebook') return;
+    toast.success(`${connected === 'google' ? 'Google' : 'Facebook'} connected`);
+    router.replace('/profile');
+  }, [router, searchParams]);
 
   const profileForm = useForm<UpdateProfileInput>({
     resolver: zodResolver(updateProfileSchema),
@@ -81,6 +108,40 @@ export function ProfileForm({ user }: { user: ProfileUser }) {
     }
   }
 
+  async function onConnect(provider: OAuthProvider) {
+    setConnectionAction(provider);
+    setConnectionError(null);
+    try {
+      await apiFetch(`/api/profile/connections/${provider}`, { method: 'POST' });
+      await signIn(provider, {
+        callbackUrl: `${window.location.origin}/profile?connection=${provider}`,
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unable to start the connection.';
+      setConnectionError(message);
+      toast.error(message);
+      setConnectionAction(null);
+    }
+  }
+
+  async function onDisconnect(provider: OAuthProvider) {
+    setConnectionAction(provider);
+    setConnectionError(null);
+    try {
+      await apiFetch(`/api/profile/connections/${provider}`, { method: 'DELETE' });
+      toast.success(
+        `${provider === 'google' ? 'Google' : 'Facebook'} disconnected. Please sign in again.`,
+      );
+      await signOut({ callbackUrl: '/login' });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unable to disconnect this sign-in method.';
+      setConnectionError(message);
+      toast.error(message);
+    } finally {
+      setConnectionAction(null);
+    }
+  }
+
   return (
     <div className="space-y-6">
       <Card>
@@ -128,7 +189,57 @@ export function ProfileForm({ user }: { user: ProfileUser }) {
         </form>
       </Card>
 
-      {isEmailAccount && (
+      <Card>
+        <CardHeader>
+          <CardTitle className="font-display text-lg">Sign-in methods</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <p className="text-sm text-muted-foreground">
+            Connect Google or Facebook to sign in with either provider. Providers are only linked
+            when you start the connection here.
+          </p>
+          {connectionError && (
+            <p role="alert" className="rounded-md bg-expense/15 px-3 py-2 text-sm text-expense">
+              {connectionError}
+            </p>
+          )}
+          <div className="divide-y divide-border rounded-md border border-border">
+            {connectionOptions.map((option) => {
+              const connected = user.connections.includes(option.provider);
+              const isLoading = connectionAction === option.provider;
+              const disabled = connectionAction !== null || (!connected && !option.enabled);
+              return (
+                <div
+                  key={option.provider}
+                  className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between"
+                >
+                  <div>
+                    <p className="font-medium text-foreground">{option.label}</p>
+                    <p className="text-sm text-muted-foreground">
+                      {connected
+                        ? 'Connected'
+                        : option.enabled
+                          ? 'Not connected'
+                          : 'Unavailable on this deployment'}
+                    </p>
+                  </div>
+                  <Button
+                    type="button"
+                    variant={connected ? 'outline' : 'default'}
+                    disabled={disabled}
+                    onClick={() => (connected ? onDisconnect(option.provider) : onConnect(option.provider))}
+                  >
+                    {isLoading && <Spinner />}
+                    {isLoading ? 'Please wait…' : connected ? 'Disconnect' : 'Connect'}
+                  </Button>
+                </div>
+              );
+            })}
+          </div>
+        </CardContent>
+      </Card>
+
+      {user.hasPassword && (
         <Card>
           <CardHeader>
             <CardTitle className="font-display text-lg">Change password</CardTitle>

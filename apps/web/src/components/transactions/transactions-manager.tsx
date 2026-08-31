@@ -17,6 +17,8 @@ import { formatMoney } from '@/lib/format';
 import { cn } from '@/lib/utils';
 import { resolveTransactionBucket } from '@/lib/meta';
 import { TransactionForm, type TransactionFormValues } from './transaction-form';
+import { CsvExportButton } from './csv-export-button';
+import { CsvImportDialog } from './csv-import-dialog';
 
 interface TransactionsManagerProps {
   accounts: Account[];
@@ -191,10 +193,21 @@ export function TransactionsManager({ accounts, categories }: TransactionsManage
           </h1>
           <p className="mt-1 text-sm text-muted-foreground">Search, filter and record transactions.</p>
         </div>
-        <Button onClick={() => openCreate()}>
-          <Plus className="h-4 w-4" />
-          New transaction
-        </Button>
+        <div className="flex flex-wrap gap-2">
+          <CsvExportButton />
+          <CsvImportDialog
+            accounts={accounts}
+            categories={categories}
+            onImported={() => {
+              setPage(1);
+              return load();
+            }}
+          />
+          <Button onClick={() => openCreate()}>
+            <Plus className="h-4 w-4" />
+            New transaction
+          </Button>
+        </div>
       </div>
 
       <Card>

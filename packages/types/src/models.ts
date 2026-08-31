@@ -19,7 +19,7 @@ export type Frequency = (typeof FREQUENCIES)[number];
 export const AUTH_PROVIDERS = ['email', 'google', 'facebook'] as const;
 export type AuthProvider = (typeof AUTH_PROVIDERS)[number];
 
-export const TRANSACTION_SOURCES = ['manual', 'bank_sync'] as const;
+export const TRANSACTION_SOURCES = ['manual', 'bank_sync', 'recurring', 'csv_import'] as const;
 export type TransactionSource = (typeof TRANSACTION_SOURCES)[number];
 
 export interface User {
@@ -91,12 +91,27 @@ export interface Transaction {
 export interface RecurringRule {
   id: string;
   accountId: string;
+  userId: string;
   categoryId?: string | null;
   label?: string | null;
   amount: string;
+  type: Exclude<TransactionType, 'transfer'>;
   frequency: Frequency;
   nextDueDate: Date;
   isActive: boolean;
+}
+
+export interface TransactionAttachment {
+  id: string;
+  transactionId: string;
+  userId: string;
+  storagePath: string;
+  originalFilename: string;
+  mimeType: 'image/jpeg' | 'image/png' | 'image/webp';
+  fileSize: number;
+  createdAt: Date;
+  updatedAt: Date;
+  signedUrl?: string;
 }
 
 export interface Budget {
@@ -177,4 +192,53 @@ export interface MonthlyTrendPoint {
   month: string;
   income: string;
   expense: string;
+}
+
+export const REPORT_PERIODS = ['week', 'month'] as const;
+export type ReportPeriod = (typeof REPORT_PERIODS)[number];
+
+export interface CashFlowPoint {
+  label: string;
+  income: string;
+  expense: string;
+  net: string;
+  savingsRate: number | null;
+}
+
+export interface CashFlowSummary {
+  income: string;
+  expense: string;
+  net: string;
+  savingsRate: number | null;
+}
+
+export interface BudgetVarianceRow {
+  id: string;
+  categoryName: string;
+  color?: string | null;
+  limit: string;
+  spent: string;
+  remaining: string;
+  progress: number;
+  over: boolean;
+  kind: 'budget' | 'unbudgeted' | 'uncategorized';
+}
+
+export interface CategoryComparisonRow {
+  categoryName: string;
+  color?: string | null;
+  current: string;
+  previous: string;
+  change: string;
+  percentageChange: number | null;
+}
+
+export interface AccountSpendingRow {
+  accountId: string;
+  accountName: string;
+  accountType: AccountType;
+  color?: string | null;
+  isArchived: boolean;
+  amount: string;
+  share: number;
 }

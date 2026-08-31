@@ -20,6 +20,7 @@ export const RATE_LIMITS = {
   passwordResetIp: { limit: 5, windowSeconds: 60 * 60 },
   passwordResetEmail: { limit: 3, windowSeconds: 60 * 60 },
   passwordChange: { limit: 5, windowSeconds: 15 * 60 },
+  oauthLink: { limit: 10, windowSeconds: 15 * 60 },
   mutation: { limit: 120, windowSeconds: 60 },
 } satisfies Record<string, RateLimitPolicy>;
 

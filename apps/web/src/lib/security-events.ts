@@ -8,6 +8,11 @@ export type SecurityEventName =
   | 'password_reset_requested'
   | 'password_reset_completed'
   | 'oauth_sign_in_failed'
+  | 'oauth_signed_in'
+  | 'oauth_link_intent_created'
+  | 'oauth_identity_linked'
+  | 'oauth_identity_unlinked'
+  | 'oauth_link_failed'
   | 'rate_limit_blocked'
   | 'origin_rejected';
 

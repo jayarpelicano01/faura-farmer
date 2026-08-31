@@ -13,6 +13,7 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectItemText, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { apiFetch } from '@/lib/api';
+import { ReceiptAttachments } from './receipt-attachments';
 import { categoriesByType, BUCKET_BADGE_COLOR, BUCKET_META, resolveCategoryBucket } from '@/lib/meta';
 import type { SelectAccount } from '@/lib/meta';
 
@@ -89,6 +90,7 @@ export function TransactionForm({
 }: TransactionFormProps) {
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [createdTransactionId, setCreatedTransactionId] = useState<string | null>(null);
 
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
@@ -135,6 +137,7 @@ export function TransactionForm({
       note: initial?.note ?? '',
     });
     setSubmitError(null);
+    setCreatedTransactionId(null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, initial, form]);
 
@@ -157,6 +160,7 @@ export function TransactionForm({
   }, [destinationAccounts, form, watchDestinationAccountId, watchType]);
 
   async function onSubmit(values: FormValues) {
+    if (createdTransactionId) return;
     if (values.type === 'transfer') {
       const source = accounts.find((account) => account.id === values.accountId);
       const destination = accounts.find(
@@ -198,11 +202,14 @@ export function TransactionForm({
         });
         toast.success(values.type === 'transfer' ? 'Transfer updated' : 'Transaction updated');
       } else {
-        await apiFetch('/api/transactions', {
+        const created = await apiFetch<{ id: string }>('/api/transactions', {
           method: 'POST',
           body: JSON.stringify(payload),
         });
         toast.success(values.type === 'transfer' ? 'Transfer added' : 'Transaction added');
+        setCreatedTransactionId(created.id);
+        await onSaved();
+        return;
       }
       onOpenChange(false);
       await onSaved();
@@ -470,16 +477,21 @@ export function TransactionForm({
                 </FormItem>
               )}
             />
+            {(initial?.id || createdTransactionId) && (
+              <ReceiptAttachments transactionId={initial?.id ?? createdTransactionId!} />
+            )}
             <DialogFooter>
               <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
-                Cancel
+                {createdTransactionId ? 'Done' : 'Cancel'}
               </Button>
               <Button
                 type="submit"
-                disabled={saving || (watchType === 'transfer' && destinationAccounts.length === 0)}
+                disabled={saving || Boolean(createdTransactionId) || (watchType === 'transfer' && destinationAccounts.length === 0)}
               >
                 {saving
                   ? 'Saving…'
+                  : createdTransactionId
+                    ? 'Transaction added'
                   : initial?.id
                     ? 'Save changes'
                     : watchType === 'transfer'

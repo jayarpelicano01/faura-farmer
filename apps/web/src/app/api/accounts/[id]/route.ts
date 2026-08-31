@@ -5,6 +5,7 @@ import { badRequest, fail, notFound, ok, unauthorized } from '@/lib/http';
 import { toNumber } from '@/lib/format';
 import { lockAccountsInOrder } from '@/lib/queries';
 import { guardMutation, readJsonBody } from '@/lib/security';
+import { deleteReceiptObjects } from '@/lib/storage/receipts';
 
 export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -207,23 +208,36 @@ export async function DELETE(request: Request, { params }: { params: Promise<{ i
         return { status: 'retry' as const, accountIds: requiredAccountIds };
       }
 
-      await tx.transaction.deleteMany({
-        where:
-          transferGroupIds.length > 0
-            ? {
-                OR: [
-                  { accountId: account.id },
-                  {
-                    transferGroupId: { in: transferGroupIds },
-                    account: { userId: session.user.id },
-                  },
-                ],
-              }
-            : { accountId: account.id },
+      const transactionsWhere =
+        transferGroupIds.length > 0
+          ? {
+              OR: [
+                { accountId: account.id },
+                {
+                  transferGroupId: { in: transferGroupIds },
+                  account: { userId: session.user.id },
+                },
+              ],
+            }
+          : { accountId: account.id };
+      const transactions = await tx.transaction.findMany({
+        where: transactionsWhere,
+        select: { id: true },
       });
+      const attachments = await tx.transactionAttachment.findMany({
+        where: {
+          transactionId: { in: transactions.map((transaction) => transaction.id) },
+          userId: session.user.id,
+        },
+        select: { storagePath: true },
+      });
+      await tx.transaction.deleteMany({ where: transactionsWhere });
       await tx.recurringRule.deleteMany({ where: { accountId: account.id } });
       await tx.account.delete({ where: { id: account.id } });
-      return { status: 'deleted' as const };
+      return {
+        status: 'deleted' as const,
+        receiptPaths: attachments.map((attachment) => attachment.storagePath),
+      };
     });
 
     if (result.status === 'retry') {
@@ -238,6 +252,11 @@ export async function DELETE(request: Request, { params }: { params: Promise<{ i
         'ACCOUNT_DELETE_CONFLICT',
       );
     }
+    await deleteReceiptObjects(result.receiptPaths).catch((error) => {
+      console.error('Unable to remove receipt objects after account deletion', {
+        error: error instanceof Error ? error.message : 'unknown',
+      });
+    });
     return ok({ id: account.id, deleted: true });
   }
 

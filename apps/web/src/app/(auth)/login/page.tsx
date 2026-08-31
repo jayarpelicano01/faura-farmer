@@ -207,9 +207,22 @@ function RegisterForm() {
 
 export default function AuthPage() {
   const [mode, setMode] = useState<Mode>('login');
+  const [socialProvider, setSocialProvider] = useState<'google' | 'facebook' | null>(null);
+  const [socialError, setSocialError] = useState<string | null>(null);
 
   async function onSocial(provider: 'google' | 'facebook') {
-    await signIn(provider);
+    setSocialProvider(provider);
+    setSocialError(null);
+    try {
+      const result = await signIn(provider);
+      if (result?.error) {
+        setSocialError('We could not start sign-in with that provider. Please try again.');
+        setSocialProvider(null);
+      }
+    } catch {
+      setSocialError('We could not start sign-in with that provider. Please try again.');
+      setSocialProvider(null);
+    }
   }
 
   return (
@@ -259,14 +272,21 @@ export default function AuthPage() {
             <Separator />
           </div>
           <CardFooter className="flex-col gap-2 pt-4">
+            {socialError && (
+              <p role="alert" className="w-full rounded-md bg-expense/15 px-3 py-2 text-sm text-expense">
+                {socialError}
+              </p>
+            )}
             {googleEnabled && (
               <Button
                 type="button"
                 variant="outline"
                 className="w-full"
+                disabled={socialProvider !== null}
                 onClick={() => onSocial('google')}
               >
-                Continue with Google
+                {socialProvider === 'google' && <Spinner />}
+                {socialProvider === 'google' ? 'Connecting…' : 'Continue with Google'}
               </Button>
             )}
             {facebookEnabled && (
@@ -274,9 +294,11 @@ export default function AuthPage() {
                 type="button"
                 variant="outline"
                 className="w-full"
+                disabled={socialProvider !== null}
                 onClick={() => onSocial('facebook')}
               >
-                Continue with Facebook
+                {socialProvider === 'facebook' && <Spinner />}
+                {socialProvider === 'facebook' ? 'Connecting…' : 'Continue with Facebook'}
               </Button>
             )}
           </CardFooter>

@@ -9,6 +9,7 @@ import {
 } from '@/lib/queries';
 import { createTransactionSchema, updateTransactionSchema } from '@/lib/validations';
 import { guardMutation, readJsonBody } from '@/lib/security';
+import { deleteReceiptObjects } from '@/lib/storage/receipts';
 
 const transactionInclude = { account: true, category: true } as const;
 
@@ -441,6 +442,13 @@ export async function DELETE(request: Request, { params }: { params: Promise<{ i
 
       const logicalId =
         currentGroup.find((row) => row.transferRole === 'outgoing')?.id ?? current.id;
+      const attachments = await tx.transactionAttachment.findMany({
+        where: {
+          transactionId: { in: currentGroup.map((row) => row.id) },
+          userId: session.user.id,
+        },
+        select: { storagePath: true },
+      });
       if (current.transferGroupId) {
         await tx.transaction.deleteMany({
           where: {
@@ -451,7 +459,11 @@ export async function DELETE(request: Request, { params }: { params: Promise<{ i
       } else {
         await tx.transaction.delete({ where: { id: current.id } });
       }
-      return { status: 'deleted' as const, id: logicalId };
+      return {
+        status: 'deleted' as const,
+        id: logicalId,
+        receiptPaths: attachments.map((attachment) => attachment.storagePath),
+      };
     });
 
     if (result.status === 'retry') {
@@ -466,6 +478,11 @@ export async function DELETE(request: Request, { params }: { params: Promise<{ i
         'TRANSACTION_DELETE_CONFLICT',
       );
     }
+    await deleteReceiptObjects(result.receiptPaths).catch((error) => {
+      console.error('Unable to remove receipt objects after transaction deletion', {
+        error: error instanceof Error ? error.message : 'unknown',
+      });
+    });
     return ok({ id: result.id, deleted: true });
   }
 

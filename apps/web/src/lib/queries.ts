@@ -1,10 +1,15 @@
 import { prisma, Prisma } from '@faura-farmer/database';
 import type {
+  AccountSpendingRow,
   AccountWithBalance,
+  BudgetVarianceRow,
   BucketAllocation,
   BudgetBucket,
   BudgetWithCategory,
+  CashFlowPoint,
+  CashFlowSummary,
   Category,
+  CategoryComparisonRow,
   MonthTotals,
   MonthlyBudget,
   MonthlyTrendPoint,
@@ -13,11 +18,17 @@ import type {
 } from '@faura-farmer/types';
 import { BUDGET_BUCKETS } from '@faura-farmer/types';
 import {
+  calculatePercentageChange,
+  calculateSavingsRate,
+  type ReportRange,
+} from '@/lib/reporting';
+import {
   endOfMonth,
   endOfYear,
   format,
   startOfMonth,
   startOfYear,
+  subDays,
   subMonths,
 } from 'date-fns';
 
@@ -357,6 +368,288 @@ export async function getMonthlyTrend(
   }
 
   return points;
+}
+
+export async function getReportCurrencies(userId: string): Promise<string[]> {
+  const accounts = await prisma.account.findMany({
+    where: { userId },
+    select: { currency: true },
+  });
+
+  return [...new Set(accounts.map((account) => account.currency.toUpperCase()))].sort((a, b) =>
+    a.localeCompare(b),
+  );
+}
+
+function reportAccountWhere(userId: string, currency: string) {
+  return {
+    userId,
+    currency: { equals: currency, mode: 'insensitive' as const },
+  };
+}
+
+function inRange(date: Date, range: Pick<ReportRange, 'from' | 'to'>) {
+  return date >= range.from && date <= range.to;
+}
+
+export async function getCashFlowReport(
+  userId: string,
+  currency: string,
+  range: ReportRange,
+): Promise<{ summary: CashFlowSummary; points: CashFlowPoint[] }> {
+  const chartFrom =
+    range.period === 'week' ? range.from : startOfMonth(subMonths(range.to, 5));
+
+  const rows = await prisma.transaction.findMany({
+    where: {
+      account: reportAccountWhere(userId, currency),
+      type: { in: ['income', 'expense'] },
+      date: { gte: chartFrom, lte: range.to },
+    },
+    select: { date: true, type: true, amount: true },
+  });
+
+  const amountsByKey = new Map<string, { income: number; expense: number }>();
+  let summaryIncome = 0;
+  let summaryExpense = 0;
+
+  for (const row of rows) {
+    const key = range.period === 'week' ? format(row.date, 'yyyy-MM-dd') : format(row.date, 'yyyy-MM');
+    const amount = toNumber(row.amount);
+    const bucket = amountsByKey.get(key) ?? { income: 0, expense: 0 };
+    if (row.type === 'income') {
+      bucket.income += amount;
+      if (inRange(row.date, range)) summaryIncome += amount;
+    } else {
+      bucket.expense += amount;
+      if (inRange(row.date, range)) summaryExpense += amount;
+    }
+    amountsByKey.set(key, bucket);
+  }
+
+  const points: CashFlowPoint[] = [];
+  const pointCount = range.period === 'week' ? 7 : 6;
+  for (let index = pointCount - 1; index >= 0; index -= 1) {
+    const pointDate = range.period === 'week' ? subDays(range.to, index) : subMonths(range.to, index);
+    const key = range.period === 'week' ? format(pointDate, 'yyyy-MM-dd') : format(pointDate, 'yyyy-MM');
+    const bucket = amountsByKey.get(key) ?? { income: 0, expense: 0 };
+    const net = bucket.income - bucket.expense;
+    points.push({
+      label: range.period === 'week' ? format(pointDate, 'EEE') : format(pointDate, 'MMM'),
+      income: String(bucket.income),
+      expense: String(bucket.expense),
+      net: String(net),
+      savingsRate: calculateSavingsRate(bucket.income, bucket.expense),
+    });
+  }
+
+  const net = summaryIncome - summaryExpense;
+  return {
+    summary: {
+      income: String(summaryIncome),
+      expense: String(summaryExpense),
+      net: String(net),
+      savingsRate: calculateSavingsRate(summaryIncome, summaryExpense),
+    },
+    points,
+  };
+}
+
+export async function getBudgetVarianceReport(
+  userId: string,
+  currency: string,
+  range: ReportRange,
+): Promise<BudgetVarianceRow[]> {
+  const budgetFrom = startOfMonth(range.to);
+  const [budgets, categories, grouped] = await Promise.all([
+    prisma.budget.findMany({
+      where: { userId },
+      include: {
+        category: { select: { id: true, name: true, color: true, type: true } },
+      },
+      orderBy: { createdAt: 'asc' },
+    }),
+    prisma.category.findMany({
+      where: { userId },
+      select: { id: true, name: true, color: true, parentId: true },
+    }),
+    prisma.transaction.groupBy({
+      by: ['categoryId'],
+      where: {
+        account: reportAccountWhere(userId, currency),
+        type: 'expense',
+        date: { gte: budgetFrom, lte: range.to },
+      },
+      _sum: { amount: true },
+    }),
+  ]);
+
+  const { descendantsOf } = buildCategoryMaps(categories);
+  const spentByCategory = new Map<string, number>();
+  let uncategorized = 0;
+  for (const row of grouped) {
+    const amount = toNumber(row._sum.amount);
+    if (row.categoryId) spentByCategory.set(row.categoryId, amount);
+    else uncategorized += amount;
+  }
+
+  const budgetedCategoryIds = new Set<string>();
+  const rows = budgets.map<BudgetVarianceRow>((budget) => {
+    const categoryIds = descendantsOf(budget.categoryId);
+    let spent = 0;
+    for (const categoryId of categoryIds) {
+      budgetedCategoryIds.add(categoryId);
+      spent += spentByCategory.get(categoryId) ?? 0;
+    }
+    const limit = toNumber(budget.monthlyLimit);
+    const remaining = limit - spent;
+    return {
+      id: budget.id,
+      categoryName: budget.category.name,
+      color: budget.category.color,
+      limit: String(limit),
+      spent: String(spent),
+      remaining: String(remaining),
+      progress: limit > 0 ? (spent / limit) * 100 : 0,
+      over: spent > limit,
+      kind: 'budget',
+    };
+  });
+
+  const unbudgeted = [...spentByCategory.entries()].reduce(
+    (total, [categoryId, amount]) => total + (budgetedCategoryIds.has(categoryId) ? 0 : amount),
+    0,
+  );
+  if (unbudgeted > 0) {
+    rows.push({
+      id: 'unbudgeted',
+      categoryName: 'Unbudgeted spending',
+      color: null,
+      limit: '0',
+      spent: String(unbudgeted),
+      remaining: String(-unbudgeted),
+      progress: 0,
+      over: true,
+      kind: 'unbudgeted',
+    });
+  }
+  if (uncategorized > 0) {
+    rows.push({
+      id: 'uncategorized',
+      categoryName: 'Uncategorized spending',
+      color: null,
+      limit: '0',
+      spent: String(uncategorized),
+      remaining: String(-uncategorized),
+      progress: 0,
+      over: true,
+      kind: 'uncategorized',
+    });
+  }
+
+  return rows;
+}
+
+export async function getCategoryComparisonReport(
+  userId: string,
+  currency: string,
+  range: ReportRange,
+): Promise<CategoryComparisonRow[]> {
+  const [categories, current, previous] = await Promise.all([
+    prisma.category.findMany({
+      where: { userId },
+      select: { id: true, name: true, color: true, parentId: true },
+    }),
+    prisma.transaction.groupBy({
+      by: ['categoryId'],
+      where: {
+        account: reportAccountWhere(userId, currency),
+        type: 'expense',
+        date: { gte: range.from, lte: range.to },
+      },
+      _sum: { amount: true },
+    }),
+    prisma.transaction.groupBy({
+      by: ['categoryId'],
+      where: {
+        account: reportAccountWhere(userId, currency),
+        type: 'expense',
+        date: { gte: range.previousFrom, lte: range.previousTo },
+      },
+      _sum: { amount: true },
+    }),
+  ]);
+
+  const { rootOf } = buildCategoryMaps(categories);
+  const categoriesById = new Map(categories.map((category) => [category.id, category]));
+  const currentByRoot = new Map<string, number>();
+  const previousByRoot = new Map<string, number>();
+  const addToRoot = (target: Map<string, number>, categoryId: string | null, amount: number) => {
+    const rootId = categoryId ? rootOf(categoryId) : 'uncategorized';
+    target.set(rootId, (target.get(rootId) ?? 0) + amount);
+  };
+
+  for (const row of current) addToRoot(currentByRoot, row.categoryId, toNumber(row._sum.amount));
+  for (const row of previous) addToRoot(previousByRoot, row.categoryId, toNumber(row._sum.amount));
+
+  const rootIds = new Set([...currentByRoot.keys(), ...previousByRoot.keys()]);
+  return [...rootIds]
+    .map<CategoryComparisonRow>((rootId) => {
+      const currentAmount = currentByRoot.get(rootId) ?? 0;
+      const previousAmount = previousByRoot.get(rootId) ?? 0;
+      const category = categoriesById.get(rootId);
+      return {
+        categoryName: category?.name ?? 'Uncategorized',
+        color: category?.color ?? null,
+        current: String(currentAmount),
+        previous: String(previousAmount),
+        change: String(currentAmount - previousAmount),
+        percentageChange: calculatePercentageChange(currentAmount, previousAmount),
+      };
+    })
+    .sort((a, b) => toNumber(b.current) - toNumber(a.current));
+}
+
+export async function getAccountSpendingReport(
+  userId: string,
+  currency: string,
+  range: ReportRange,
+): Promise<AccountSpendingRow[]> {
+  const [accounts, grouped] = await Promise.all([
+    prisma.account.findMany({
+      where: reportAccountWhere(userId, currency),
+      select: { id: true, label: true, type: true, color: true, isArchived: true },
+    }),
+    prisma.transaction.groupBy({
+      by: ['accountId'],
+      where: {
+        account: reportAccountWhere(userId, currency),
+        type: 'expense',
+        date: { gte: range.from, lte: range.to },
+      },
+      _sum: { amount: true },
+    }),
+  ]);
+
+  const accountsById = new Map(accounts.map((account) => [account.id, account]));
+  const total = grouped.reduce((sum, row) => sum + toNumber(row._sum.amount), 0);
+
+  return grouped
+    .flatMap<AccountSpendingRow>((row) => {
+      const account = accountsById.get(row.accountId);
+      if (!account) return [];
+      const amount = toNumber(row._sum.amount);
+      return [{
+        accountId: account.id,
+        accountName: account.label,
+        accountType: account.type,
+        color: account.color,
+        isArchived: account.isArchived,
+        amount: String(amount),
+        share: total > 0 ? (amount / total) * 100 : 0,
+      }];
+    })
+    .sort((a, b) => toNumber(b.amount) - toNumber(a.amount));
 }
 
 export async function getCategoryTree(userId: string): Promise<{

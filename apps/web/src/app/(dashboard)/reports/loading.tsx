@@ -11,7 +11,7 @@ export default function ReportsLoading() {
         </div>
         <Skeleton className="h-10 w-40 rounded-md" />
       </div>
-      {Array.from({ length: 3 }).map((_, index) => (
+      {Array.from({ length: 4 }).map((_, index) => (
         <Card key={index}>
           <CardHeader className="flex flex-row items-center justify-between">
             <Skeleton className="h-5 w-44" />

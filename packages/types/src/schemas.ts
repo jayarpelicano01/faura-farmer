@@ -180,6 +180,36 @@ export const transactionListQuerySchema = z.object({
   perPage: z.coerce.number().int().min(1).max(100).default(10),
 });
 
+const recurringRuleFields = {
+  accountId: z.string().uuid('Account is required'),
+  categoryId: z.string().uuid('Category is invalid').optional().nullable(),
+  label: z.string().trim().max(120).optional().nullable(),
+  amount: z.coerce.number().positive('Amount must be positive').max(999999999999),
+  type: z.enum(['income', 'expense']),
+  frequency: z.enum(FREQUENCIES),
+  nextDueDate: z.coerce.date(),
+  isActive: z.boolean().optional(),
+};
+
+export const createRecurringRuleSchema = z.object(recurringRuleFields).strict();
+export const updateRecurringRuleSchema = z
+  .object({
+    accountId: recurringRuleFields.accountId.optional(),
+    categoryId: recurringRuleFields.categoryId,
+    label: recurringRuleFields.label,
+    amount: recurringRuleFields.amount.optional(),
+    type: recurringRuleFields.type.optional(),
+    frequency: recurringRuleFields.frequency.optional(),
+    nextDueDate: recurringRuleFields.nextDueDate.optional(),
+    isActive: recurringRuleFields.isActive,
+  })
+  .strict()
+  .refine((data) => Object.keys(data).length > 0, 'At least one field is required');
+
+export const recurringOccurrenceSchema = z
+  .object({ expectedDueDate: z.coerce.date() })
+  .strict();
+
 export const accountType = z.enum(ACCOUNT_TYPES);
 export const categoryType = z.enum(CATEGORY_TYPES);
 export const transactionType = z.enum(TRANSACTION_TYPES);
@@ -202,3 +232,6 @@ export type MonthlyBudgetInput = z.infer<typeof monthlyBudgetSchema>;
 export type CreateTransactionInput = z.infer<typeof createTransactionSchema>;
 export type UpdateTransactionInput = z.infer<typeof updateTransactionSchema>;
 export type TransactionListQuery = z.infer<typeof transactionListQuerySchema>;
+export type CreateRecurringRuleInput = z.infer<typeof createRecurringRuleSchema>;
+export type UpdateRecurringRuleInput = z.infer<typeof updateRecurringRuleSchema>;
+export type RecurringOccurrenceInput = z.infer<typeof recurringOccurrenceSchema>;

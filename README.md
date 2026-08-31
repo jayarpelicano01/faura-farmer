@@ -19,7 +19,7 @@
 
 ## Features
 
-- **Account auth** via NextAuth v5 with Google and Facebook OAuth
+- **Account auth** via NextAuth v5 with email/password plus Google and Facebook OAuth
 - **Transaction tracking** with typed forms (React Hook Form + Zod validation)
 - **Spending insights** rendered as interactive charts (Recharts)
 - **Typed data layer** with Prisma 6 (schema → client, no loose SQL strings)
@@ -101,6 +101,30 @@ Copy `.env.example` to `.env.local` and fill in:
 | `FACEBOOK_CLIENT_ID` / `FACEBOOK_CLIENT_SECRET` | Facebook OAuth credentials |
 | `NEXT_PUBLIC_APP_URL` | Public app URL |
 | `NEXT_PUBLIC_GOOGLE_ENABLED` / `NEXT_PUBLIC_FACEBOOK_ENABLED` | Toggle OAuth buttons |
+
+## OAuth setup
+
+OAuth accounts are never linked merely because their email address matches an existing
+Faura-Farmer account. A user who already has an account must sign in with an existing
+method and connect Google or Facebook from **Profile → Sign-in methods**. An account
+cannot remove its last remaining sign-in method.
+
+Create the Google Cloud OAuth client and Meta Facebook Login app yourself, then set the
+credentials in local and Vercel environment settings. Do not commit provider secrets.
+Set each public enable flag to `true` only after its corresponding client ID and secret are
+configured; otherwise the provider button stays hidden.
+
+Register these exact redirect URIs with both providers:
+
+- `http://localhost:3000/api/auth/callback/google`
+- `http://localhost:3000/api/auth/callback/facebook`
+- `https://faura-farmer.vercel.app/api/auth/callback/google`
+- `https://faura-farmer.vercel.app/api/auth/callback/facebook`
+
+Google requests `openid email profile`; Facebook requests `email public_profile`. Provider
+responses without an email are rejected. Before deploying this feature, back up production
+data and rehearse the OAuth identity migration on staging; migration application and Vercel
+environment changes remain separate user-approved release steps.
 
 ## Author
 

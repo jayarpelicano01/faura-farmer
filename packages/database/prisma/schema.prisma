@@ -70,9 +70,39 @@ model User {
   monthlyBudget       MonthlyBudget?
   passwordResetTokens PasswordResetToken[]
   securityEvents      SecurityEvent[]
+  oauthIdentities     OAuthIdentity[]
+  oauthLinkIntents    OAuthLinkIntent[]
 
   @@unique([authProvider, providerId])
   @@map("users")
+}
+
+model OAuthIdentity {
+  id                String       @id @default(uuid()) @db.Uuid
+  userId            String       @map("user_id") @db.Uuid
+  provider          AuthProvider
+  providerAccountId String       @map("provider_account_id")
+  createdAt         DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@index([userId])
+  @@map("oauth_identities")
+}
+
+model OAuthLinkIntent {
+  id        String       @id @default(uuid()) @db.Uuid
+  userId    String       @map("user_id") @db.Uuid
+  provider  AuthProvider
+  expiresAt DateTime     @map("expires_at") @db.Timestamptz(6)
+  usedAt    DateTime?    @map("used_at") @db.Timestamptz(6)
+  createdAt DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, provider, expiresAt])
+  @@map("oauth_link_intents")
 }
 
 model Account {
@@ -141,6 +171,7 @@ model Transaction {
 
   account  Account   @relation(fields: [accountId], references: [id], onDelete: Cascade)
   category Category? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  attachments TransactionAttachment[]
 
   @@index([accountId])
   @@index([date])
@@ -149,6 +180,7 @@ model Transaction {
   @@index([accountId, transferRole, transferGroupId])
   @@index([userId, date])
   @@index([transferGroupId])
+  @@unique([id, userId])
   @@unique([transferGroupId, transferRole])
   @@map("transactions")
 }
@@ -160,6 +192,7 @@ model RecurringRule {
   categoryId  String?   @map("category_id") @db.Uuid
   label       String?
   amount      Decimal   @db.Decimal(14, 2)
+  type        TransactionType @default(expense)
   frequency   Frequency
   nextDueDate DateTime  @map("next_due_date") @db.Date
   isActive    Boolean   @default(true) @map("is_active")
@@ -169,7 +202,27 @@ model RecurringRule {
 
   @@index([accountId])
   @@index([userId])
+  @@index([userId, isActive, nextDueDate])
+  @@unique([id, userId])
   @@map("recurring_rules")
+}
+
+model TransactionAttachment {
+  id               String      @id @default(uuid()) @db.Uuid
+  transactionId    String      @map("transaction_id") @db.Uuid
+  userId           String      @map("user_id") @db.Uuid
+  storagePath      String      @unique @map("storage_path")
+  originalFilename String      @map("original_filename")
+  mimeType         String      @map("mime_type")
+  fileSize         Int         @map("file_size")
+  createdAt        DateTime    @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt        DateTime    @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  transaction Transaction @relation(fields: [transactionId, userId], references: [id, userId], onDelete: Cascade)
+
+  @@index([transactionId])
+  @@index([userId, transactionId])
+  @@map("transaction_attachments")
 }
 
 model Budget {
