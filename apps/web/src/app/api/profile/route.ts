@@ -2,13 +2,18 @@ import { prisma } from '@faura-farmer/database';
 import { auth } from '@/lib/auth';
 import { updateProfileSchema } from '@/lib/validations';
 import { badRequest, ok, unauthorized } from '@/lib/http';
+import { guardMutation, readJsonBody } from '@/lib/security';
 
 export async function PATCH(request: Request) {
   const session = await auth();
   if (!session?.user?.id) return unauthorized();
 
-  const body = await request.json().catch(() => null);
-  const parsed = updateProfileSchema.safeParse(body);
+  const securityFailure = await guardMutation(request, 'profile-write', session.user.id);
+  if (securityFailure) return securityFailure;
+
+  const bodyResult = await readJsonBody(request);
+  if ('response' in bodyResult) return bodyResult.response;
+  const parsed = updateProfileSchema.safeParse(bodyResult.data);
   if (!parsed.success) {
     return badRequest(parsed.error.issues[0]?.message ?? 'Invalid input');
   }

@@ -3,19 +3,24 @@ import { auth } from '@/lib/auth';
 import { updateBudgetSchema } from '@/lib/validations';
 import { badRequest, notFound, ok, unauthorized } from '@/lib/http';
 import { findConflictingBudget } from '@/lib/queries';
+import { guardMutation, readJsonBody } from '@/lib/security';
 
 export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const session = await auth();
   if (!session?.user?.id) return unauthorized();
 
+  const securityFailure = await guardMutation(request, 'budget-write', session.user.id);
+  if (securityFailure) return securityFailure;
+
   const budget = await prisma.budget.findFirst({
     where: { id, userId: session.user.id },
   });
   if (!budget) return notFound('Budget not found');
 
-  const body = await request.json().catch(() => null);
-  const parsed = updateBudgetSchema.safeParse(body);
+  const bodyResult = await readJsonBody(request);
+  if ('response' in bodyResult) return bodyResult.response;
+  const parsed = updateBudgetSchema.safeParse(bodyResult.data);
   if (!parsed.success) {
     return badRequest(parsed.error.issues[0]?.message ?? 'Invalid input');
   }
@@ -49,10 +54,13 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   });
 }
 
-export async function DELETE(_request: Request, { params }: { params: Promise<{ id: string }> }) {
+export async function DELETE(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const session = await auth();
   if (!session?.user?.id) return unauthorized();
+
+  const securityFailure = await guardMutation(request, 'budget-write', session.user.id);
+  if (securityFailure) return securityFailure;
 
   const budget = await prisma.budget.findFirst({
     where: { id, userId: session.user.id },

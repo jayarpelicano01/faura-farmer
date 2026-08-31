@@ -31,6 +31,7 @@ export interface User {
   name?: string | null;
   username?: string | null;
   avatarUrl?: string | null;
+  sessionVersion: number;
   createdAt: Date;
 }
 

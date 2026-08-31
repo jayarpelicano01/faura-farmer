@@ -1,5 +1,7 @@
 export {
   registerSchema,
+  forgotPasswordSchema,
+  resetPasswordSchema,
   loginSchema,
   updateProfileSchema,
   changePasswordSchema,
@@ -17,6 +19,8 @@ export {
 
 export type {
   RegisterInput,
+  ForgotPasswordInput,
+  ResetPasswordInput,
   LoginInput,
   UpdateProfileInput,
   ChangePasswordInput,

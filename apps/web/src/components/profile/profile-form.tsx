@@ -2,7 +2,7 @@
 
 import { toast } from 'sonner';
 import { useRouter } from 'next/navigation';
-import { useSession } from 'next-auth/react';
+import { signOut, useSession } from 'next-auth/react';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
 import {
@@ -74,8 +74,8 @@ export function ProfileForm({ user }: { user: ProfileUser }) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(values),
       });
-      toast.success('Password updated');
-      passwordForm.reset({ currentPassword: '', newPassword: '', confirmPassword: '' });
+      toast.success('Password updated. Please sign in again.');
+      await signOut({ callbackUrl: '/login' });
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Failed to update password.');
     }

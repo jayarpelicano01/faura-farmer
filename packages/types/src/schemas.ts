@@ -35,6 +35,21 @@ export const registerSchema = z
     path: ['passwordConfirm'],
   });
 
+export const forgotPasswordSchema = z.object({
+  email: emailField,
+});
+
+export const resetPasswordSchema = z
+  .object({
+    token: z.string().min(40, 'Reset token is invalid').max(256),
+    newPassword: strongPassword,
+    confirmPassword: z.string(),
+  })
+  .refine((data) => data.newPassword === data.confirmPassword, {
+    message: 'Passwords do not match',
+    path: ['confirmPassword'],
+  });
+
 export const updateProfileSchema = z.object({
   name: z.string().trim().max(120).optional().nullable(),
   username: z
@@ -161,7 +176,7 @@ export const transactionListQuerySchema = z.object({
   from: z.coerce.date().optional(),
   to: z.coerce.date().optional(),
   q: z.string().trim().max(120).optional(),
-  page: z.coerce.number().int().min(1).default(1),
+  page: z.coerce.number().int().min(1).max(500).default(1),
   perPage: z.coerce.number().int().min(1).max(100).default(10),
 });
 
@@ -171,6 +186,8 @@ export const transactionType = z.enum(TRANSACTION_TYPES);
 export const frequency = z.enum(FREQUENCIES);
 
 export type RegisterInput = z.infer<typeof registerSchema>;
+export type ForgotPasswordInput = z.infer<typeof forgotPasswordSchema>;
+export type ResetPasswordInput = z.infer<typeof resetPasswordSchema>;
 export type LoginInput = z.infer<typeof loginSchema>;
 export type UpdateProfileInput = z.infer<typeof updateProfileSchema>;
 export type ChangePasswordInput = z.infer<typeof changePasswordSchema>;

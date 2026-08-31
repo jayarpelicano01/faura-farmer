@@ -52,22 +52,26 @@ enum Frequency {
 }
 
 model User {
-  id           String       @id @default(uuid()) @db.Uuid
-  email        String       @unique
-  passwordHash String?      @map("password_hash")
-  authProvider AuthProvider @default(email) @map("auth_provider")
-  providerId   String?      @map("provider_id")
-  name         String?      @map("name")
-  username     String?      @unique @map("username")
-  avatarUrl    String?      @map("avatar_url")
-  createdAt    DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
+  id             String       @id @default(uuid()) @db.Uuid
+  email          String       @unique
+  passwordHash   String?      @map("password_hash")
+  authProvider   AuthProvider @default(email) @map("auth_provider")
+  providerId     String?      @map("provider_id")
+  name           String?      @map("name")
+  username       String?      @unique @map("username")
+  avatarUrl      String?      @map("avatar_url")
+  sessionVersion Int          @default(0) @map("session_version")
+  createdAt      DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
 
-  accounts   Account[]
-  categories Category[]
-  budgets    Budget[]
-  goals      Goal[]
-  monthlyBudget MonthlyBudget?
+  accounts            Account[]
+  categories          Category[]
+  budgets             Budget[]
+  goals               Goal[]
+  monthlyBudget       MonthlyBudget?
+  passwordResetTokens PasswordResetToken[]
+  securityEvents      SecurityEvent[]
 
+  @@unique([authProvider, providerId])
   @@map("users")
 }
 
@@ -90,6 +94,7 @@ model Account {
   recurringRules RecurringRule[]
 
   @@index([userId])
+  @@unique([id, userId])
   @@map("accounts")
 }
 
@@ -112,12 +117,14 @@ model Category {
 
   @@index([userId])
   @@index([parentId])
+  @@unique([id, userId])
   @@map("categories")
 }
 
 model Transaction {
   id                    String          @id @default(uuid()) @db.Uuid
   accountId             String          @map("account_id") @db.Uuid
+  userId                String          @map("user_id") @db.Uuid
   categoryId            String?         @map("category_id") @db.Uuid
   bucket                BudgetBucket?
   amount                Decimal         @db.Decimal(14, 2)
@@ -139,6 +146,8 @@ model Transaction {
   @@index([date])
   @@index([accountId, date])
   @@index([accountId, type, date])
+  @@index([accountId, transferRole, transferGroupId])
+  @@index([userId, date])
   @@index([transferGroupId])
   @@unique([transferGroupId, transferRole])
   @@map("transactions")
@@ -147,6 +156,7 @@ model Transaction {
 model RecurringRule {
   id          String    @id @default(uuid()) @db.Uuid
   accountId   String    @map("account_id") @db.Uuid
+  userId      String    @map("user_id") @db.Uuid
   categoryId  String?   @map("category_id") @db.Uuid
   label       String?
   amount      Decimal   @db.Decimal(14, 2)
@@ -158,6 +168,7 @@ model RecurringRule {
   category Category? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
 
   @@index([accountId])
+  @@index([userId])
   @@map("recurring_rules")
 }
 
@@ -199,4 +210,32 @@ model MonthlyBudget {
 
   @@unique([userId])
   @@map("monthly_budgets")
+}
+
+model PasswordResetToken {
+  id        String    @id @default(uuid()) @db.Uuid
+  userId    String    @map("user_id") @db.Uuid
+  tokenHash String    @unique @map("token_hash")
+  expiresAt DateTime  @map("expires_at") @db.Timestamptz(6)
+  usedAt    DateTime? @map("used_at") @db.Timestamptz(6)
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, expiresAt])
+  @@map("password_reset_tokens")
+}
+
+model SecurityEvent {
+  id        String    @id @default(uuid()) @db.Uuid
+  userId    String?   @map("user_id") @db.Uuid
+  event     String
+  ipHash    String?   @map("ip_hash")
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([userId, createdAt])
+  @@index([event, createdAt])
+  @@map("security_events")
 }

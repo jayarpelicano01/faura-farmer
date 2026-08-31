@@ -4,6 +4,7 @@ import { auth } from '@/lib/auth';
 import { badRequest, created, fail, ok, unauthorized } from '@/lib/http';
 import { lockAccountsInOrder, toLogicalTransactions } from '@/lib/queries';
 import { createTransactionSchema, transactionListQuerySchema } from '@/lib/validations';
+import { guardMutation, readJsonBody } from '@/lib/security';
 
 const transactionInclude = { account: true, category: true } as const;
 
@@ -29,30 +30,77 @@ export async function GET(request: Request) {
     if (!ownedAccount) return fail('Account not found', 404, 'NOT_FOUND');
   }
 
-  const where: Prisma.TransactionWhereInput = { account: { userId } };
-  if (categoryId) where.categoryId = categoryId;
-  if (type) where.type = type;
+  const filters: Prisma.TransactionWhereInput = { account: { userId } };
+  if (categoryId) filters.categoryId = categoryId;
+  if (type) filters.type = type;
   if (from || to) {
-    where.date = {
+    filters.date = {
       ...(from ? { gte: from } : {}),
       ...(to ? { lte: to } : {}),
     };
   }
-  if (q) where.note = { contains: q, mode: 'insensitive' };
+  if (q) filters.note = { contains: q, mode: 'insensitive' };
 
-  const rows = await prisma.transaction.findMany({
-    where,
-    include: transactionInclude,
-    orderBy: [{ date: 'desc' }, { createdAt: 'desc' }, { id: 'desc' }],
-  });
-  const logical = toLogicalTransactions(rows).filter(
-    (transaction) =>
-      !accountId ||
-      transaction.accountId === accountId ||
-      transaction.destinationAccountId === accountId,
+  let destinationTransferGroupIds: string[] = [];
+  if (accountId) {
+    const destinationRows = await prisma.transaction.findMany({
+      where: {
+        accountId,
+        account: { userId },
+        transferRole: 'incoming',
+        transferGroupId: { not: null },
+      },
+      select: { transferGroupId: true },
+    });
+    destinationTransferGroupIds = destinationRows.flatMap((row) =>
+      row.transferGroupId ? [row.transferGroupId] : [],
+    );
+  }
+
+  const logicalWhere: Prisma.TransactionWhereInput = {
+    AND: [
+      filters,
+      { OR: [{ transferGroupId: null }, { transferRole: 'outgoing' }] },
+      ...(accountId
+        ? [
+            {
+              OR: [
+                { accountId },
+                ...(destinationTransferGroupIds.length > 0
+                  ? [{ transferGroupId: { in: destinationTransferGroupIds } }]
+                  : []),
+              ],
+            },
+          ]
+        : []),
+    ],
+  };
+
+  const [total, rows] = await prisma.$transaction([
+    prisma.transaction.count({ where: logicalWhere }),
+    prisma.transaction.findMany({
+      where: logicalWhere,
+      include: transactionInclude,
+      orderBy: [{ date: 'desc' }, { createdAt: 'desc' }, { id: 'desc' }],
+      skip: (page - 1) * perPage,
+      take: perPage,
+    }),
+  ]);
+  const transferGroupIds = rows.flatMap((row) =>
+    row.transferGroupId ? [row.transferGroupId] : [],
   );
-  const total = logical.length;
-  const items = logical.slice((page - 1) * perPage, page * perPage);
+  const incomingRows =
+    transferGroupIds.length > 0
+      ? await prisma.transaction.findMany({
+          where: {
+            transferGroupId: { in: transferGroupIds },
+            transferRole: 'incoming',
+            account: { userId },
+          },
+          include: transactionInclude,
+        })
+      : [];
+  const items = toLogicalTransactions([...rows, ...incomingRows]);
 
   return ok({ items, total, page, perPage });
 }
@@ -62,8 +110,12 @@ export async function POST(request: Request) {
   if (!session?.user?.id) return unauthorized();
   const userId = session.user.id;
 
-  const body = await request.json().catch(() => null);
-  const parsed = createTransactionSchema.safeParse(body);
+  const securityFailure = await guardMutation(request, 'transaction-write', userId);
+  if (securityFailure) return securityFailure;
+
+  const bodyResult = await readJsonBody(request);
+  if ('response' in bodyResult) return bodyResult.response;
+  const parsed = createTransactionSchema.safeParse(bodyResult.data);
   if (!parsed.success) {
     return badRequest(parsed.error.issues[0]?.message ?? 'Invalid input');
   }
@@ -95,6 +147,7 @@ export async function POST(request: Request) {
       const outgoing = await tx.transaction.create({
         data: {
           accountId: input.accountId,
+          userId,
           categoryId: null,
           bucket: null,
           amount: input.amount,
@@ -110,6 +163,7 @@ export async function POST(request: Request) {
       const incoming = await tx.transaction.create({
         data: {
           accountId: input.destinationAccountId,
+          userId,
           categoryId: null,
           bucket: null,
           amount: input.amount,
@@ -159,6 +213,7 @@ export async function POST(request: Request) {
   const transaction = await prisma.transaction.create({
     data: {
       accountId: input.accountId,
+      userId,
       categoryId: input.categoryId ?? null,
       bucket: input.bucket ?? null,
       amount: input.amount,

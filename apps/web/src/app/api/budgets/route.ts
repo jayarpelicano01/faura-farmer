@@ -3,6 +3,7 @@ import { auth } from '@/lib/auth';
 import { createBudgetSchema } from '@/lib/validations';
 import { badRequest, created, ok, unauthorized } from '@/lib/http';
 import { findConflictingBudget, getBudgetsWithProgress } from '@/lib/queries';
+import { guardMutation, readJsonBody } from '@/lib/security';
 
 export async function GET() {
   const session = await auth();
@@ -16,8 +17,12 @@ export async function POST(request: Request) {
   const session = await auth();
   if (!session?.user?.id) return unauthorized();
 
-  const body = await request.json().catch(() => null);
-  const parsed = createBudgetSchema.safeParse(body);
+  const securityFailure = await guardMutation(request, 'budget-write', session.user.id);
+  if (securityFailure) return securityFailure;
+
+  const bodyResult = await readJsonBody(request);
+  if ('response' in bodyResult) return bodyResult.response;
+  const parsed = createBudgetSchema.safeParse(bodyResult.data);
   if (!parsed.success) {
     return badRequest(parsed.error.issues[0]?.message ?? 'Invalid input');
   }

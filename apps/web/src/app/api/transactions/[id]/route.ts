@@ -8,6 +8,7 @@ import {
   type TransactionWithRelations,
 } from '@/lib/queries';
 import { createTransactionSchema, updateTransactionSchema } from '@/lib/validations';
+import { guardMutation, readJsonBody } from '@/lib/security';
 
 const transactionInclude = { account: true, category: true } as const;
 
@@ -48,11 +49,15 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   if (!session?.user?.id) return unauthorized();
   const userId = session.user.id;
 
+  const securityFailure = await guardMutation(request, 'transaction-write', userId);
+  if (securityFailure) return securityFailure;
+
   const transaction = await findOwnedTransaction(id, userId);
   if (!transaction) return notFound('Transaction not found');
 
-  const body = await request.json().catch(() => null);
-  const parsed = updateTransactionSchema.safeParse(body);
+  const bodyResult = await readJsonBody(request);
+  if ('response' in bodyResult) return bodyResult.response;
+  const parsed = updateTransactionSchema.safeParse(bodyResult.data);
   if (!parsed.success) {
     return badRequest(parsed.error.issues[0]?.message ?? 'Invalid input');
   }
@@ -115,6 +120,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
           select: {
             id: true,
             accountId: true,
+            userId: true,
             transferGroupId: true,
             source: true,
             account: { select: { userId: true } },
@@ -183,6 +189,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
             where: { id: currentIncoming.id },
             data: {
               accountId: final.destinationAccountId,
+              userId: currentSource.userId,
               categoryId: null,
               bucket: null,
               amount: final.amount,
@@ -197,6 +204,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
           await tx.transaction.create({
             data: {
               accountId: final.destinationAccountId,
+              userId: currentSource.userId,
               categoryId: null,
               bucket: null,
               amount: final.amount,
@@ -374,10 +382,13 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   return ok(toLogicalTransactions(updatedGroup)[0]);
 }
 
-export async function DELETE(_request: Request, { params }: { params: Promise<{ id: string }> }) {
+export async function DELETE(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const session = await auth();
   if (!session?.user?.id) return unauthorized();
+
+  const securityFailure = await guardMutation(request, 'transaction-write', session.user.id);
+  if (securityFailure) return securityFailure;
 
   const transaction = await findOwnedTransaction(id, session.user.id);
   if (!transaction) return notFound('Transaction not found');

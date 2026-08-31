@@ -7,6 +7,7 @@ declare module 'next-auth' {
       id: string;
       authProvider: AuthProvider;
       avatarUrl?: string | null;
+      sessionVersion?: number;
     } & DefaultSession['user'];
   }
 }
@@ -16,5 +17,7 @@ declare module 'next-auth/jwt' {
     id?: string;
     authProvider?: AuthProvider;
     avatarUrl?: string | null;
+    sessionVersion?: number;
+    sessionRevoked?: boolean;
   }
 }

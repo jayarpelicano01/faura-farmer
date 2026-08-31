@@ -4,6 +4,7 @@ import { updateAccountSchema } from '@/lib/validations';
 import { badRequest, fail, notFound, ok, unauthorized } from '@/lib/http';
 import { toNumber } from '@/lib/format';
 import { lockAccountsInOrder } from '@/lib/queries';
+import { guardMutation, readJsonBody } from '@/lib/security';
 
 export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -41,13 +42,17 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   const session = await auth();
   if (!session?.user?.id) return unauthorized();
 
+  const securityFailure = await guardMutation(request, 'account-write', session.user.id);
+  if (securityFailure) return securityFailure;
+
   const account = await prisma.account.findFirst({
     where: { id, userId: session.user.id },
   });
   if (!account) return notFound('Account not found');
 
-  const body = await request.json().catch(() => null);
-  const parsed = updateAccountSchema.safeParse(body);
+  const bodyResult = await readJsonBody(request);
+  if ('response' in bodyResult) return bodyResult.response;
+  const parsed = updateAccountSchema.safeParse(bodyResult.data);
   if (!parsed.success) {
     return badRequest(parsed.error.issues[0]?.message ?? 'Invalid input');
   }
@@ -147,10 +152,13 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   return ok({ ...updated, startingBalance: String(updated.startingBalance) });
 }
 
-export async function DELETE(_request: Request, { params }: { params: Promise<{ id: string }> }) {
+export async function DELETE(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const session = await auth();
   if (!session?.user?.id) return unauthorized();
+
+  const securityFailure = await guardMutation(request, 'account-write', session.user.id);
+  if (securityFailure) return securityFailure;
 
   const account = await prisma.account.findFirst({
     where: { id, userId: session.user.id },

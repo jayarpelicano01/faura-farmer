@@ -23,3 +23,25 @@ export function notFound(message = 'Not found') {
 export function badRequest(message = 'Bad request') {
   return fail(message, 400, 'BAD_REQUEST');
 }
+
+export function forbidden(message = 'Forbidden') {
+  return fail(message, 403, 'FORBIDDEN');
+}
+
+export function payloadTooLarge(message = 'Request body is too large') {
+  return fail(message, 413, 'PAYLOAD_TOO_LARGE');
+}
+
+export function tooManyRequests(message = 'Too many requests', retryAfter?: number) {
+  return NextResponse.json(
+    { error: message, code: 'RATE_LIMITED' },
+    {
+      status: 429,
+      headers: retryAfter ? { 'Retry-After': String(retryAfter) } : undefined,
+    },
+  );
+}
+
+export function serviceUnavailable(message = 'Service temporarily unavailable') {
+  return fail(message, 503, 'SERVICE_UNAVAILABLE');
+}
