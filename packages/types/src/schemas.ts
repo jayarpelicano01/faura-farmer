@@ -102,18 +102,57 @@ export const monthlyBudgetSchema = z.object({
   amount: z.coerce.number().positive('Monthly budget must be positive').max(999999999999),
 });
 
-export const transactionSchema = z.object({
+const transactionFields = {
   accountId: z.string().uuid('Account is required'),
-  categoryId: z.string().uuid().optional().nullable(),
-  bucket: z.enum(BUDGET_BUCKETS).optional().nullable(),
   amount: z.coerce.number().positive('Amount must be positive').max(999999999999),
-  type: z.enum(TRANSACTION_TYPES),
   date: z.coerce.date(),
   note: z.string().trim().max(500).optional().nullable(),
-});
+};
+
+const ordinaryTransactionSchema = z
+  .object({
+    ...transactionFields,
+    type: z.enum(['income', 'expense']),
+    categoryId: z.string().uuid().optional().nullable(),
+    bucket: z.enum(BUDGET_BUCKETS).optional().nullable(),
+    destinationAccountId: z.never().optional(),
+  })
+  .strict();
+
+const transferTransactionSchema = z
+  .object({
+    ...transactionFields,
+    type: z.literal('transfer'),
+    destinationAccountId: z.string().uuid('Destination account is required'),
+    categoryId: z.never().optional(),
+    bucket: z.never().optional(),
+  })
+  .strict();
+
+export const transactionSchema = z
+  .discriminatedUnion('type', [ordinaryTransactionSchema, transferTransactionSchema])
+  .refine(
+    (data) => data.type !== 'transfer' || data.accountId !== data.destinationAccountId,
+    {
+      message: 'Source and destination accounts must be different',
+      path: ['destinationAccountId'],
+    },
+  );
 
 export const createTransactionSchema = transactionSchema;
-export const updateTransactionSchema = transactionSchema.partial();
+export const updateTransactionSchema = z
+  .object({
+    accountId: transactionFields.accountId.optional(),
+    destinationAccountId: z.string().uuid('Destination account is required').optional(),
+    categoryId: z.string().uuid().optional().nullable(),
+    bucket: z.enum(BUDGET_BUCKETS).optional().nullable(),
+    amount: transactionFields.amount.optional(),
+    type: z.enum(TRANSACTION_TYPES).optional(),
+    date: transactionFields.date.optional(),
+    note: transactionFields.note,
+  })
+  .strict()
+  .refine((data) => Object.keys(data).length > 0, 'At least one field is required');
 
 export const transactionListQuerySchema = z.object({
   accountId: z.string().uuid().optional(),

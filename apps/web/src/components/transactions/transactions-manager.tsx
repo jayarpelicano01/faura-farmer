@@ -142,6 +142,7 @@ export function TransactionsManager({ accounts, categories }: TransactionsManage
       preset
         ? {
             accountId: '',
+            destinationAccountId: null,
             bucket: null,
             amount: '',
             type: preset,
@@ -157,6 +158,7 @@ export function TransactionsManager({ accounts, categories }: TransactionsManage
     setEditing({
       id: tx.id,
       accountId: tx.accountId,
+      destinationAccountId: tx.destinationAccountId ?? tx.destinationAccount?.id ?? null,
       categoryId: tx.categoryId,
       bucket: tx.bucket,
       amount: String(tx.amount),
@@ -171,7 +173,7 @@ export function TransactionsManager({ accounts, categories }: TransactionsManage
     if (!pendingDelete) return;
     try {
       await apiFetch(`/api/transactions/${pendingDelete.id}`, { method: 'DELETE' });
-      toast.success('Transaction deleted');
+      toast.success(pendingDelete.type === 'transfer' ? 'Transfer deleted' : 'Transaction deleted');
       setPage(1);
       load();
     } catch (error) {
@@ -350,18 +352,24 @@ export function TransactionsManager({ accounts, categories }: TransactionsManage
       <ConfirmDialog
         open={pendingDelete !== null}
         onOpenChange={(open) => !open && setPendingDelete(null)}
-        title="Delete transaction"
+        title={pendingDelete?.type === 'transfer' ? 'Delete transfer' : 'Delete transaction'}
         description={
           pendingDelete
-            ? `Delete the ${
-                pendingDelete.type === 'transfer'
-                  ? 'transfer'
-                  : pendingDelete.type
-              } of ${
-                pendingDelete.amount != null
-                  ? formatMoney(pendingDelete.amount, pendingDelete.account?.currency ?? 'PHP')
-                  : ''
-              }? This cannot be undone.`
+            ? pendingDelete.type === 'transfer'
+              ? `Delete the transfer of ${formatMoney(
+                  pendingDelete.amount,
+                  pendingDelete.account?.currency ?? 'PHP',
+                )} from ${pendingDelete.account?.label ?? 'the source account'} to ${
+                  pendingDelete.destinationAccount?.label ?? 'the destination account'
+                }? Both linked entries will be removed. This cannot be undone.`
+              : `Delete the ${pendingDelete.type} of ${
+                  pendingDelete.amount != null
+                    ? formatMoney(
+                        pendingDelete.amount,
+                        pendingDelete.account?.currency ?? 'PHP',
+                      )
+                    : ''
+                }? This cannot be undone.`
             : undefined
         }
         confirmLabel="Delete"

@@ -10,6 +10,9 @@ export type BudgetBucket = (typeof BUDGET_BUCKETS)[number];
 export const TRANSACTION_TYPES = ['income', 'expense', 'transfer'] as const;
 export type TransactionType = (typeof TRANSACTION_TYPES)[number];
 
+export const TRANSFER_ROLES = ['outgoing', 'incoming'] as const;
+export type TransferRole = (typeof TRANSFER_ROLES)[number];
+
 export const FREQUENCIES = ['weekly', 'monthly', 'yearly'] as const;
 export type Frequency = (typeof FREQUENCIES)[number];
 
@@ -69,6 +72,9 @@ export interface Transaction {
   bucket?: BudgetBucket | null;
   amount: string;
   type: TransactionType;
+  transferGroupId?: string | null;
+  transferRole?: TransferRole | null;
+  destinationAccountId?: string | null;
   date: Date;
   note?: string | null;
   source: TransactionSource;
@@ -77,6 +83,7 @@ export interface Transaction {
   createdAt: Date;
   updatedAt: Date;
   account?: Account;
+  destinationAccount?: Account | null;
   category?: Category | null;
 }
 

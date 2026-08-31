@@ -40,6 +40,11 @@ enum TransactionType {
   transfer
 }
 
+enum TransferRole {
+  outgoing
+  incoming
+}
+
 enum Frequency {
   weekly
   monthly
@@ -117,6 +122,8 @@ model Transaction {
   bucket                BudgetBucket?
   amount                Decimal         @db.Decimal(14, 2)
   type                  TransactionType
+  transferGroupId       String?         @map("transfer_group_id") @db.Uuid
+  transferRole          TransferRole?   @map("transfer_role")
   date                  DateTime        @db.Date
   note                  String?
   source                String          @default("manual")
@@ -132,6 +139,8 @@ model Transaction {
   @@index([date])
   @@index([accountId, date])
   @@index([accountId, type, date])
+  @@index([transferGroupId])
+  @@unique([transferGroupId, transferRole])
   @@map("transactions")
 }
 

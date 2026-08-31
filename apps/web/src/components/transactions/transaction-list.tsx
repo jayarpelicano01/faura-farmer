@@ -58,6 +58,12 @@ function amount(tx: Transaction): string {
   return formatMoney(tx.amount, tx.account?.currency ?? 'PHP');
 }
 
+function accountPath(tx: Transaction): string {
+  const source = tx.account?.label ?? 'Unknown account';
+  if (tx.type !== 'transfer') return source;
+  return `${source} → ${tx.destinationAccount?.label ?? 'Unknown destination'}`;
+}
+
 function MobileItem({
   tx,
   variant,
@@ -90,7 +96,7 @@ function MobileItem({
           </span>
           <div className="min-w-0">
             <p className="truncate text-sm font-medium text-foreground">
-              {tx.account?.label ?? '—'}
+              {accountPath(tx)}
             </p>
             <p className="truncate text-xs text-muted-foreground">{formatDate(tx.date)}</p>
           </div>
@@ -118,13 +124,20 @@ function MobileItem({
                 <Badge variant={TYPE_BADGE_VARIANT[tx.type]}>{tx.type}</Badge>
               </dd>
             </div>
-            <div className="flex items-center justify-between gap-4">
-              <dt className="text-muted-foreground">Category</dt>
-              <dd className="flex items-center gap-1 text-foreground">
-                {tx.category?.name ?? '—'}
-                <BucketTag bucket={bucket} />
-              </dd>
-            </div>
+            {tx.type === 'transfer' ? (
+              <div className="flex items-start justify-between gap-4">
+                <dt className="text-muted-foreground">Transfer</dt>
+                <dd className="text-right text-foreground">{accountPath(tx)}</dd>
+              </div>
+            ) : (
+              <div className="flex items-center justify-between gap-4">
+                <dt className="text-muted-foreground">Category</dt>
+                <dd className="flex items-center gap-1 text-foreground">
+                  {tx.category?.name ?? '—'}
+                  <BucketTag bucket={bucket} />
+                </dd>
+              </div>
+            )}
             <div className="flex items-center justify-between gap-4">
               <dt className="text-muted-foreground">Date</dt>
               <dd className="text-foreground">{formatDate(tx.date)}</dd>
@@ -139,7 +152,12 @@ function MobileItem({
           {(onEdit || onDelete) && (
             <div className="mt-3 flex items-center gap-2 border-t border-border pt-3">
               {onEdit && (
-                <Button variant="outline" size="sm" onClick={() => onEdit(tx)}>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  aria-label={`Edit ${tx.type}`}
+                  onClick={() => onEdit(tx)}
+                >
                   <Pencil className="h-3.5 w-3.5" />
                   Edit
                 </Button>
@@ -149,6 +167,7 @@ function MobileItem({
                   variant="outline"
                   size="sm"
                   className="text-expense"
+                  aria-label={`Delete ${tx.type}`}
                   onClick={() => onDelete(tx)}
                 >
                   <Trash2 className="h-3.5 w-3.5" />
@@ -298,11 +317,17 @@ export function TransactionList({
                 <TableRow key={tx.id}>
                   <TableCell className="text-muted-foreground">{formatDate(tx.date)}</TableCell>
                   <TableCell className="font-medium text-foreground">
-                    {tx.account?.label}
+                    {accountPath(tx)}
                   </TableCell>
                   <TableCell className="text-muted-foreground">
-                    {tx.category?.name ?? '—'}
-                    <BucketTag bucket={bucketOf(tx)} />
+                    {tx.type === 'transfer' ? (
+                      '—'
+                    ) : (
+                      <>
+                        {tx.category?.name ?? '—'}
+                        <BucketTag bucket={bucketOf(tx)} />
+                      </>
+                    )}
                   </TableCell>
                   {variant === 'full' && (
                     <TableCell className="max-w-[160px] truncate text-muted-foreground">
@@ -320,7 +345,12 @@ export function TransactionList({
                     <TableCell>
                       <div className="flex items-center gap-1">
                         {onEdit && (
-                          <Button variant="ghost" size="icon" onClick={() => onEdit(tx)}>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            aria-label={`Edit ${tx.type}`}
+                            onClick={() => onEdit(tx)}
+                          >
                             <Pencil className="h-4 w-4" />
                           </Button>
                         )}
@@ -329,6 +359,7 @@ export function TransactionList({
                             variant="ghost"
                             size="icon"
                             className="text-expense"
+                            aria-label={`Delete ${tx.type}`}
                             onClick={() => onDelete(tx)}
                           >
                             <Trash2 className="h-4 w-4" />

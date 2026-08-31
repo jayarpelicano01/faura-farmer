@@ -1,4 +1,4 @@
-import { prisma } from '@faura-farmer/database';
+import { prisma, Prisma } from '@faura-farmer/database';
 import type {
   AccountWithBalance,
   BucketAllocation,
@@ -27,6 +27,102 @@ export function toNumber(value: unknown): number {
   return Number.isFinite(n) ? n : 0;
 }
 
+const transactionWithRelations = {
+  account: true,
+  category: true,
+} satisfies Prisma.TransactionInclude;
+
+export type TransactionWithRelations = Prisma.TransactionGetPayload<{
+  include: typeof transactionWithRelations;
+}>;
+
+export interface LockedAccount {
+  id: string;
+  userId: string;
+  currency: string;
+}
+
+/** Lock account rows in one global order before validating or writing transfers. */
+export async function lockAccountsInOrder(
+  tx: Prisma.TransactionClient,
+  accountIds: string[],
+  userId: string,
+): Promise<LockedAccount[]> {
+  const orderedIds = [...new Set(accountIds)].sort();
+  if (orderedIds.length === 0) return [];
+
+  const ids = Prisma.join(
+    orderedIds.map((id) => Prisma.sql`CAST(${id} AS UUID)`),
+  );
+  return tx.$queryRaw<LockedAccount[]>(Prisma.sql`
+    SELECT
+      "id"::text AS "id",
+      "user_id"::text AS "userId",
+      "currency"
+    FROM "accounts"
+    WHERE "id" IN (${ids})
+      AND "user_id" = CAST(${userId} AS UUID)
+    ORDER BY "id"
+    FOR UPDATE
+  `);
+}
+
+function serializeAccount(account: TransactionWithRelations['account']) {
+  return {
+    ...account,
+    startingBalance: String(account.startingBalance),
+  };
+}
+
+/** Collapse linked transfer legs into one event represented by the outgoing row. */
+export function toLogicalTransactions(rows: TransactionWithRelations[]): Transaction[] {
+  const rowsByGroup = new Map<string, TransactionWithRelations[]>();
+  for (const row of rows) {
+    if (!row.transferGroupId) continue;
+    const grouped = rowsByGroup.get(row.transferGroupId) ?? [];
+    grouped.push(row);
+    rowsByGroup.set(row.transferGroupId, grouped);
+  }
+
+  const emittedGroups = new Set<string>();
+  const logical: Transaction[] = [];
+
+  for (const row of rows) {
+    let source = row;
+    let destination: TransactionWithRelations | undefined;
+
+    if (row.transferGroupId) {
+      if (emittedGroups.has(row.transferGroupId)) continue;
+      emittedGroups.add(row.transferGroupId);
+
+      const grouped = rowsByGroup.get(row.transferGroupId) ?? [row];
+      source = grouped.find((candidate) => candidate.transferRole === 'outgoing') ?? row;
+      destination = grouped.find((candidate) => candidate.transferRole === 'incoming');
+    }
+
+    logical.push({
+      ...source,
+      amount: String(source.amount),
+      transferGroupId: source.transferGroupId ?? null,
+      transferRole: source.transferRole ?? null,
+      destinationAccountId: destination?.accountId ?? null,
+      account: serializeAccount(source.account),
+      destinationAccount: destination ? serializeAccount(destination.account) : null,
+      category: source.category ? { ...source.category } : null,
+    } as Transaction);
+  }
+
+  return logical.sort((a, b) => {
+    const dateOrder = b.date.getTime() - a.date.getTime();
+    if (dateOrder !== 0) return dateOrder;
+
+    const createdOrder = b.createdAt.getTime() - a.createdAt.getTime();
+    if (createdOrder !== 0) return createdOrder;
+
+    return b.id.localeCompare(a.id);
+  });
+}
+
 export async function getAccountsWithBalance(userId: string): Promise<AccountWithBalance[]> {
   const accounts = await prisma.account.findMany({
     where: { userId },
@@ -36,7 +132,7 @@ export async function getAccountsWithBalance(userId: string): Promise<AccountWit
   if (accounts.length === 0) return [];
 
   const grouped = await prisma.transaction.groupBy({
-    by: ['accountId', 'type'],
+    by: ['accountId', 'type', 'transferRole'],
     where: {
       account: { userId },
       type: { in: ['income', 'expense', 'transfer'] },
@@ -48,8 +144,11 @@ export async function getAccountsWithBalance(userId: string): Promise<AccountWit
   for (const row of grouped) {
     const current = netByAccount.get(row.accountId) ?? 0;
     const sum = toNumber(row._sum.amount);
-    if (row.type === 'income') netByAccount.set(row.accountId, current + sum);
-    else netByAccount.set(row.accountId, current - sum);
+    if (row.type === 'income' || (row.type === 'transfer' && row.transferRole === 'incoming')) {
+      netByAccount.set(row.accountId, current + sum);
+    } else {
+      netByAccount.set(row.accountId, current - sum);
+    }
   }
 
   return accounts.map<AccountWithBalance>((a) => ({
@@ -94,17 +193,11 @@ export async function getRecentTransactions(
 ): Promise<Transaction[]> {
   const transactions = await prisma.transaction.findMany({
     where: { account: { userId } },
-    include: { account: true, category: true },
-    orderBy: [{ date: 'desc' }, { createdAt: 'desc' }],
-    take: limit,
+    include: transactionWithRelations,
+    orderBy: [{ date: 'desc' }, { createdAt: 'desc' }, { id: 'desc' }],
   });
 
-  return transactions.map((t) => ({
-    ...t,
-    amount: String(t.amount),
-    account: t.account ? { ...t.account, startingBalance: String(t.account.startingBalance) } : undefined,
-    category: t.category ? { ...t.category } : null,
-  })) as Transaction[];
+  return toLogicalTransactions(transactions).slice(0, limit);
 }
 
 export async function getSpendingByCategory(

@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import { z } from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -16,26 +16,46 @@ import { apiFetch } from '@/lib/api';
 import { categoriesByType, BUCKET_BADGE_COLOR, BUCKET_META, resolveCategoryBucket } from '@/lib/meta';
 import type { SelectAccount } from '@/lib/meta';
 
-const formSchema = z.object({
-  accountId: z.string().min(1, 'Account is required'),
-  categoryId: z.string().nullable().optional(),
-  bucket: z.enum(BUDGET_BUCKETS).nullable().optional(),
-  amount: z
-    .string()
-    .min(1, 'Amount is required')
-    .refine((value) => Number.isFinite(Number(value)) && Number(value) > 0, {
-      message: 'Amount must be a positive number',
-    }),
-  type: z.enum(['income', 'expense', 'transfer']),
-  date: z.string().min(1, 'Date is required'),
-  note: z.string().optional().nullable(),
-});
+const formSchema = z
+  .object({
+    accountId: z.string().min(1, 'Account is required'),
+    destinationAccountId: z.string().nullable().optional(),
+    categoryId: z.string().nullable().optional(),
+    bucket: z.enum(BUDGET_BUCKETS).nullable().optional(),
+    amount: z
+      .string()
+      .min(1, 'Amount is required')
+      .refine((value) => Number.isFinite(Number(value)) && Number(value) > 0, {
+        message: 'Amount must be a positive number',
+      }),
+    type: z.enum(['income', 'expense', 'transfer']),
+    date: z.string().min(1, 'Date is required'),
+    note: z.string().optional().nullable(),
+  })
+  .superRefine((values, context) => {
+    if (values.type !== 'transfer') return;
+
+    if (!values.destinationAccountId) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['destinationAccountId'],
+        message: 'To account is required',
+      });
+    } else if (values.destinationAccountId === values.accountId) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['destinationAccountId'],
+        message: 'Choose a different account',
+      });
+    }
+  });
 
 type FormValues = z.infer<typeof formSchema>;
 
 export interface TransactionFormValues {
   id?: string;
   accountId: string;
+  destinationAccountId?: string | null;
   categoryId?: string | null;
   bucket?: BudgetBucket | null;
   amount: string | number;
@@ -74,6 +94,7 @@ export function TransactionForm({
     resolver: zodResolver(formSchema),
     defaultValues: {
       accountId: '',
+      destinationAccountId: null,
       categoryId: null,
       bucket: null,
       amount: '',
@@ -84,12 +105,28 @@ export function TransactionForm({
   });
 
   const watchType = form.watch('type');
+  const watchAccountId = form.watch('accountId');
+  const watchDestinationAccountId = form.watch('destinationAccountId');
   const watchCategoryId = form.watch('categoryId');
+
+  const sourceAccount = useMemo(
+    () => accounts.find((account) => account.id === watchAccountId) ?? null,
+    [accounts, watchAccountId],
+  );
+  const destinationAccounts = useMemo(() => {
+    if (!sourceAccount) return [];
+    const sourceCurrency = sourceAccount.currency.toUpperCase();
+    return accounts.filter(
+      (account) =>
+        account.id !== sourceAccount.id && account.currency.toUpperCase() === sourceCurrency,
+    );
+  }, [accounts, sourceAccount]);
 
   useEffect(() => {
     if (!open) return;
     form.reset({
       accountId: initial?.accountId ?? accounts[0]?.id ?? '',
+      destinationAccountId: initial?.destinationAccountId ?? null,
       categoryId: initial?.categoryId ?? null,
       bucket: initial?.bucket ?? null,
       amount: String(initial?.amount ?? ''),
@@ -102,19 +139,53 @@ export function TransactionForm({
   }, [open, initial, form]);
 
   useEffect(() => {
-    if (watchType !== 'expense') {
+    if (watchType === 'transfer') {
+      form.setValue('categoryId', null);
       form.setValue('bucket', null);
+      return;
     }
+
+    form.setValue('destinationAccountId', null);
+    if (watchType !== 'expense') form.setValue('bucket', null);
   }, [watchType, form]);
 
+  useEffect(() => {
+    if (watchType !== 'transfer' || !watchDestinationAccountId) return;
+    if (destinationAccounts.some((account) => account.id === watchDestinationAccountId)) return;
+
+    form.setValue('destinationAccountId', null, { shouldValidate: true });
+  }, [destinationAccounts, form, watchDestinationAccountId, watchType]);
+
   async function onSubmit(values: FormValues) {
+    if (values.type === 'transfer') {
+      const source = accounts.find((account) => account.id === values.accountId);
+      const destination = accounts.find(
+        (account) => account.id === values.destinationAccountId,
+      );
+      if (
+        !source ||
+        !destination ||
+        source.id === destination.id ||
+        source.currency.toUpperCase() !== destination.currency.toUpperCase()
+      ) {
+        form.setError('destinationAccountId', {
+          message: 'Choose a different account with the same currency',
+        });
+        return;
+      }
+    }
+
     setSaving(true);
     setSubmitError(null);
     try {
       const payload = {
         accountId: values.accountId,
-        categoryId: values.categoryId ? values.categoryId : null,
-        bucket: values.bucket ?? null,
+        ...(values.type === 'transfer'
+          ? { destinationAccountId: values.destinationAccountId }
+          : {
+              categoryId: values.categoryId || null,
+              bucket: values.type === 'expense' ? values.bucket ?? null : null,
+            }),
         amount: Number(values.amount),
         type: values.type,
         date: new Date(values.date),
@@ -125,13 +196,13 @@ export function TransactionForm({
           method: 'PATCH',
           body: JSON.stringify(payload),
         });
-        toast.success('Transaction updated');
+        toast.success(values.type === 'transfer' ? 'Transfer updated' : 'Transaction updated');
       } else {
         await apiFetch('/api/transactions', {
           method: 'POST',
           body: JSON.stringify(payload),
         });
-        toast.success('Transaction added');
+        toast.success(values.type === 'transfer' ? 'Transfer added' : 'Transaction added');
       }
       onOpenChange(false);
       await onSaved();
@@ -147,10 +218,18 @@ export function TransactionForm({
       <DialogContent>
         <DialogHeader>
           <DialogTitle className="font-display">
-            {initial?.id ? 'Edit transaction' : 'New transaction'}
+            {initial?.id
+              ? watchType === 'transfer'
+                ? 'Edit transfer'
+                : 'Edit transaction'
+              : watchType === 'transfer'
+                ? 'New transfer'
+                : 'New transaction'}
           </DialogTitle>
           <DialogDescription>
-            Record a manual transaction against one of your accounts.
+            {watchType === 'transfer'
+              ? 'Move money between two accounts with the same currency.'
+              : 'Record a manual transaction against one of your accounts.'}
           </DialogDescription>
         </DialogHeader>
         <Form {...form}>
@@ -202,7 +281,7 @@ export function TransactionForm({
               name="accountId"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Account</FormLabel>
+                  <FormLabel>{watchType === 'transfer' ? 'From account' : 'Account'}</FormLabel>
                   <FormControl>
                     <Select value={field.value} onValueChange={field.onChange}>
                       <SelectTrigger className="bg-background">
@@ -221,42 +300,87 @@ export function TransactionForm({
                 </FormItem>
               )}
             />
-            <FormField
-              control={form.control}
-              name="categoryId"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Category</FormLabel>
-                  <FormControl>
-                    <Select
-                      value={field.value ?? 'none'}
-                      onValueChange={(value) => field.onChange(value === 'none' ? null : value)}
-                    >
-                      <SelectTrigger className="bg-background">
-                        <SelectValue placeholder="Uncategorized" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="none">Uncategorized</SelectItem>
-                        {categoriesByType(categories, watchType ?? 'expense').map((category) => {
-                          const bucket = resolveCategoryBucket(categories, category);
-                          return (
-                            <SelectItem key={category.id} value={category.id}>
-                              <SelectItemText>{category.name}</SelectItemText>
-                              {bucket && (
-                                <span className="ml-2 text-xs font-normal text-muted-foreground">
-                                  {BUCKET_META[bucket].label}
-                                </span>
-                              )}
+            {watchType === 'transfer' && (
+              <FormField
+                control={form.control}
+                name="destinationAccountId"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>To account</FormLabel>
+                    <FormControl>
+                      <Select
+                        value={field.value ?? ''}
+                        onValueChange={field.onChange}
+                        disabled={!sourceAccount || destinationAccounts.length === 0}
+                      >
+                        <SelectTrigger className="bg-background">
+                          <SelectValue placeholder="Select destination account" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {destinationAccounts.length === 0 ? (
+                            <SelectItem value="__unavailable" disabled>
+                              No compatible accounts
                             </SelectItem>
-                          );
-                        })}
-                      </SelectContent>
-                    </Select>
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+                          ) : (
+                            destinationAccounts.map((account) => (
+                              <SelectItem key={account.id} value={account.id}>
+                                {account.label}
+                              </SelectItem>
+                            ))
+                          )}
+                        </SelectContent>
+                      </Select>
+                    </FormControl>
+                    <p className="text-xs text-muted-foreground" aria-live="polite">
+                      {!sourceAccount
+                        ? 'Choose a source account to see destinations.'
+                        : destinationAccounts.length === 0
+                          ? `No other ${sourceAccount.currency} account is available.`
+                          : `Only ${sourceAccount.currency} accounts are available.`}
+                    </p>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            )}
+            {watchType !== 'transfer' && (
+              <FormField
+                control={form.control}
+                name="categoryId"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Category</FormLabel>
+                    <FormControl>
+                      <Select
+                        value={field.value ?? 'none'}
+                        onValueChange={(value) => field.onChange(value === 'none' ? null : value)}
+                      >
+                        <SelectTrigger className="bg-background">
+                          <SelectValue placeholder="Uncategorized" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="none">Uncategorized</SelectItem>
+                          {categoriesByType(categories, watchType ?? 'expense').map((category) => {
+                            const bucket = resolveCategoryBucket(categories, category);
+                            return (
+                              <SelectItem key={category.id} value={category.id}>
+                                <SelectItemText>{category.name}</SelectItemText>
+                                {bucket && (
+                                  <span className="ml-2 text-xs font-normal text-muted-foreground">
+                                    {BUCKET_META[bucket].label}
+                                  </span>
+                                )}
+                              </SelectItem>
+                            );
+                          })}
+                        </SelectContent>
+                      </Select>
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            )}
             {(watchType ?? 'expense') === 'expense' && (
               <FormField
                 control={form.control}
@@ -350,8 +474,17 @@ export function TransactionForm({
               <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
                 Cancel
               </Button>
-              <Button type="submit" disabled={saving}>
-                {saving ? 'Saving…' : initial?.id ? 'Save changes' : 'Add transaction'}
+              <Button
+                type="submit"
+                disabled={saving || (watchType === 'transfer' && destinationAccounts.length === 0)}
+              >
+                {saving
+                  ? 'Saving…'
+                  : initial?.id
+                    ? 'Save changes'
+                    : watchType === 'transfer'
+                      ? 'Add transfer'
+                      : 'Add transaction'}
               </Button>
             </DialogFooter>
           </form>
