@@ -45,4 +45,3 @@ Use dedicated test accounts and do not place their passwords in tickets or repor
 - Review Supabase `security_events` for `oauth_signed_in`, `oauth_sign_in_failed`, `oauth_identity_linked`, `oauth_identity_unlinked`, `oauth_link_failed`, and `rate_limit_blocked` entries. The application stores only a hashed client IP.
 - Check the Upstash dashboard for request errors and usage limits.
 - For a bad application deployment, roll back the Vercel deployment. Do not roll back the additive Prisma schema automatically.
-
