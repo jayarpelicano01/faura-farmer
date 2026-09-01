@@ -126,6 +126,9 @@ responses without an email are rejected. Before deploying this feature, back up 
 data and rehearse the OAuth identity migration on staging; migration application and Vercel
 environment changes remain separate user-approved release steps.
 
+See [authentication operations](docs/auth-operations.md) for credential rotation,
+production configuration, OAuth acceptance checks, and incident triage.
+
 ## Author
 
 **Agustin Ronato Pelicano Jr. (Jay Ar)** — Junior & Full-Stack Software Developer
