@@ -14,7 +14,10 @@ export type SecurityEventName =
   | 'oauth_identity_unlinked'
   | 'oauth_link_failed'
   | 'rate_limit_blocked'
-  | 'origin_rejected';
+  | 'origin_rejected'
+  | 'mobile_registered'
+  | 'mobile_login_failed'
+  | 'mobile_signed_in';
 
 export async function recordSecurityEvent(
   event: SecurityEventName,

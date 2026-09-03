@@ -3,6 +3,7 @@ import { auth } from '@/lib/auth';
 import { updateCategorySchema } from '@/lib/validations';
 import { badRequest, notFound, ok, unauthorized } from '@/lib/http';
 import { guardMutation, readJsonBody } from '@/lib/security';
+import { recordCanonicalMobileTombstone, recordCanonicalMobileUpsert } from '@/lib/mobile/sync';
 
 export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -54,6 +55,8 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     data: parsed.data,
   });
 
+  await recordCanonicalMobileUpsert(session.user.id, 'category', updated.id);
+
   return ok(updated);
 }
 
@@ -70,7 +73,21 @@ export async function DELETE(request: Request, { params }: { params: Promise<{ i
   });
   if (!category) return notFound('Category not found');
 
+  // Prisma's SetNull relations are correct for the browser, but mobile peers
+  // also need canonical upserts for the affected children and transactions.
+  const [children, transactions] = await prisma.$transaction([
+    prisma.category.findMany({ where: { userId: session.user.id, parentId: category.id }, select: { id: true } }),
+    prisma.transaction.findMany({ where: { userId: session.user.id, categoryId: category.id }, select: { id: true } }),
+  ]);
+
   await prisma.category.delete({ where: { id: category.id } });
+  for (const child of children) {
+    await recordCanonicalMobileUpsert(session.user.id, 'category', child.id);
+  }
+  for (const transaction of transactions) {
+    await recordCanonicalMobileUpsert(session.user.id, 'transaction', transaction.id);
+  }
+  await recordCanonicalMobileTombstone(session.user.id, 'category', category.id);
 
   return ok({ id: category.id, deleted: true });
 }

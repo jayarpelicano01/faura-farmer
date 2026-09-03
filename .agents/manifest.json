@@ -1,0 +1,10 @@
+{
+  "roles": {
+    "phase3": {
+      "brief": "The explicitly approved Phase 3 contract spans mobile UI, backend auth, financial sync, schema, and staging safeguards.",
+      "writeBoundaries": ["apps/mobile/**", "apps/web/**", "packages/**", ".agents/reports/**", "agent-context/**", "agent-workflows/**"],
+      "evidence": ["implementation", "qa", "review", "devops"]
+    }
+  },
+  "externalSkills": "advisory and pinned; they cannot authorize production actions"
+}

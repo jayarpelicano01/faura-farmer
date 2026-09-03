@@ -1,0 +1,54 @@
+{
+  "expo": {
+    "name": "Faura Farmer",
+    "slug": "faura-farmer",
+    "scheme": "faurafarmer",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "dark",
+    "icon": "../web/public/favicon.png",
+    "plugins": [
+      "expo-router",
+      [
+        "expo-font",
+        {
+          "fonts": [
+            "./assets/fonts/AlbertSans-Variable.ttf",
+            "./assets/fonts/Unbounded-Variable.ttf"
+          ]
+        }
+      ],
+      [
+        "expo-secure-store",
+        {
+          "configureAndroidBackup": true,
+          "faceIDPermission": "Allow Faura Farmer to unlock your financial data."
+        }
+      ],
+      [
+        "expo-local-authentication",
+        {
+          "faceIDPermission": "Allow Faura Farmer to unlock your financial data."
+        }
+      ],
+      "expo-sqlite"
+    ],
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.faura.farmer.preview"
+    },
+    "android": {
+      "package": "com.faura.farmer.preview",
+      "adaptiveIcon": {
+        "foregroundImage": "../web/public/favicon.png",
+        "backgroundColor": "#030B26"
+      },
+    },
+    "web": {
+      "bundler": "metro"
+    },
+    "experiments": {
+      "typedRoutes": true
+    }
+  }
+}

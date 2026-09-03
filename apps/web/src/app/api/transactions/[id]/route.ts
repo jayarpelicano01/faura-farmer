@@ -10,6 +10,7 @@ import {
 import { createTransactionSchema, updateTransactionSchema } from '@/lib/validations';
 import { guardMutation, readJsonBody } from '@/lib/security';
 import { deleteReceiptObjects } from '@/lib/storage/receipts';
+import { recordCanonicalMobileTombstone, recordCanonicalMobileUpsert } from '@/lib/mobile/sync';
 
 const transactionInclude = { account: true, category: true } as const;
 
@@ -380,7 +381,9 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   const updated = await findOwnedTransaction(source.id, userId);
   if (!updated) return notFound('Transaction not found');
   const updatedGroup = await findTransferGroup(updated, userId);
-  return ok(toLogicalTransactions(updatedGroup)[0]);
+  const logical = toLogicalTransactions(updatedGroup)[0];
+  await recordCanonicalMobileUpsert(userId, 'transaction', logical.id);
+  return ok(logical);
 }
 
 export async function DELETE(request: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -483,6 +486,7 @@ export async function DELETE(request: Request, { params }: { params: Promise<{ i
         error: error instanceof Error ? error.message : 'unknown',
       });
     });
+    await recordCanonicalMobileTombstone(session.user.id, 'transaction', result.id);
     return ok({ id: result.id, deleted: true });
   }
 

@@ -4,6 +4,7 @@ import { createAccountSchema } from '@/lib/validations';
 import { badRequest, created, ok, unauthorized } from '@/lib/http';
 import { getAccountsWithBalance } from '@/lib/queries';
 import { guardMutation, readJsonBody } from '@/lib/security';
+import { recordCanonicalMobileUpsert } from '@/lib/mobile/sync';
 
 export async function GET() {
   const session = await auth();
@@ -39,6 +40,8 @@ export async function POST(request: Request) {
       icon: parsed.data.icon ?? null,
     },
   });
+
+  await recordCanonicalMobileUpsert(session.user.id, 'account', account.id);
 
   return created({ ...account, balance: String(account.startingBalance) });
 }

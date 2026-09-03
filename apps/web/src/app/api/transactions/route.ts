@@ -5,6 +5,7 @@ import { badRequest, created, fail, ok, unauthorized } from '@/lib/http';
 import { lockAccountsInOrder, toLogicalTransactions } from '@/lib/queries';
 import { createTransactionSchema, transactionListQuerySchema } from '@/lib/validations';
 import { guardMutation, readJsonBody } from '@/lib/security';
+import { recordCanonicalMobileUpsert } from '@/lib/mobile/sync';
 
 const transactionInclude = { account: true, category: true } as const;
 
@@ -191,9 +192,9 @@ export async function POST(request: Request) {
       );
     }
 
-    return created(
-      toLogicalTransactions([transferResult.outgoing, transferResult.incoming])[0],
-    );
+    const logical = toLogicalTransactions([transferResult.outgoing, transferResult.incoming])[0];
+    await recordCanonicalMobileUpsert(userId, 'transaction', logical.id);
+    return created(logical);
   }
 
   const account = await prisma.account.findFirst({
@@ -225,5 +226,7 @@ export async function POST(request: Request) {
     include: transactionInclude,
   });
 
-  return created(toLogicalTransactions([transaction])[0]);
+  const logical = toLogicalTransactions([transaction])[0];
+  await recordCanonicalMobileUpsert(userId, 'transaction', logical.id);
+  return created(logical);
 }

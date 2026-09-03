@@ -6,6 +6,7 @@ import { toNumber } from '@/lib/format';
 import { lockAccountsInOrder } from '@/lib/queries';
 import { guardMutation, readJsonBody } from '@/lib/security';
 import { deleteReceiptObjects } from '@/lib/storage/receipts';
+import { recordCanonicalMobileTombstone, recordCanonicalMobileUpsert } from '@/lib/mobile/sync';
 
 export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -136,6 +137,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
         );
       }
 
+      await recordCanonicalMobileUpsert(session.user.id, 'account', result.account.id);
       return ok({
         ...result.account,
         startingBalance: String(result.account.startingBalance),
@@ -150,6 +152,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   }
 
   const updated = await prisma.account.update({ where: { id: account.id }, data: parsed.data });
+  await recordCanonicalMobileUpsert(session.user.id, 'account', updated.id);
   return ok({ ...updated, startingBalance: String(updated.startingBalance) });
 }
 
@@ -222,7 +225,7 @@ export async function DELETE(request: Request, { params }: { params: Promise<{ i
           : { accountId: account.id };
       const transactions = await tx.transaction.findMany({
         where: transactionsWhere,
-        select: { id: true },
+        select: { id: true, transferGroupId: true, transferRole: true },
       });
       const attachments = await tx.transactionAttachment.findMany({
         where: {
@@ -237,6 +240,9 @@ export async function DELETE(request: Request, { params }: { params: Promise<{ i
       return {
         status: 'deleted' as const,
         receiptPaths: attachments.map((attachment) => attachment.storagePath),
+        deletedTransactionIds: transactions
+          .filter((transaction) => !transaction.transferGroupId || transaction.transferRole === 'outgoing')
+          .map((transaction) => transaction.id),
       };
     });
 
@@ -257,6 +263,10 @@ export async function DELETE(request: Request, { params }: { params: Promise<{ i
         error: error instanceof Error ? error.message : 'unknown',
       });
     });
+    for (const transactionId of result.deletedTransactionIds) {
+      await recordCanonicalMobileTombstone(session.user.id, 'transaction', transactionId);
+    }
+    await recordCanonicalMobileTombstone(session.user.id, 'account', account.id);
     return ok({ id: account.id, deleted: true });
   }
 
