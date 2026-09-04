@@ -6,7 +6,7 @@
     "version": "1.0.0",
     "orientation": "portrait",
     "userInterfaceStyle": "automatic",
-    "icon": "../web/public/favicon.png",
+    "icon": "./assets/icon.png",
     "plugins": [
       "expo-router",
       [
@@ -41,7 +41,7 @@
       "package": "com.faura.farmer",
       "versionCode": 1,
       "adaptiveIcon": {
-        "foregroundImage": "../web/public/favicon.png",
+        "foregroundImage": "./assets/icon.png",
         "backgroundColor": "#030B26"
       },
       "permissions": [
