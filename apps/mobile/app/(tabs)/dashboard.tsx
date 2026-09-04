@@ -155,7 +155,7 @@ function useDashboardStyles() {
   metricPair: { flexDirection: 'row', gap: 12 },
   metricHalf: { flex: 1, minWidth: 0 },
   metricLabel: { color: theme.mutedForeground, fontFamily: fontFamily.display, fontSize: 11, fontWeight: '600', lineHeight: 16 },
-  metricValue: { marginTop: 9, color: theme.foreground, fontFamily: fontFamily.display, fontSize: 20, fontWeight: '600', letterSpacing: -0.8, lineHeight: 28 },
+  metricValue: { marginTop: 9, color: theme.foreground, fontFamily: fontFamily.display, fontSize: 18, fontWeight: '600', letterSpacing: -0.8, lineHeight: 28 },
   income: { color: theme.income },
   expense: { color: theme.expense },
   sectionHeader: { flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between', gap: 12 },

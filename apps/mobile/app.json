@@ -3,7 +3,7 @@
     "name": "Faura Farmer",
     "slug": "faura-farmer",
     "scheme": "faurafarmer",
-    "version": "0.1.0",
+    "version": "1.0.0",
     "orientation": "portrait",
     "userInterfaceStyle": "automatic",
     "icon": "../web/public/favicon.png",
@@ -38,17 +38,29 @@
       "bundleIdentifier": "com.faura.farmer.preview"
     },
     "android": {
-      "package": "com.faura.farmer.preview",
+      "package": "com.faura.farmer",
+      "versionCode": 1,
       "adaptiveIcon": {
         "foregroundImage": "../web/public/favicon.png",
         "backgroundColor": "#030B26"
       },
+      "permissions": [
+        "android.permission.USE_BIOMETRIC",
+        "android.permission.USE_FINGERPRINT"
+      ]
     },
     "web": {
       "bundler": "metro"
     },
     "experiments": {
       "typedRoutes": true
-    }
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "5f8a3f2c-59e9-4d12-8fb7-36a01177f616"
+      }
+    },
+    "owner": "jayaruuu"
   }
 }

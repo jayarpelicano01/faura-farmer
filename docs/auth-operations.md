@@ -21,6 +21,7 @@ In Vercel Production, confirm without copying values into source control:
 - `DATABASE_URL` and `DIRECT_URL` point to the intended production database.
 - The Upstash REST URL and standard token are present and current.
 - `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `NEXT_PUBLIC_GOOGLE_ENABLED=true`, and `NEXT_PUBLIC_APP_URL=https://faura-farmer.vercel.app` are set.
+- Mobile v1 requires `MOBILE_API_ENABLED=true` and a separate 32+ character `MOBILE_AUTH_SECRET` in Production.
 - Facebook variables and `NEXT_PUBLIC_FACEBOOK_ENABLED` stay unset or disabled until its provider launch is approved.
 
 Vercel environment changes require a new deployment. Google must also have the exact production callback URI `https://faura-farmer.vercel.app/api/auth/callback/google` registered.
