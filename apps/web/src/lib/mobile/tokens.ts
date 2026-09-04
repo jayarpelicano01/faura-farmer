@@ -13,8 +13,8 @@ type AccessPayload = {
 };
 
 function secret() {
-  const value = process.env.MOBILE_AUTH_SECRET?.trim() || process.env.AUTH_SECRET?.trim();
-  if (!value || value.length < 32) throw new Error('A 32-character MOBILE_AUTH_SECRET or AUTH_SECRET is required');
+  const value = process.env.MOBILE_AUTH_SECRET?.trim();
+  if (!value || value.length < 32) throw new Error('A 32-character MOBILE_AUTH_SECRET is required');
   return value;
 }
 

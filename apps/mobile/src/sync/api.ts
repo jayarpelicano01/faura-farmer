@@ -6,7 +6,6 @@ const REQUEST_TIMEOUT_MS = 10_000;
 export type MobileConnectionProblem =
   | 'missing_configuration'
   | 'invalid_configuration'
-  | 'production_api'
   | 'server_unavailable'
   | 'mobile_api_disabled';
 
@@ -20,7 +19,7 @@ export class MobileConnectionError extends Error {
 export function connectionMessage(error: unknown) {
   if (error instanceof MobileConnectionError) return error.message;
   if (error instanceof TypeError && /network|fetch/i.test(error.message)) {
-    return 'Can’t reach the local server. Start the web app on port 3000, then try again.';
+    return 'Can’t reach the server. Check your connection and try again.';
   }
   return error instanceof Error ? error.message : 'Something went wrong. Please try again.';
 }
@@ -33,17 +32,13 @@ function apiBase() {
       'Mobile connection is not configured. Add EXPO_PUBLIC_API_URL to apps/mobile/.env.local, then restart Expo.',
     );
   }
-  let url: URL;
   try {
-    url = new URL(raw);
+    new URL(raw);
   } catch {
     throw new MobileConnectionError(
       'invalid_configuration',
-      'EXPO_PUBLIC_API_URL must be a complete local or Preview URL. Restart Expo after correcting it.',
+      'EXPO_PUBLIC_API_URL must be a complete URL. Restart Expo after correcting it.',
     );
-  }
-  if (url.hostname === 'faura-farmer.vercel.app') {
-    throw new MobileConnectionError('production_api', 'The production API is not available to the mobile app. Use local development or a Preview URL.');
   }
   return raw.replace(/\/$/, '');
 }
@@ -53,7 +48,7 @@ async function decode<T>(response: Response): Promise<T> {
   if (response.status === 404 && /mobile api is not enabled/i.test(data.error ?? '')) {
     throw new MobileConnectionError(
       'mobile_api_disabled',
-      'The mobile API is disabled. Set MOBILE_API_ENABLED=true and a 32+ character MOBILE_AUTH_SECRET in apps/web/.env.local, then restart the web server.',
+      'Mobile sync is temporarily unavailable. Please try again later.',
     );
   }
   if (!response.ok) throw new Error(data.error ?? `Request failed (${response.status})`);
@@ -83,7 +78,7 @@ export async function mobileRequest<T>(path: string, options: RequestInit = {}, 
     if (error instanceof TypeError && /network|fetch/i.test(error.message)) {
       throw new MobileConnectionError(
         'server_unavailable',
-        'Can’t reach the local server. Start the web app on port 3000, then try again.',
+        'Can’t reach the server. Check your connection and try again.',
       );
     }
     throw error;
