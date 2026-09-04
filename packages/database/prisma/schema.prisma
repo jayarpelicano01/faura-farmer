@@ -72,6 +72,9 @@ model User {
   securityEvents      SecurityEvent[]
   oauthIdentities     OAuthIdentity[]
   oauthLinkIntents    OAuthLinkIntent[]
+  mobileSessions      MobileSession[]
+  mobileSyncChanges   MobileSyncChange[]
+  mobileMutations     MobileMutation[]
 
   @@unique([authProvider, providerId])
   @@map("users")
@@ -118,6 +121,7 @@ model Account {
   icon              String?
   isArchived        Boolean     @default(false) @map("is_archived")
   createdAt         DateTime    @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt         DateTime    @updatedAt @map("updated_at") @db.Timestamptz(6)
 
   user           User            @relation(fields: [userId], references: [id], onDelete: Cascade)
   transactions   Transaction[]
@@ -137,6 +141,8 @@ model Category {
   icon      String?
   color     String?
   bucket    BudgetBucket?
+  createdAt DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime     @updatedAt @map("updated_at") @db.Timestamptz(6)
 
   user             User            @relation(fields: [userId], references: [id], onDelete: Cascade)
   parent           Category?       @relation("CategoryParent", fields: [parentId], references: [id], onDelete: SetNull)
@@ -291,4 +297,57 @@ model SecurityEvent {
   @@index([userId, createdAt])
   @@index([event, createdAt])
   @@map("security_events")
+}
+
+/// Refresh sessions are mobile-only. The opaque refresh token is never stored;
+/// `tokenHash` contains a SHA-256 digest and is replaced on every refresh.
+model MobileSession {
+  id        String    @id @default(uuid()) @db.Uuid
+  userId    String    @map("user_id") @db.Uuid
+  tokenHash String    @unique @map("token_hash")
+  deviceId  String    @map("device_id")
+  sessionVersion Int  @default(0) @map("session_version")
+  expiresAt DateTime  @map("expires_at") @db.Timestamptz(6)
+  revokedAt DateTime? @map("revoked_at") @db.Timestamptz(6)
+  lastUsedAt DateTime @default(now()) @map("last_used_at") @db.Timestamptz(6)
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, deviceId, expiresAt])
+  @@map("mobile_sessions")
+}
+
+/// Monotonic, per-user-filtered change feed. Tombstones carry no payload and
+/// protect clients from reviving records deleted on another device.
+model MobileSyncChange {
+  cursor    BigInt   @id @default(autoincrement()) @db.BigInt
+  userId    String   @map("user_id") @db.Uuid
+  entity    String
+  recordId  String   @map("record_id") @db.Uuid
+  operation String
+  data      Json?
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, cursor])
+  @@index([userId, entity, recordId, cursor])
+  @@map("mobile_sync_changes")
+}
+
+/// Durable idempotency receipts for a device mutation. Responses are recorded
+/// in the same transaction as the associated domain and change-log writes.
+model MobileMutation {
+  id               String   @id @default(uuid()) @db.Uuid
+  userId           String   @map("user_id") @db.Uuid
+  clientMutationId String   @map("client_mutation_id") @db.Uuid
+  result           Json
+  createdAt        DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, clientMutationId])
+  @@index([userId, createdAt])
+  @@map("mobile_mutations")
 }

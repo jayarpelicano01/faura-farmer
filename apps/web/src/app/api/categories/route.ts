@@ -4,6 +4,7 @@ import { createCategorySchema } from '@/lib/validations';
 import { badRequest, created, ok, unauthorized } from '@/lib/http';
 import { getCategoryTree } from '@/lib/queries';
 import { guardMutation, readJsonBody } from '@/lib/security';
+import { recordCanonicalMobileUpsert } from '@/lib/mobile/sync';
 
 export async function GET() {
   const session = await auth();
@@ -49,6 +50,8 @@ export async function POST(request: Request) {
       bucket: parsed.data.bucket ?? null,
     },
   });
+
+  await recordCanonicalMobileUpsert(session.user.id, 'category', category.id);
 
   return created(category);
 }
