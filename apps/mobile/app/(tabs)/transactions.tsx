@@ -1,11 +1,12 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Alert, Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import * as Crypto from 'expo-crypto';
 import type { MobileAccount, MobileCategory, MobileTransaction } from '@faura-farmer/types';
 import { listRecords, queueDelete, queueUpsert } from '@/data/db';
-import { Button, Card, ChoiceChip, Empty, Field, Screen, Title, ui } from '@/ui/primitives';
-import { fontFamily, theme } from '@/ui/theme';
+import { Button, Card, ChoiceChip, Empty, Field, Screen, Title, useUiStyles } from '@/ui/primitives';
+import { fontFamily, useAppTheme } from '@/ui/theme';
 import { useSync } from '@/sync/use-sync';
+import { useRouter } from 'expo-router';
 
 function blankTransaction(accountId: string): MobileTransaction {
   return { id: Crypto.randomUUID(), accountId, categoryId: null, bucket: null, amount: '', type: 'expense', destinationAccountId: null, date: new Date().toISOString().slice(0, 10), note: null, updatedAt: new Date().toISOString() };
@@ -29,6 +30,10 @@ function categoryName(categories: MobileCategory[], id: string | null) {
 }
 
 export default function TransactionsScreen() {
+  const router = useRouter();
+  const { theme } = useAppTheme();
+  const styles = useTransactionsStyles();
+  const ui = useUiStyles();
   const [transactions, setTransactions] = useState<MobileTransaction[]>([]);
   const [accounts, setAccounts] = useState<MobileAccount[]>([]);
   const [categories, setCategories] = useState<MobileCategory[]>([]);
@@ -69,14 +74,11 @@ export default function TransactionsScreen() {
           <Title>Transactions</Title>
           <Text style={styles.subtitle}>Income, spending, and account transfers.</Text>
         </View>
-        <Pressable
+        <Button
           accessibilityLabel="Create a new transaction"
-          accessibilityRole="button"
           onPress={begin}
-          style={({ pressed }) => [styles.headerAction, pressed ? styles.pressed : undefined]}
-        >
-          <Text style={styles.headerActionText}>New</Text>
-        </Pressable>
+          size="compact"
+        >New</Button>
       </View>
       <ScrollView contentContainerStyle={styles.listContent} contentInsetAdjustmentBehavior="automatic" keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
         {transactions.length === 0 ? <Empty>Income, expenses, and transfers work offline.</Empty> : (
@@ -99,18 +101,21 @@ export default function TransactionsScreen() {
                     accessibilityRole="button"
                     onLongPress={() => remove(item.id)}
                     onPress={() => setEditing(item)}
-                    style={({ pressed }) => [styles.transactionRow, index > 0 ? styles.rowDivider : undefined, pressed ? styles.rowPressed : undefined]}
                   >
-                    <View style={[styles.identityMark, { backgroundColor: source?.color ?? theme.primary }]}>
-                      <Text style={styles.identityText}>{label.charAt(0).toUpperCase()}</Text>
-                    </View>
-                    <View style={styles.transactionCopy}>
-                      <Text numberOfLines={1} style={ui.listTitle}>{item.note?.trim() || label}</Text>
-                      <Text numberOfLines={1} style={ui.listMeta}>{item.date} · {detail}</Text>
-                    </View>
-                    <Text style={[styles.amount, item.type === 'income' ? styles.income : item.type === 'expense' ? styles.expense : undefined]}>
-                      {item.type === 'income' ? '+' : item.type === 'expense' ? '−' : ''}{formatMoney(item.amount, currency)}
-                    </Text>
+                    {({ pressed }) => (
+                      <View style={[styles.transactionRow, index > 0 ? styles.rowDivider : undefined, pressed ? styles.rowPressed : undefined]}>
+                        <View style={[styles.identityMark, { backgroundColor: source?.color ?? theme.primary }]}>
+                          <Text style={styles.identityText}>{label.charAt(0).toUpperCase()}</Text>
+                        </View>
+                        <View style={styles.transactionCopy}>
+                          <Text numberOfLines={1} style={ui.listTitle}>{item.note?.trim() || label}</Text>
+                          <Text numberOfLines={1} style={ui.listMeta}>{item.date} · {detail}</Text>
+                        </View>
+                        <Text style={[styles.amount, item.type === 'income' ? styles.income : item.type === 'expense' ? styles.expense : undefined]}>
+                          {item.type === 'income' ? '+' : item.type === 'expense' ? '−' : ''}{formatMoney(item.amount, currency)}
+                        </Text>
+                      </View>
+                    )}
                   </Pressable>
                 );
               })}
@@ -118,12 +123,16 @@ export default function TransactionsScreen() {
           </Card>
         )}
       </ScrollView>
+
+      <Button variant="outline" onPress={() => router.replace('/(tabs)/dashboard')}>Done</Button>
+
       <TransactionEditor accounts={accounts} categories={categories} exists={transactions.some((item) => item.id === editing?.id)} transaction={editing} onChange={setEditing} onCancel={() => setEditing(null)} onSave={() => void save()} />
     </Screen>
   );
 }
 
 function TransactionEditor({ accounts, categories, exists, transaction, onChange, onCancel, onSave }: { accounts: MobileAccount[]; categories: MobileCategory[]; exists: boolean; transaction: MobileTransaction | null; onChange: (transaction: MobileTransaction) => void; onCancel: () => void; onSave: () => void }) {
+  const styles = useTransactionsStyles();
   return (
     <Modal animationType="slide" onRequestClose={onCancel} presentationStyle="formSheet" visible={Boolean(transaction)}>
       <Screen scrollable>
@@ -151,8 +160,8 @@ function TransactionEditor({ accounts, categories, exists, transaction, onChange
             <View style={styles.chips}>{categories.filter((category) => category.type === transaction.type).map((category) => <ChoiceChip key={category.id} label={category.name} selected={transaction.categoryId === category.id} onPress={() => onChange({ ...transaction, categoryId: category.id })} />)}</View>
           </View>}
           <View style={styles.formActions}>
-            <Button onPress={onSave}>{exists ? 'Save changes' : 'Add transaction'}</Button>
-            <Button tone="plain" onPress={onCancel}>Cancel</Button>
+            <Button size="full" onPress={onSave}>{exists ? 'Save changes' : 'Add transaction'}</Button>
+            <Button variant="outline" onPress={onCancel}>Cancel</Button>
           </View>
         </View> : null}
       </Screen>
@@ -160,12 +169,12 @@ function TransactionEditor({ accounts, categories, exists, transaction, onChange
   );
 }
 
-const styles = StyleSheet.create({
+function useTransactionsStyles() {
+  const { theme } = useAppTheme();
+  return useMemo(() => StyleSheet.create({
   pageHeader: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, paddingBottom: 20 },
   headingCopy: { flex: 1, minWidth: 0 },
   subtitle: { color: theme.mutedForeground, fontFamily: fontFamily.body, fontSize: 14, lineHeight: 20 },
-  headerAction: { minHeight: 40, alignItems: 'center', justifyContent: 'center', borderRadius: 8, backgroundColor: theme.primarySolid, paddingHorizontal: 14 },
-  headerActionText: { color: theme.primaryForeground, fontFamily: fontFamily.body, fontSize: 14, fontWeight: '700' },
   listContent: { flexGrow: 1, paddingBottom: 32 },
   rowGroup: { gap: 0 },
   transactionRow: { flexDirection: 'row', alignItems: 'center', gap: 12, minHeight: 64, paddingVertical: 10 },
@@ -180,8 +189,8 @@ const styles = StyleSheet.create({
   editorHeader: { marginBottom: 24 },
   form: { gap: 0 },
   formSection: { marginBottom: 16 },
-  fieldLabel: { marginBottom: 8, color: theme.foreground, fontFamily: fontFamily.body, fontSize: 14, fontWeight: '600' },
+   fieldLabel: { marginBottom: 8, color: theme.foreground, fontFamily: fontFamily.body, fontSize: 14, fontWeight: '500' },
   chips: { flexDirection: 'row', flexWrap: 'wrap' },
   formActions: { gap: 12, marginTop: 8 },
-  pressed: { opacity: 0.84, transform: [{ scale: 0.985 }] },
-});
+  }), [theme]);
+}

@@ -24,7 +24,8 @@
     --radius: 0.75rem;
     --income: 167 76% 25%;
     --expense: 211 72% 26%;
-    --destructive: 211 78% 20%;
+    --destructive: 8 64% 42%;
+    --destructive-foreground: 0 0% 100%;
     --primary-solid: 226 85% 8%;
     --primary-solid-foreground: 0 0% 100%;
   }
@@ -50,7 +51,8 @@
     --radius: 0.75rem;
     --income: 167 70% 45%;
     --expense: 211 48% 42%;
-    --destructive: 211 60% 36%;
+    --destructive: 8 72% 62%;
+    --destructive-foreground: 226 85% 8%;
     --primary-solid: 226 85% 8%;
     --primary-solid-foreground: 0 0% 100%;
   }

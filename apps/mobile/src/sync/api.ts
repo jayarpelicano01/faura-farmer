@@ -1,6 +1,8 @@
 import type { MobileAuthResponse } from '@faura-farmer/types';
 import { getInstallationId, getStoredSession, type StoredSession } from '@/auth/session';
 
+const REQUEST_TIMEOUT_MS = 10_000;
+
 export type MobileConnectionProblem =
   | 'missing_configuration'
   | 'invalid_configuration'
@@ -59,14 +61,25 @@ async function decode<T>(response: Response): Promise<T> {
 }
 
 export async function mobileRequest<T>(path: string, options: RequestInit = {}, accessToken?: string) {
+  const controller = new AbortController();
+  let timedOut = false;
+  const timeout = setTimeout(() => {
+    timedOut = true;
+    controller.abort();
+  }, REQUEST_TIMEOUT_MS);
+
   try {
     const response = await fetch(`${apiBase()}${path}`, {
       ...options,
       headers: { Accept: 'application/json', ...(options.body ? { 'Content-Type': 'application/json' } : {}), ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}), ...options.headers },
+      signal: controller.signal,
     });
     return decode<T>(response);
   } catch (error) {
     if (error instanceof MobileConnectionError) throw error;
+    if (timedOut) {
+      throw new MobileConnectionError('server_unavailable', 'Sync timed out. Check your connection and try again.');
+    }
     if (error instanceof TypeError && /network|fetch/i.test(error.message)) {
       throw new MobileConnectionError(
         'server_unavailable',
@@ -74,6 +87,8 @@ export async function mobileRequest<T>(path: string, options: RequestInit = {}, 
       );
     }
     throw error;
+  } finally {
+    clearTimeout(timeout);
   }
 }
 

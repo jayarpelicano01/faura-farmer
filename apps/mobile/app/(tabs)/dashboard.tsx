@@ -1,9 +1,9 @@
-import { useCallback, useEffect, useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { StyleSheet, Text, View } from 'react-native';
 import type { MobileAccount, MobileTransaction } from '@faura-farmer/types';
 import { listRecords } from '@/data/db';
-import { Card, Empty, Screen, SectionTitle, Title, ui } from '@/ui/primitives';
-import { fontFamily, theme } from '@/ui/theme';
+import { Button, Card, Empty, Screen, SectionTitle, Title, useUiStyles } from '@/ui/primitives';
+import { fontFamily, useAppTheme } from '@/ui/theme';
 import { useSync } from '@/sync/use-sync';
 
 const phpCurrency = new Intl.NumberFormat(undefined, { style: 'currency', currency: 'PHP' });
@@ -14,15 +14,18 @@ function accountLabel(accounts: MobileAccount[], accountId: string | null) {
 }
 
 export default function DashboardScreen() {
+  const { theme } = useAppTheme();
+  const styles = useDashboardStyles();
+  const ui = useUiStyles();
   const [accounts, setAccounts] = useState<MobileAccount[]>([]);
   const [transactions, setTransactions] = useState<MobileTransaction[]>([]);
-  const { syncing, syncNow } = useSync();
+  const { lastSyncFailed, syncStatus, syncNow } = useSync();
   const load = useCallback(async () => {
     setAccounts(await listRecords('account'));
     setTransactions(await listRecords('transaction'));
   }, []);
 
-  useEffect(() => { void load(); }, [load, syncing]);
+  useEffect(() => { void load(); }, [load, syncStatus]);
 
   const balances = new Map(accounts.map((account) => [account.id, Number(account.startingBalance)]));
   let income = 0;
@@ -51,15 +54,15 @@ export default function DashboardScreen() {
           <Title>Dashboard</Title>
           <Text style={styles.subtitle}>Here’s your money at a glance.</Text>
         </View>
-        <Pressable
-          accessibilityLabel={syncing ? 'Syncing your data' : 'Sync your data'}
-          accessibilityRole="button"
-          disabled={syncing}
-          onPress={() => void syncNow(true)}
-          style={({ pressed }) => [styles.syncButton, pressed && !syncing ? styles.pressed : undefined, syncing ? styles.syncButtonDisabled : undefined]}
-        >
-          <Text style={styles.syncButtonText}>{syncing ? 'Syncing…' : 'Sync'}</Text>
-        </Pressable>
+        <View style={styles.syncControl}>
+          <Button
+            accessibilityLabel="Sync your data"
+            onPress={() => void syncNow(true)}
+            size="compact"
+            variant="outline"
+          >Sync</Button>
+          {lastSyncFailed ? <View pointerEvents="none" style={styles.syncRetryDot} /> : null}
+        </View>
       </View>
 
       <View style={styles.metrics}>
@@ -140,13 +143,14 @@ export default function DashboardScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+function useDashboardStyles() {
+  const { theme } = useAppTheme();
+  return useMemo(() => StyleSheet.create({
   pageHeader: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, marginBottom: 22 },
-  headingCopy: { flex: 1, minWidth: 0 },
-  subtitle: { color: theme.mutedForeground, fontFamily: fontFamily.body, fontSize: 14, lineHeight: 20 },
-  syncButton: { minHeight: 40, alignItems: 'center', justifyContent: 'center', borderColor: theme.border, borderRadius: 8, borderWidth: 1, backgroundColor: theme.surface, paddingHorizontal: 13 },
-  syncButtonDisabled: { opacity: 0.6 },
-  syncButtonText: { color: theme.primary, fontFamily: fontFamily.body, fontSize: 14, fontWeight: '600' },
+   headingCopy: { flex: 1, minWidth: 0 },
+   syncControl: { position: 'relative', alignSelf: 'flex-start' },
+   syncRetryDot: { position: 'absolute', top: -2, right: -2, width: 6, height: 6, borderRadius: 3, backgroundColor: theme.danger },
+   subtitle: { color: theme.mutedForeground, fontFamily: fontFamily.body, fontSize: 14, lineHeight: 20 },
   metrics: { gap: 0, marginBottom: 10 },
   metricPair: { flexDirection: 'row', gap: 12 },
   metricHalf: { flex: 1, minWidth: 0 },
@@ -165,5 +169,5 @@ const styles = StyleSheet.create({
   transactionCopy: { flex: 1, minWidth: 0, gap: 2 },
   transactionAmount: { flexShrink: 0, color: theme.foreground, fontFamily: fontFamily.body, fontSize: 14, fontWeight: '700', fontVariant: ['tabular-nums'] },
   accountAmount: { flexShrink: 0, color: theme.foreground, fontFamily: fontFamily.display, fontSize: 13, fontWeight: '600', fontVariant: ['tabular-nums'] },
-  pressed: { opacity: 0.84, transform: [{ scale: 0.985 }] },
-});
+  }), [theme]);
+}

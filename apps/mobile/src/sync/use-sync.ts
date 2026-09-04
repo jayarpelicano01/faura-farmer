@@ -1,31 +1,107 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
-import { AppState, Alert } from 'react-native';
+import { createContext, createElement, useCallback, useContext, useEffect, useMemo, useRef, useState, type PropsWithChildren } from 'react';
+import { AppState } from 'react-native';
 import NetInfo from '@react-native-community/netinfo';
 import { useSession } from '@/auth/session';
+import { MobileConnectionError } from './api';
 import { synchronize } from './sync';
 
-export function useSync() {
+export type SyncStatus = 'idle' | 'syncing' | 'success' | 'offline' | 'attention';
+
+type SyncContextValue = {
+  lastSyncFailed: boolean;
+  syncing: boolean;
+  syncMessage: string | null;
+  syncNow: (manual?: boolean) => Promise<void>;
+  syncStatus: SyncStatus;
+};
+
+const SyncContext = createContext<SyncContextValue | null>(null);
+const OFFLINE_MESSAGE = 'Changes saved here. Sync when online.';
+const RESULT_STATUS_DURATION_MS = 5_000;
+
+function messageFor(error: unknown) {
+  if (error instanceof MobileConnectionError && error.problem === 'server_unavailable') return OFFLINE_MESSAGE;
+  return 'Sync needs attention. Your changes stay on this device.';
+}
+
+export function SyncProvider({ children }: PropsWithChildren) {
   const { status, update } = useSession();
-  const [syncing, setSyncing] = useState(false);
+  const [lastSyncFailed, setLastSyncFailed] = useState(false);
+  const [syncStatus, setSyncStatus] = useState<SyncStatus>('idle');
+  const [syncMessage, setSyncMessage] = useState<string | null>(null);
   const syncingRef = useRef(false);
-  const syncNow = useCallback(async (showErrors = false) => {
+  const resetTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const showStatus = useCallback((nextStatus: SyncStatus, message: string | null, duration?: number) => {
+    if (resetTimer.current) clearTimeout(resetTimer.current);
+    setSyncStatus(nextStatus);
+    setSyncMessage(message);
+    resetTimer.current = duration
+      ? setTimeout(() => {
+        setSyncStatus('idle');
+        setSyncMessage(null);
+        resetTimer.current = null;
+      }, duration)
+      : null;
+  }, []);
+
+  const syncNow = useCallback(async (manual = false) => {
     if (status !== 'ready' || syncingRef.current) return;
     syncingRef.current = true;
-    setSyncing(true);
+    if (manual) setLastSyncFailed(false);
+    showStatus('syncing', 'Syncing...');
     try {
+      const connection = await NetInfo.fetch();
+      if (connection.isConnected === false) {
+        setLastSyncFailed(true);
+        showStatus('offline', OFFLINE_MESSAGE, RESULT_STATUS_DURATION_MS);
+        return;
+      }
       const result = await synchronize(update);
-      if (result.warning) Alert.alert('A change needs attention', result.warning);
+      if (result.warning) {
+        setLastSyncFailed(true);
+        showStatus('attention', result.warning, RESULT_STATUS_DURATION_MS);
+      } else {
+        setLastSyncFailed(false);
+        showStatus('success', 'Synced', RESULT_STATUS_DURATION_MS);
+      }
     } catch (error) {
-      if (showErrors) Alert.alert('Sync unavailable', error instanceof Error ? error.message : 'Try again when online.');
-    } finally { syncingRef.current = false; setSyncing(false); }
-  }, [status, update]);
+      setLastSyncFailed(true);
+      showStatus(error instanceof MobileConnectionError && error.problem === 'server_unavailable' ? 'offline' : 'attention', messageFor(error), RESULT_STATUS_DURATION_MS);
+    } finally {
+      syncingRef.current = false;
+    }
+  }, [showStatus, status, update]);
 
   useEffect(() => {
-    if (status !== 'ready') return;
+    if (status !== 'ready') {
+      setLastSyncFailed(false);
+      showStatus('idle', null);
+      return;
+    }
     void syncNow();
     const net = NetInfo.addEventListener((state) => { if (state.isConnected) void syncNow(); });
     const app = AppState.addEventListener('change', (state) => { if (state === 'active') void syncNow(); });
     return () => { net(); app.remove(); };
-  }, [status, syncNow]);
-  return { syncing, syncNow };
+  }, [showStatus, status, syncNow]);
+
+  useEffect(() => () => {
+    if (resetTimer.current) clearTimeout(resetTimer.current);
+  }, []);
+
+  const value = useMemo(() => ({
+    lastSyncFailed,
+    syncing: syncStatus === 'syncing',
+    syncMessage,
+    syncNow,
+    syncStatus,
+  }), [lastSyncFailed, syncMessage, syncNow, syncStatus]);
+
+  return createElement(SyncContext.Provider, { value }, children);
+}
+
+export function useSync() {
+  const context = useContext(SyncContext);
+  if (!context) throw new Error('useSync must be used inside SyncProvider');
+  return context;
 }
