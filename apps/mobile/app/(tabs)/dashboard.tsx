@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Link } from 'expo-router';
 import type { MobileAccount, MobileTransaction } from '@faura-farmer/types';
 import { listRecords } from '@/data/db';
 import { Button, Card, Empty, Screen, SectionTitle, Title, useUiStyles } from '@/ui/primitives';
 import { fontFamily, useAppTheme } from '@/ui/theme';
 import { useSync } from '@/sync/use-sync';
+import { useCurrency } from '@/ui/currency';
 
 const phpCurrency = new Intl.NumberFormat(undefined, { style: 'currency', currency: 'PHP' });
 const currency = (amount: number) => phpCurrency.format(amount);
@@ -20,6 +22,7 @@ export default function DashboardScreen() {
   const [accounts, setAccounts] = useState<MobileAccount[]>([]);
   const [transactions, setTransactions] = useState<MobileTransaction[]>([]);
   const { lastSyncFailed, syncStatus, syncNow } = useSync();
+  const { convert, formatMoney } = useCurrency();
   const load = useCallback(async () => {
     setAccounts(await listRecords('account'));
     setTransactions(await listRecords('transaction'));
@@ -33,11 +36,11 @@ export default function DashboardScreen() {
   for (const transaction of transactions) {
     const amount = Number(transaction.amount);
     if (transaction.type === 'income') {
-      income += amount;
+      income += Number(convert(amount, accounts.find((account) => account.id === transaction.accountId)?.currency ?? 'PHP'));
       balances.set(transaction.accountId, (balances.get(transaction.accountId) ?? 0) + amount);
     }
     if (transaction.type === 'expense') {
-      expense += amount;
+      expense += Number(convert(amount, accounts.find((account) => account.id === transaction.accountId)?.currency ?? 'PHP'));
       balances.set(transaction.accountId, (balances.get(transaction.accountId) ?? 0) - amount);
     }
     if (transaction.type === 'transfer') {
@@ -45,7 +48,7 @@ export default function DashboardScreen() {
       if (transaction.destinationAccountId) balances.set(transaction.destinationAccountId, (balances.get(transaction.destinationAccountId) ?? 0) + amount);
     }
   }
-  const total = [...balances.values()].reduce((sum, value) => sum + value, 0);
+  const total = accounts.reduce((sum, account) => sum + Number(convert(balances.get(account.id) ?? 0, account.currency)), 0);
 
   return (
     <Screen scrollable>
@@ -68,28 +71,34 @@ export default function DashboardScreen() {
       <View style={styles.metrics}>
         <Card>
           <Text style={styles.metricLabel}>Total balance</Text>
-          <Text style={styles.metricValue}>{currency(total)}</Text>
+          <Text style={styles.metricValue}>{formatMoney(total)}</Text>
         </Card>
         <View style={styles.metricPair}>
           <View style={styles.metricHalf}>
             <Card>
               <Text style={styles.metricLabel}>Income this month</Text>
-              <Text style={[styles.metricValue, styles.income]}>{currency(income)}</Text>
+              <Text style={[styles.metricValue, styles.income]}>{formatMoney(income)}</Text>
             </Card>
           </View>
           <View style={styles.metricHalf}>
             <Card>
               <Text style={styles.metricLabel}>Expense this month</Text>
-              <Text style={[styles.metricValue, styles.expense]}>{currency(expense)}</Text>
+              <Text style={[styles.metricValue, styles.expense]}>{formatMoney(expense)}</Text>
             </Card>
           </View>
         </View>
       </View>
 
-      <View style={styles.sectionHeader}>
-        <SectionTitle>Recent transactions</SectionTitle>
-        <Text style={styles.sectionLink}>Latest five</Text>
-      </View>
+      <Link href="/transactions" asChild>
+        <Pressable accessibilityHint="Open all transactions" accessibilityLabel="Recent transactions" accessibilityRole="link">
+          {({ pressed }) => (
+            <View style={[styles.sectionHeader, pressed ? styles.sectionHeaderPressed : undefined]}>
+              <SectionTitle>Recent transactions</SectionTitle>
+              <Text style={styles.sectionLink}>View all</Text>
+            </View>
+          )}
+        </Pressable>
+      </Link>
       {transactions.length === 0 ? <Empty>Your recent transactions will appear here.</Empty> : (
         <Card>
           <View style={styles.rowGroup}>
@@ -108,7 +117,7 @@ export default function DashboardScreen() {
                     <Text numberOfLines={1} style={ui.listMeta}>{item.date} · {item.type}</Text>
                   </View>
                   <Text style={[styles.transactionAmount, item.type === 'income' ? styles.income : item.type === 'expense' ? styles.expense : undefined]}>
-                    {item.type === 'income' ? '+' : item.type === 'expense' ? '−' : ''}{currency(Number(item.amount))}
+                    {item.type === 'income' ? '+' : item.type === 'expense' ? '−' : ''}{formatMoney(item.amount, account?.currency ?? 'PHP')}
                   </Text>
                 </View>
               );
@@ -117,10 +126,16 @@ export default function DashboardScreen() {
         </Card>
       )}
 
-      <View style={styles.sectionHeader}>
-        <SectionTitle>Accounts</SectionTitle>
-        <Text style={styles.sectionLink}>{accounts.length} total</Text>
-      </View>
+      <Link href="/accounts" asChild>
+        <Pressable accessibilityHint="Open all accounts" accessibilityLabel="Accounts" accessibilityRole="link">
+          {({ pressed }) => (
+            <View style={[styles.sectionHeader, pressed ? styles.sectionHeaderPressed : undefined]}>
+              <SectionTitle>Accounts</SectionTitle>
+              <Text style={styles.sectionLink}>{accounts.length} total · View all</Text>
+            </View>
+          )}
+        </Pressable>
+      </Link>
       {accounts.length === 0 ? <Empty>Create an account to start tracking.</Empty> : (
         <Card>
           <View style={styles.rowGroup}>
@@ -133,7 +148,7 @@ export default function DashboardScreen() {
                   <Text numberOfLines={1} style={ui.listTitle}>{account.label}</Text>
                   <Text style={ui.listMeta}>{account.type.replace('_', ' ')}</Text>
                 </View>
-                <Text style={styles.accountAmount}>{currency(balances.get(account.id) ?? 0)}</Text>
+                <Text style={styles.accountAmount}>{formatMoney(balances.get(account.id) ?? 0, account.currency)}</Text>
               </View>
             ))}
           </View>
@@ -158,7 +173,8 @@ function useDashboardStyles() {
   metricValue: { marginTop: 9, color: theme.foreground, fontFamily: fontFamily.display, fontSize: 18, fontWeight: '600', letterSpacing: -0.8, lineHeight: 28 },
   income: { color: theme.income },
   expense: { color: theme.expense },
-  sectionHeader: { flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between', gap: 12 },
+  sectionHeader: { minHeight: 44, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 },
+  sectionHeaderPressed: { opacity: 0.72 },
   sectionLink: { color: theme.primary, fontFamily: fontFamily.body, fontSize: 13, fontWeight: '600' },
   rowGroup: { gap: 0 },
   transactionRow: { flexDirection: 'row', alignItems: 'center', gap: 12, minHeight: 62, paddingVertical: 10 },
