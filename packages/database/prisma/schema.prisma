@@ -61,6 +61,10 @@ model User {
   username       String?      @unique @map("username")
   avatarUrl      String?      @map("avatar_url")
   sessionVersion Int          @default(0) @map("session_version")
+  displayCurrency String      @default("PHP") @map("display_currency")
+  usdPerPhp       Decimal?    @map("usd_per_php") @db.Decimal(20, 10)
+  rateDate        DateTime?   @map("rate_date") @db.Date
+  rateRefreshedAt DateTime?   @map("rate_refreshed_at") @db.Timestamptz(6)
   createdAt      DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
 
   accounts            Account[]

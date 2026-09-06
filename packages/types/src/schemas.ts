@@ -6,6 +6,7 @@ import {
   TRANSACTION_TYPES,
   FREQUENCIES,
 } from './models';
+import { DISPLAY_CURRENCIES } from './currency';
 
 const emailField = z.string().trim().email('Enter a valid email address').max(255);
 
@@ -60,6 +61,7 @@ export const updateProfileSchema = z.object({
     .regex(/^[a-zA-Z0-9_.-]+$/, 'Username can only contain letters, numbers, dots, dashes and underscores')
     .optional()
     .nullable(),
+  displayCurrency: z.enum(DISPLAY_CURRENCIES).optional(),
 });
 
 export const changePasswordSchema = z
@@ -91,6 +93,7 @@ export const accountSchema = z.object({
 export const createAccountSchema = accountSchema;
 export const updateAccountSchema = accountSchema.partial().extend({
   isArchived: z.boolean().optional(),
+  currentBalance: z.coerce.number().min(-999999999999).max(999999999999).optional(),
 });
 
 export const categorySchema = z.object({

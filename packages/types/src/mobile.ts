@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { ACCOUNT_TYPES, BUDGET_BUCKETS, CATEGORY_TYPES, TRANSACTION_TYPES } from './models';
+import { DISPLAY_CURRENCIES, type DisplayCurrency } from './currency';
 
 const uuid = z.string().uuid();
 const decimalString = z.string().regex(/^\d+(?:\.\d{1,2})?$/, 'Amount must be a decimal string');
@@ -55,24 +56,39 @@ export const mobileTransactionSchema = z
     }
   });
 
+export const mobileBudgetSchema = z.object({
+  id: uuid,
+  categoryId: uuid,
+  monthlyLimit: positiveDecimalString,
+  updatedAt: z.string().datetime(),
+});
+
+export const mobileMonthlyBudgetSchema = z.object({
+  id: uuid,
+  amount: positiveDecimalString,
+  updatedAt: z.string().datetime(),
+});
+
 export const mobileEntitySchema = z.discriminatedUnion('entity', [
   z.object({ entity: z.literal('account'), record: mobileAccountSchema }),
   z.object({ entity: z.literal('category'), record: mobileCategorySchema }),
   z.object({ entity: z.literal('transaction'), record: mobileTransactionSchema }),
+  z.object({ entity: z.literal('budget'), record: mobileBudgetSchema }),
+  z.object({ entity: z.literal('monthly_budget'), record: mobileMonthlyBudgetSchema }),
 ]);
 
 export const mobileSyncMutationSchema = z.discriminatedUnion('operation', [
   z.object({
     mutationId: uuid,
-    entity: z.enum(['account', 'category', 'transaction']),
+    entity: z.enum(['account', 'category', 'transaction', 'budget', 'monthly_budget']),
     recordId: uuid,
     operation: z.literal('upsert'),
     baseCursor: cursor.nullable(),
-    record: z.union([mobileAccountSchema, mobileCategorySchema, mobileTransactionSchema]),
+    record: z.union([mobileAccountSchema, mobileCategorySchema, mobileTransactionSchema, mobileBudgetSchema, mobileMonthlyBudgetSchema]),
   }),
   z.object({
     mutationId: uuid,
-    entity: z.enum(['account', 'category', 'transaction']),
+    entity: z.enum(['account', 'category', 'transaction', 'budget', 'monthly_budget']),
     recordId: uuid,
     operation: z.literal('delete'),
     baseCursor: cursor.nullable(),
@@ -89,6 +105,8 @@ export const mobileSyncPullSchema = z.object({ cursor: cursor.default('0') });
 export type MobileAccount = z.infer<typeof mobileAccountSchema>;
 export type MobileCategory = z.infer<typeof mobileCategorySchema>;
 export type MobileTransaction = z.infer<typeof mobileTransactionSchema>;
+export type MobileBudget = z.infer<typeof mobileBudgetSchema>;
+export type MobileMonthlyBudget = z.infer<typeof mobileMonthlyBudgetSchema>;
 export type MobileSyncMutation = z.infer<typeof mobileSyncMutationSchema>;
 export type MobileSyncPush = z.infer<typeof mobileSyncPushSchema>;
 
@@ -99,12 +117,24 @@ export type MobileAuthResponse = {
   user: { id: string; email: string; name: string | null };
 };
 
+export type MobileProfile = {
+  id: string;
+  email: string;
+  name: string | null;
+  username: string | null;
+  hasPassword: boolean;
+  displayCurrency: DisplayCurrency;
+  usdPerPhp: string | null;
+  rateDate: string | null;
+  rateRefreshedAt: string | null;
+};
+
 export type MobileSyncChange = {
   cursor: string;
-  entity: 'account' | 'category' | 'transaction';
+  entity: 'account' | 'category' | 'transaction' | 'budget' | 'monthly_budget';
   recordId: string;
   operation: 'upsert' | 'delete';
-  record: MobileAccount | MobileCategory | MobileTransaction | null;
+  record: MobileAccount | MobileCategory | MobileTransaction | MobileBudget | MobileMonthlyBudget | null;
 };
 
 export type MobileApiError = { error: string; code: string };
