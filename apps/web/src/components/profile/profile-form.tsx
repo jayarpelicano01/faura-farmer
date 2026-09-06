@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import type { CurrencyPreference } from '@faura-farmer/types';
 import { toast } from 'sonner';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { signIn, signOut, useSession } from 'next-auth/react';
@@ -30,6 +31,10 @@ interface ProfileUser {
   avatarUrl: string | null;
   hasPassword: boolean;
   connections: string[];
+  displayCurrency: 'PHP' | 'USD';
+  usdPerPhp: string | null;
+  rateDate: string | null;
+  rateRefreshedAt: string | null;
 }
 
 const connectionOptions: Array<{ provider: OAuthProvider; label: string; enabled: boolean }> = [
@@ -51,6 +56,8 @@ export function ProfileForm({ user }: { user: ProfileUser }) {
   const { update } = useSession();
   const [connectionAction, setConnectionAction] = useState<OAuthProvider | null>(null);
   const [connectionError, setConnectionError] = useState<string | null>(null);
+  const [preference, setPreference] = useState<CurrencyPreference>({ displayCurrency: user.displayCurrency, usdPerPhp: user.usdPerPhp, rateDate: user.rateDate, rateRefreshedAt: user.rateRefreshedAt });
+  const [currencyPending, setCurrencyPending] = useState(false);
 
   useEffect(() => {
     const connected = searchParams.get('connection');
@@ -142,6 +149,33 @@ export function ProfileForm({ user }: { user: ProfileUser }) {
     }
   }
 
+  async function changeCurrency(displayCurrency: 'PHP' | 'USD') {
+    if (displayCurrency === 'USD' && !preference.usdPerPhp) {
+      toast.error('Refresh the exchange rate before switching to USD.');
+      return;
+    }
+    setCurrencyPending(true);
+    try {
+      const response = await apiFetch<{ user: { preference: CurrencyPreference } }>('/api/profile', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ displayCurrency }) });
+      setPreference(response.user.preference);
+      toast.success(`Display currency changed to ${displayCurrency}`);
+      router.refresh();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Unable to change display currency.');
+    } finally { setCurrencyPending(false); }
+  }
+
+  async function refreshRate() {
+    setCurrencyPending(true);
+    try {
+      const response = await apiFetch<{ preference: CurrencyPreference }>('/api/profile/currency-rate', { method: 'POST' });
+      setPreference((current) => ({ ...response.preference, displayCurrency: current.displayCurrency }));
+      toast.success('Exchange rate refreshed');
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Unable to refresh the exchange rate.');
+    } finally { setCurrencyPending(false); }
+  }
+
   return (
     <div className="space-y-6">
       <Card>
@@ -187,6 +221,18 @@ export function ProfileForm({ user }: { user: ProfileUser }) {
             </Button>
           </CardContent>
         </form>
+      </Card>
+
+      <Card>
+        <CardHeader><CardTitle className="font-display text-lg">Display currency</CardTitle></CardHeader>
+        <CardContent className="space-y-4">
+          <p className="text-sm text-muted-foreground">Show amounts in PHP or USD. Saved balances and transactions remain unchanged.</p>
+          <div className="flex gap-2">
+            {(['PHP', 'USD'] as const).map((currency) => <Button key={currency} disabled={currencyPending || preference.displayCurrency === currency} type="button" variant={preference.displayCurrency === currency ? 'default' : 'outline'} onClick={() => void changeCurrency(currency)}>{currency}</Button>)}
+          </div>
+          <p className="text-xs text-muted-foreground">{preference.usdPerPhp ? `1 PHP = ${preference.usdPerPhp} USD${preference.rateDate ? ` · rate date ${preference.rateDate}` : ''}` : 'No USD rate is cached yet.'}</p>
+          <Button disabled={currencyPending} type="button" variant="outline" onClick={() => void refreshRate()}>{currencyPending ? 'Refreshing…' : 'Refresh rate'}</Button>
+        </CardContent>
       </Card>
 
       <Card>

@@ -16,6 +16,10 @@ export default async function ProfilePage() {
       username: true,
       avatarUrl: true,
       passwordHash: true,
+      displayCurrency: true,
+      usdPerPhp: true,
+      rateDate: true,
+      rateRefreshedAt: true,
       oauthIdentities: { select: { provider: true } },
     },
   });
@@ -38,6 +42,10 @@ export default async function ProfilePage() {
           avatarUrl: user.avatarUrl,
           hasPassword: Boolean(user.passwordHash),
           connections: user.oauthIdentities.map((identity) => identity.provider),
+          displayCurrency: user.displayCurrency === 'USD' ? 'USD' : 'PHP',
+          usdPerPhp: user.usdPerPhp?.toString() ?? null,
+          rateDate: user.rateDate?.toISOString().slice(0, 10) ?? null,
+          rateRefreshedAt: user.rateRefreshedAt?.toISOString() ?? null,
         }}
       />
     </div>
