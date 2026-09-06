@@ -75,9 +75,10 @@ export async function DELETE(request: Request, { params }: { params: Promise<{ i
 
   // Prisma's SetNull relations are correct for the browser, but mobile peers
   // also need canonical upserts for the affected children and transactions.
-  const [children, transactions] = await prisma.$transaction([
+  const [children, transactions, budgets] = await prisma.$transaction([
     prisma.category.findMany({ where: { userId: session.user.id, parentId: category.id }, select: { id: true } }),
     prisma.transaction.findMany({ where: { userId: session.user.id, categoryId: category.id }, select: { id: true } }),
+    prisma.budget.findMany({ where: { userId: session.user.id, categoryId: category.id }, select: { id: true } }),
   ]);
 
   await prisma.category.delete({ where: { id: category.id } });
@@ -86,6 +87,9 @@ export async function DELETE(request: Request, { params }: { params: Promise<{ i
   }
   for (const transaction of transactions) {
     await recordCanonicalMobileUpsert(session.user.id, 'transaction', transaction.id);
+  }
+  for (const budget of budgets) {
+    await recordCanonicalMobileTombstone(session.user.id, 'budget', budget.id);
   }
   await recordCanonicalMobileTombstone(session.user.id, 'category', category.id);
 
