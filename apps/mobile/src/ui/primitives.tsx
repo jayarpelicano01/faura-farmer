@@ -208,7 +208,7 @@ export function ChoiceChip({ label, selected, onPress }: { label: string; select
   );
 }
 
-export function Field({ label, ...props }: TextInputProps & { label: string }) {
+export function Field({ label, editable = true, style, ...props }: TextInputProps & { label: string }) {
   const styles = usePrimitiveStyles();
   const { theme } = useAppTheme();
   return (
@@ -216,9 +216,10 @@ export function Field({ label, ...props }: TextInputProps & { label: string }) {
       <Text style={styles.label}>{label}</Text>
       <TextInput
         accessibilityLabel={label}
+        editable={editable}
         placeholderTextColor={theme.mutedForeground}
         selectionColor={theme.primary}
-        style={styles.input}
+        style={[styles.input, !editable ? styles.inputDisabled : undefined, style]}
         {...props}
       />
     </View>
@@ -299,6 +300,7 @@ function createStyles(theme: AppTheme) {
     field: { marginBottom: 16 },
     label: { marginBottom: 8, color: theme.foreground, fontFamily: fontFamily.body, fontSize: 14, fontWeight: '500' },
     input: { minHeight: 46, borderCurve: 'continuous', borderWidth: 1, borderColor: theme.input, borderRadius: radius.control, backgroundColor: theme.background, color: theme.foreground, fontFamily: fontFamily.body, fontSize: 14, paddingHorizontal: 12, paddingVertical: 10 },
+    inputDisabled: { backgroundColor: theme.muted, color: theme.mutedForeground, opacity: 0.8 },
     emptySurface: { marginBottom: 12, borderCurve: 'continuous', borderRadius: radius.card, borderColor: theme.border, borderWidth: StyleSheet.hairlineWidth, backgroundColor: theme.card },
     empty: { paddingHorizontal: 18, paddingVertical: 28, color: theme.mutedForeground, fontFamily: fontFamily.body, fontSize: 15, lineHeight: 22, textAlign: 'center' },
     chip: { minHeight: 38, alignItems: 'center', justifyContent: 'center', marginRight: 8, marginBottom: 8, borderCurve: 'continuous', borderRadius: radius.control, borderColor: theme.input, borderWidth: 1, backgroundColor: theme.background, paddingHorizontal: 12, paddingVertical: 8 },

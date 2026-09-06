@@ -9,6 +9,7 @@ import { BrandLockup } from '@/ui/brand';
 import { AppShell } from '@/ui/app-shell';
 import { Button } from '@/ui/primitives';
 import { fontFamily, ThemeProvider, useAppTheme } from '@/ui/theme';
+import { CurrencyProvider } from '@/ui/currency';
 import '../global.css';
 
 function LockScreen() {
@@ -47,7 +48,7 @@ function RootContent({ fontsLoaded, fontError }: { fontsLoaded: boolean; fontErr
   return (
     <SafeAreaProvider>
       <StatusBar barStyle={mode === 'dark' ? 'light-content' : 'dark-content'} backgroundColor={theme.background} />
-      <SessionProvider><SyncProvider><Gate /></SyncProvider></SessionProvider>
+      <SessionProvider><CurrencyProvider><SyncProvider><Gate /></SyncProvider></CurrencyProvider></SessionProvider>
     </SafeAreaProvider>
   );
 }

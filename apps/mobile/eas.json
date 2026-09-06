@@ -10,10 +10,16 @@
       "distribution": "internal",
       "env": {
         "EXPO_PUBLIC_API_URL": "https://faura-farmer.vercel.app",
-        "reactNativeArchitectures": "arm64-v8a"
+        "FAURA_APK_VARIANT": "arm64"
       },
       "android": {
         "buildType": "apk"
+      }
+    },
+    "production-compat": {
+      "extends": "production",
+      "env": {
+        "FAURA_APK_VARIANT": "compat"
       }
     }
   }
