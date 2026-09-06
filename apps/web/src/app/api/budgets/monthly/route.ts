@@ -3,6 +3,7 @@ import { monthlyBudgetSchema } from '@/lib/validations';
 import { badRequest, ok, unauthorized } from '@/lib/http';
 import { getBucketAllocation, setMonthlyBudget } from '@/lib/queries';
 import { guardMutation, readJsonBody } from '@/lib/security';
+import { recordCanonicalMobileUpsert } from '@/lib/mobile/sync';
 
 export async function GET() {
   const session = await auth();
@@ -26,7 +27,8 @@ export async function PUT(request: Request) {
     return badRequest(parsed.error.issues[0]?.message ?? 'Invalid input');
   }
 
-  await setMonthlyBudget(session.user.id, parsed.data.amount);
+  const saved = await setMonthlyBudget(session.user.id, parsed.data.amount);
+  await recordCanonicalMobileUpsert(session.user.id, 'monthly_budget', saved.id);
   const allocation = await getBucketAllocation(session.user.id, new Date());
   return ok(allocation);
 }

@@ -4,6 +4,7 @@ import { updateBudgetSchema } from '@/lib/validations';
 import { badRequest, notFound, ok, unauthorized } from '@/lib/http';
 import { findConflictingBudget } from '@/lib/queries';
 import { guardMutation, readJsonBody } from '@/lib/security';
+import { recordCanonicalMobileTombstone, recordCanonicalMobileUpsert } from '@/lib/mobile/sync';
 
 export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -45,6 +46,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     where: { id: budget.id },
     data: parsed.data,
   });
+  await recordCanonicalMobileUpsert(session.user.id, 'budget', updated.id);
 
   return ok({
     id: updated.id,
@@ -68,6 +70,7 @@ export async function DELETE(request: Request, { params }: { params: Promise<{ i
   if (!budget) return notFound('Budget not found');
 
   await prisma.budget.delete({ where: { id: budget.id } });
+  await recordCanonicalMobileTombstone(session.user.id, 'budget', budget.id);
 
   return ok({ id: budget.id, deleted: true });
 }

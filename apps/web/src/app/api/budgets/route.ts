@@ -4,6 +4,7 @@ import { createBudgetSchema } from '@/lib/validations';
 import { badRequest, created, ok, unauthorized } from '@/lib/http';
 import { findConflictingBudget, getBudgetsWithProgress } from '@/lib/queries';
 import { guardMutation, readJsonBody } from '@/lib/security';
+import { recordCanonicalMobileUpsert } from '@/lib/mobile/sync';
 
 export async function GET() {
   const session = await auth();
@@ -48,6 +49,7 @@ export async function POST(request: Request) {
       monthlyLimit: parsed.data.monthlyLimit,
     },
   });
+  await recordCanonicalMobileUpsert(session.user.id, 'budget', budget.id);
 
   return created({
     id: budget.id,
