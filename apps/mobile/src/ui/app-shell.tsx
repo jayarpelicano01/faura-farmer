@@ -1,21 +1,24 @@
 import { useMemo, useRef, useState, type PropsWithChildren } from 'react';
 import { ActivityIndicator, Animated, Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 import { usePathname, useRouter, type Href } from 'expo-router';
-import { ArrowLeftRight, Check, CircleAlert, CloudOff, LayoutDashboard, Menu, Moon, PiggyBank, Sun, Tags, X, type LucideIcon } from 'lucide-react-native';
+import { ArrowLeftRight, BarChart3, Check, CircleAlert, CloudOff, LayoutDashboard, Menu, Moon, PiggyBank, Sun, Tags, Wallet, X, type LucideIcon } from 'lucide-react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useSession } from '@/auth/session';
 import { useSync } from '@/sync/use-sync';
 import { AppChromeProvider } from './primitives';
 import { BrandMark } from './brand';
+import { FloatingActions } from './floating-actions';
 import { fontFamily, radius, type AppTheme, useAppTheme } from './theme';
 
-type NavigationHref = '/dashboard' | '/accounts' | '/transactions' | '/categories';
+type NavigationHref = '/dashboard' | '/accounts' | '/transactions' | '/categories' | '/budgets' | '/reports';
 type NavigationItem = { href: NavigationHref; label: string; icon: LucideIcon };
 
 const navigationItems: NavigationItem[] = [
   { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { href: '/accounts', label: 'Accounts', icon: PiggyBank },
   { href: '/transactions', label: 'Transactions', icon: ArrowLeftRight },
+  { href: '/budgets', label: 'Budgets', icon: Wallet },
+  { href: '/reports', label: 'Reports', icon: BarChart3 },
   { href: '/categories', label: 'Categories', icon: Tags },
 ];
 
@@ -97,6 +100,7 @@ export function AppShell({ children }: PropsWithChildren) {
         ) : null}
 
         <View style={styles.content}>{children}</View>
+        <FloatingActions />
 
         <Modal animationType="none" onRequestClose={() => closeDrawer()} statusBarTranslucent transparent visible={drawerVisible}>
           <View style={styles.modalRoot}>
