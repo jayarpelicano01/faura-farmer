@@ -1,12 +1,13 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import * as Crypto from 'expo-crypto';
-import type { MobileAccount } from '@faura-farmer/types';
+import type { MobileAccount, MobileTransaction } from '@faura-farmer/types';
 import { listRecords, queueDelete, queueUpsert } from '@/data/db';
 import { Badge, Button, Card, ChoiceChip, Empty, Field, Screen, Title, useUiStyles } from '@/ui/primitives';
 import { fontFamily, useAppTheme } from '@/ui/theme';
+import { useCurrency } from '@/ui/currency';
 import { useSync } from '@/sync/use-sync';
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 
 const accountTypes: MobileAccount['type'][] = ['bank', 'e_wallet', 'cash', 'credit_card', 'investment'];
 const typeLabels: Record<MobileAccount['type'], string> = {
@@ -30,23 +31,84 @@ function formatMoney(amount: string, currency: string) {
   }
 }
 
+function currentBalance(account: MobileAccount, transactions: MobileTransaction[]) {
+  return transactions.reduce((balance, transaction) => {
+    const amount = Number(transaction.amount);
+    if (transaction.type === 'income' && transaction.accountId === account.id) return balance + amount;
+    if (transaction.type === 'expense' && transaction.accountId === account.id) return balance - amount;
+    if (transaction.type === 'transfer') {
+      if (transaction.accountId === account.id) return balance - amount;
+      if (transaction.destinationAccountId === account.id) return balance + amount;
+    }
+    return balance;
+  }, Number(account.startingBalance));
+}
+
 export default function AccountsScreen() {
   const router = useRouter();
+  const { new: createNew } = useLocalSearchParams<{ new?: string | string[] }>();
   const { theme } = useAppTheme();
   const styles = useAccountsStyles();
   const ui = useUiStyles();
+  const { convert, displayCurrency, formatMoney: formatDisplayMoney } = useCurrency();
   const [accounts, setAccounts] = useState<MobileAccount[]>([]);
+  const [transactions, setTransactions] = useState<MobileTransaction[]>([]);
   const [editing, setEditing] = useState<MobileAccount | null>(null);
+  const [editingCurrentBalance, setEditingCurrentBalance] = useState('');
+  const [loaded, setLoaded] = useState(false);
+  const handledCreateParam = useRef(false);
   const { syncNow } = useSync();
-  const load = useCallback(async () => setAccounts(await listRecords('account')), []);
+  const load = useCallback(async () => {
+    const [nextAccounts, nextTransactions] = await Promise.all([listRecords('account'), listRecords('transaction')]);
+    setAccounts(nextAccounts);
+    setTransactions(nextTransactions);
+    setLoaded(true);
+  }, []);
   useEffect(() => { void load(); }, [load, editing]);
+
+  useEffect(() => {
+    const shouldCreate = (Array.isArray(createNew) ? createNew[0] : createNew) === '1';
+    if (!shouldCreate) {
+      handledCreateParam.current = false;
+      return;
+    }
+    if (!loaded || handledCreateParam.current) return;
+    handledCreateParam.current = true;
+    const account = blankAccount();
+    setEditing(account);
+    setEditingCurrentBalance(account.startingBalance);
+    router.setParams({ new: undefined });
+  }, [createNew, loaded, router]);
 
   const save = async () => {
     if (!editing?.label.trim() || !/^\d+(\.\d{1,2})?$/.test(editing.startingBalance)) {
       Alert.alert('Check this account', 'A name and a valid starting balance are required.');
       return;
     }
-    await queueUpsert('account', { ...editing, label: editing.label.trim(), updatedAt: new Date().toISOString() });
+    const updatedAccount = { ...editing, label: editing.label.trim(), startingBalance: convert(editing.startingBalance, displayCurrency, editing.currency), updatedAt: new Date().toISOString() };
+    const targetBalance = Number(convert(editingCurrentBalance, displayCurrency, editing.currency));
+    if (accounts.some((account) => account.id === editing.id) && (!/^-?\d+(\.\d{1,2})?$/.test(editingCurrentBalance) || !Number.isFinite(targetBalance))) {
+      Alert.alert('Check this account', 'Enter a valid current balance.');
+      return;
+    }
+    await queueUpsert('account', updatedAccount);
+    if (accounts.some((account) => account.id === editing.id)) {
+      const difference = Math.round((targetBalance - currentBalance(updatedAccount, transactions)) * 100) / 100;
+      if (Math.abs(difference) >= 0.005) {
+        await queueUpsert('transaction', {
+          id: Crypto.randomUUID(),
+          accountId: updatedAccount.id,
+          categoryId: null,
+          bucket: null,
+          amount: Math.abs(difference).toFixed(2),
+          type: difference > 0 ? 'income' : 'expense',
+          destinationAccountId: null,
+          date: new Date().toISOString().slice(0, 10),
+          note: 'Balance adjustment',
+          updatedAt: new Date().toISOString(),
+        });
+      }
+    }
     setEditing(null);
     await load();
     void syncNow();
@@ -66,7 +128,7 @@ export default function AccountsScreen() {
         </View>
         <Button
           accessibilityLabel="Create a new account"
-          onPress={() => setEditing(blankAccount())}
+          onPress={() => { const account = blankAccount(); setEditing(account); setEditingCurrentBalance(account.startingBalance); }}
           size="compact"
         >New</Button>
       </View>
@@ -75,10 +137,10 @@ export default function AccountsScreen() {
           <Pressable
             key={account.id}
             accessibilityHint="Double tap to edit. Press and hold to delete."
-            accessibilityLabel={`${account.label}, ${typeLabels[account.type]}, ${formatMoney(account.startingBalance, account.currency)}`}
+            accessibilityLabel={`${account.label}, ${typeLabels[account.type]}, ${formatDisplayMoney(String(currentBalance(account, transactions)), account.currency)}`}
             accessibilityRole="button"
             onLongPress={() => remove(account.id)}
-            onPress={() => setEditing(account)}
+            onPress={() => { setEditing({ ...account, startingBalance: convert(account.startingBalance, account.currency) }); setEditingCurrentBalance(convert(String(currentBalance(account, transactions)), account.currency)); }}
           >
             {({ pressed }) => (
               <View style={pressed ? styles.pressed : undefined}>
@@ -95,8 +157,8 @@ export default function AccountsScreen() {
                     </View>
                     {account.isArchived ? <Badge variant="muted">Archived</Badge> : null}
                   </View>
-                  <Text style={styles.balance}>{formatMoney(account.startingBalance, account.currency)}</Text>
-                  <Text style={styles.balanceMeta}>Starting balance</Text>
+                  <Text style={styles.balance}>{formatDisplayMoney(String(currentBalance(account, transactions)), account.currency)}</Text>
+                  <Text style={styles.balanceMeta}>Starting {formatDisplayMoney(account.startingBalance, account.currency)}</Text>
                   <View style={styles.cardFooter}>
                     <Text style={styles.editHint}>Tap to edit</Text>
                     <Text style={styles.deleteHint}>Hold to delete</Text>
@@ -110,12 +172,12 @@ export default function AccountsScreen() {
 
       <Button variant="outline" onPress={() => router.replace('/(tabs)/dashboard')}>Done</Button>
 
-      <AccountEditor account={editing} exists={accounts.some((account) => account.id === editing?.id)} onChange={setEditing} onCancel={() => setEditing(null)} onSave={() => void save()} />
+      <AccountEditor account={editing} currentBalance={editingCurrentBalance} displayCurrency={displayCurrency} exists={accounts.some((account) => account.id === editing?.id)} onChange={setEditing} onCurrentBalanceChange={setEditingCurrentBalance} onCancel={() => setEditing(null)} onSave={() => void save()} />
     </Screen>
   );
 }
 
-function AccountEditor({ account, exists, onChange, onCancel, onSave }: { account: MobileAccount | null; exists: boolean; onChange: (account: MobileAccount) => void; onCancel: () => void; onSave: () => void }) {
+function AccountEditor({ account, currentBalance, displayCurrency, exists, onChange, onCurrentBalanceChange, onCancel, onSave }: { account: MobileAccount | null; currentBalance: string; displayCurrency: string; exists: boolean; onChange: (account: MobileAccount) => void; onCurrentBalanceChange: (value: string) => void; onCancel: () => void; onSave: () => void }) {
   const styles = useAccountsStyles();
   return (
     <Modal animationType="slide" onRequestClose={onCancel} presentationStyle="formSheet" visible={Boolean(account)}>
@@ -126,7 +188,15 @@ function AccountEditor({ account, exists, onChange, onCancel, onSave }: { accoun
         </View>
         {account ? <View style={styles.form}>
           <Field label="Name" placeholder="e.g. GCash or Cash wallet" value={account.label} onChangeText={(label) => onChange({ ...account, label })} />
-          <Field label="Starting balance" keyboardType="decimal-pad" value={account.startingBalance} onChangeText={(startingBalance) => onChange({ ...account, startingBalance })} />
+          <Field label={`Starting balance (${displayCurrency})`} keyboardType="decimal-pad" value={account.startingBalance} onChangeText={(startingBalance) => {
+            const previous = Number(account.startingBalance);
+            const next = Number(startingBalance);
+            if (Number.isFinite(previous) && Number.isFinite(next) && Number.isFinite(Number(currentBalance))) {
+              onCurrentBalanceChange((Number(currentBalance) + next - previous).toFixed(2));
+            }
+            onChange({ ...account, startingBalance });
+          }} />
+          {exists ? <Field label={`Current balance (${displayCurrency})`} keyboardType="decimal-pad" value={currentBalance} onChangeText={onCurrentBalanceChange} /> : null}
           <Field label="Currency" autoCapitalize="characters" value={account.currency} onChangeText={(currency) => onChange({ ...account, currency })} />
           <View style={styles.formSection}>
             <Text style={styles.fieldLabel}>Account type</Text>
