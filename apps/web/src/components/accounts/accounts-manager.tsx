@@ -80,6 +80,7 @@ export function AccountsManager() {
       institution: account.institution,
       currency: account.currency,
       startingBalance: account.startingBalance,
+      currentBalance: account.balance,
       color: account.color,
     });
     setDialogOpen(true);

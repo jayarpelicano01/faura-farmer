@@ -21,6 +21,7 @@ export interface AccountFormValues {
   institution?: string | null;
   currency: string;
   startingBalance: string | number;
+  currentBalance?: string | number;
   color?: string | null;
 }
 
@@ -42,6 +43,7 @@ const ACCOUNT_LABELS: Record<(typeof ACCOUNT_TYPES)[number], string> = {
 export function AccountForm({ open, onOpenChange, onSaved, initial }: AccountFormProps) {
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [currentBalance, setCurrentBalance] = useState('');
 
   const form = useForm<CreateAccountInput>({
     resolver: zodResolver(createAccountSchema),
@@ -65,6 +67,7 @@ export function AccountForm({ open, onOpenChange, onSaved, initial }: AccountFor
       startingBalance: Number(initial?.startingBalance ?? 0),
       color: initial?.color ?? '#adb5bd',
     });
+    setCurrentBalance(initial?.id ? String(initial.currentBalance ?? initial.startingBalance) : '');
     setSubmitError(null);
   }, [open, initial, form]);
 
@@ -75,7 +78,10 @@ export function AccountForm({ open, onOpenChange, onSaved, initial }: AccountFor
       if (initial?.id) {
         await apiFetch(`/api/accounts/${initial.id}`, {
           method: 'PATCH',
-          body: JSON.stringify(values),
+          body: JSON.stringify({
+            ...values,
+            ...(currentBalance.trim() === '' ? {} : { currentBalance: Number(currentBalance) }),
+          }),
         });
         toast.success('Account updated');
       } else {
@@ -191,13 +197,31 @@ export function AccountForm({ open, onOpenChange, onSaved, initial }: AccountFor
                         min="0"
                         {...field}
                         value={field.value ?? 0}
-                        onChange={(e) => field.onChange(e.target.value === '' ? '' : Number(e.target.value))}
+                        onChange={(event) => {
+                          const next = event.target.value === '' ? '' : Number(event.target.value);
+                          if (initial?.id && currentBalance !== '' && typeof next === 'number' && Number.isFinite(next)) {
+                            setCurrentBalance(String(Number(currentBalance) + next - Number(field.value ?? 0)));
+                          }
+                          field.onChange(next);
+                        }}
                       />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
                 )}
               />
+              {initial?.id ? (
+                <div className="space-y-2">
+                  <FormLabel>Current balance</FormLabel>
+                  <Input
+                    type="number"
+                    step="0.01"
+                    value={currentBalance}
+                    onChange={(event) => setCurrentBalance(event.target.value)}
+                  />
+                  <p className="text-xs text-muted-foreground">Saving a changed value adds a balance adjustment to your transaction history.</p>
+                </div>
+              ) : null}
               <FormField
                 control={form.control}
                 name="color"

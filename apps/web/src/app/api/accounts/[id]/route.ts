@@ -1,4 +1,4 @@
-import { prisma } from '@faura-farmer/database';
+import { Prisma, prisma } from '@faura-farmer/database';
 import { auth } from '@/lib/auth';
 import { updateAccountSchema } from '@/lib/validations';
 import { badRequest, fail, notFound, ok, unauthorized } from '@/lib/http';
@@ -7,6 +7,40 @@ import { lockAccountsInOrder } from '@/lib/queries';
 import { guardMutation, readJsonBody } from '@/lib/security';
 import { deleteReceiptObjects } from '@/lib/storage/receipts';
 import { recordCanonicalMobileTombstone, recordCanonicalMobileUpsert } from '@/lib/mobile/sync';
+
+async function createBalanceAdjustment(
+  tx: Prisma.TransactionClient,
+  userId: string,
+  accountId: string,
+  startingBalance: Prisma.Decimal,
+  targetBalance: number,
+) {
+  const grouped = await tx.transaction.groupBy({
+    by: ['type', 'transferRole'],
+    where: { accountId, userId },
+    _sum: { amount: true },
+  });
+  let net = 0;
+  for (const row of grouped) {
+    const total = toNumber(row._sum.amount);
+    net += row.type === 'income' || (row.type === 'transfer' && row.transferRole === 'incoming') ? total : -total;
+  }
+  const difference = Math.round((targetBalance - (toNumber(startingBalance) + net)) * 100) / 100;
+  if (Math.abs(difference) < 0.005) return null;
+  return tx.transaction.create({
+    data: {
+      userId,
+      accountId,
+      categoryId: null,
+      bucket: null,
+      amount: Math.abs(difference).toFixed(2),
+      type: difference > 0 ? 'income' : 'expense',
+      date: new Date(),
+      note: 'Balance adjustment',
+      source: 'manual',
+    },
+  });
+}
 
 export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -59,7 +93,9 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     return badRequest(parsed.error.issues[0]?.message ?? 'Invalid input');
   }
 
-  const requestedCurrency = parsed.data.currency;
+  const { currentBalance, ...accountData } = parsed.data;
+
+  const requestedCurrency = accountData.currency;
   if (requestedCurrency !== undefined) {
     let accountIdsToLock = [account.id];
 
@@ -119,9 +155,12 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
 
         const updated = await tx.account.update({
           where: { id: account.id },
-          data: parsed.data,
+          data: accountData,
         });
-        return { status: 'updated' as const, account: updated };
+        const adjustment = currentBalance === undefined
+          ? null
+          : await createBalanceAdjustment(tx, session.user.id, updated.id, updated.startingBalance, currentBalance);
+        return { status: 'updated' as const, account: updated, adjustmentId: adjustment?.id ?? null };
       });
 
       if (result.status === 'retry') {
@@ -138,6 +177,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
       }
 
       await recordCanonicalMobileUpsert(session.user.id, 'account', result.account.id);
+      if (result.adjustmentId) await recordCanonicalMobileUpsert(session.user.id, 'transaction', result.adjustmentId);
       return ok({
         ...result.account,
         startingBalance: String(result.account.startingBalance),
@@ -151,9 +191,16 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     );
   }
 
-  const updated = await prisma.account.update({ where: { id: account.id }, data: parsed.data });
-  await recordCanonicalMobileUpsert(session.user.id, 'account', updated.id);
-  return ok({ ...updated, startingBalance: String(updated.startingBalance) });
+  const result = await prisma.$transaction(async (tx) => {
+    const updated = await tx.account.update({ where: { id: account.id }, data: accountData });
+    const adjustment = currentBalance === undefined
+      ? null
+      : await createBalanceAdjustment(tx, session.user.id, updated.id, updated.startingBalance, currentBalance);
+    return { updated, adjustmentId: adjustment?.id ?? null };
+  });
+  await recordCanonicalMobileUpsert(session.user.id, 'account', result.updated.id);
+  if (result.adjustmentId) await recordCanonicalMobileUpsert(session.user.id, 'transaction', result.adjustmentId);
+  return ok({ ...result.updated, startingBalance: String(result.updated.startingBalance) });
 }
 
 export async function DELETE(request: Request, { params }: { params: Promise<{ id: string }> }) {
