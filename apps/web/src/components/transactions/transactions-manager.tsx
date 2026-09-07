@@ -13,7 +13,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { TransactionList } from '@/components/transactions/transaction-list';
 import { apiFetch } from '@/lib/api';
-import { formatMoney } from '@/lib/format';
+import { useDisplayCurrency } from '@/components/currency/display-currency-provider';
 import { cn } from '@/lib/utils';
 import { resolveTransactionBucket } from '@/lib/meta';
 import { TransactionForm, type TransactionFormValues } from './transaction-form';
@@ -46,6 +46,7 @@ function buildQuery(params: Record<string, string | undefined>): string {
 export function TransactionsManager({ accounts, categories }: TransactionsManagerProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const { convert, formatMoney } = useDisplayCurrency();
 
   const [q, setQ] = useState(() => searchParams.get('q') ?? '');
   const [type, setType] = useState<string>('all');
@@ -163,7 +164,7 @@ export function TransactionsManager({ accounts, categories }: TransactionsManage
       destinationAccountId: tx.destinationAccountId ?? tx.destinationAccount?.id ?? null,
       categoryId: tx.categoryId,
       bucket: tx.bucket,
-      amount: String(tx.amount),
+      amount: convert(tx.amount, tx.account?.currency ?? 'PHP'),
       type: tx.type,
       date: tx.date instanceof Date ? tx.date.toISOString() : new Date(tx.date).toISOString(),
       note: tx.note,

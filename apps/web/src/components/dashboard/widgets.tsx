@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { PiggyBank, TriangleAlert, Wallet } from 'lucide-react';
 import { formatMoney, toNumber } from '@/lib/format';
+import { formatDisplayMoney, type CurrencyPreference } from '@faura-farmer/types';
 import { cn } from '@/lib/utils';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { TransactionList } from '@/components/transactions/transaction-list';
@@ -13,7 +14,7 @@ import type {
   Transaction,
 } from '@faura-farmer/types';
 
-export function MonthlyBudgetOverview({ allocation }: { allocation: BucketAllocation }) {
+export function MonthlyBudgetOverview({ allocation, preference }: { allocation: BucketAllocation; preference: CurrencyPreference }) {
   const amount = toNumber(allocation.amount);
   return (
     <Card>
@@ -28,14 +29,14 @@ export function MonthlyBudgetOverview({ allocation }: { allocation: BucketAlloca
       </CardHeader>
       <CardContent className="space-y-4">
         <div>
-          <p className="font-display text-2xl font-semibold text-foreground">{formatMoney(amount)}</p>
+          <p className="font-display text-2xl font-semibold text-foreground">{formatMoney(amount, preference.displayCurrency)}</p>
           <p className="mt-1 text-xs text-muted-foreground">
             {allocation.persisted
               ? '~50 / 30 / 20 split across needs, wants, and savings.'
               : 'Defaults to this month&apos;s income until you set a value on the budgets page.'}
           </p>
         </div>
-        <BucketBreakdown allocation={allocation} compact />
+        <BucketBreakdown allocation={allocation} displayCurrency={preference.displayCurrency} compact />
       </CardContent>
     </Card>
   );
@@ -44,9 +45,11 @@ export function MonthlyBudgetOverview({ allocation }: { allocation: BucketAlloca
 export function BalanceCards({
   totalBalance,
   monthTotals,
+  preference,
 }: {
   totalBalance: number;
   monthTotals: MonthTotals;
+  preference: CurrencyPreference;
 }) {
   return (
     <div className="grid gap-4 sm:grid-cols-3">
@@ -56,7 +59,7 @@ export function BalanceCards({
         </CardHeader>
         <CardContent>
           <p className="font-display text-2xl font-semibold text-foreground">
-            {formatMoney(totalBalance)}
+            {formatMoney(totalBalance, preference.displayCurrency)}
           </p>
         </CardContent>
       </Card>
@@ -66,7 +69,7 @@ export function BalanceCards({
         </CardHeader>
         <CardContent>
           <p className="font-display text-2xl font-semibold text-income">
-            {formatMoney(toNumber(monthTotals.income))}
+            {formatMoney(toNumber(monthTotals.income), preference.displayCurrency)}
           </p>
         </CardContent>
       </Card>
@@ -76,7 +79,7 @@ export function BalanceCards({
         </CardHeader>
         <CardContent>
           <p className="font-display text-2xl font-semibold text-expense">
-            {formatMoney(toNumber(monthTotals.expense))}
+            {formatMoney(toNumber(monthTotals.expense), preference.displayCurrency)}
           </p>
         </CardContent>
       </Card>
@@ -84,7 +87,7 @@ export function BalanceCards({
   );
 }
 
-export function AccountSummary({ accounts }: { accounts: AccountWithBalance[] }) {
+export function AccountSummary({ accounts, preference }: { accounts: AccountWithBalance[]; preference: CurrencyPreference }) {
   return (
     <Card>
       <CardHeader className="flex flex-row items-center justify-between">
@@ -93,7 +96,7 @@ export function AccountSummary({ accounts }: { accounts: AccountWithBalance[] })
           Manage
         </Link>
       </CardHeader>
-      <CardContent className="space-y-2">
+      <CardContent className="space-y-2 max-h-[345px] overflow-y-auto">
         {accounts.length === 0 ? (
           <p className="text-sm text-muted-foreground">
             No accounts yet. Add your first account to get started.
@@ -117,7 +120,7 @@ export function AccountSummary({ accounts }: { accounts: AccountWithBalance[] })
                 </div>
               </div>
               <p className="font-display text-sm font-semibold text-foreground">
-                {formatMoney(account.balance, account.currency)}
+                {formatDisplayMoney(account.balance, account.currency, preference)}
               </p>
             </div>
           ))
@@ -147,7 +150,7 @@ export function RecentTransactions({ transactions }: { transactions: Transaction
   );
 }
 
-export function BudgetOverview({ budgets }: { budgets: BudgetWithCategory[] }) {
+export function BudgetOverview({ budgets, preference }: { budgets: BudgetWithCategory[]; preference: CurrencyPreference }) {
   const top = [...budgets]
     .sort((a, b) => Number(b.over) - Number(a.over) || b.progress - a.progress)
     .slice(0, 4);
@@ -203,8 +206,8 @@ export function BudgetOverview({ budgets }: { budgets: BudgetWithCategory[] }) {
                     />
                   </div>
                   <div className="flex items-baseline justify-between text-xs">
-                    <span className="font-semibold text-foreground">{formatMoney(spent)}</span>
-                    <span className="text-muted-foreground">of {formatMoney(limit)}</span>
+                    <span className="font-semibold text-foreground">{formatMoney(spent, preference.displayCurrency)}</span>
+                    <span className="text-muted-foreground">of {formatMoney(limit, preference.displayCurrency)}</span>
                   </div>
                 </div>
               );

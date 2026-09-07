@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
 import { Pencil, TriangleAlert } from 'lucide-react';
-import type { BucketAllocation, BudgetWithCategory } from '@faura-farmer/types';
+import type { BucketAllocation, BudgetWithCategory, DisplayCurrency } from '@faura-farmer/types';
 import { monthlyBudgetSchema, type MonthlyBudgetInput } from '@/lib/validations';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -20,15 +20,19 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '
 import { Input } from '@/components/ui/input';
 import { apiFetch } from '@/lib/api';
 import { toast } from 'sonner';
-import { formatMoney, toNumber } from '@/lib/format';
+import { formatMoney as formatProjectedMoney, toNumber } from '@/lib/format';
+import { useDisplayCurrency } from '@/components/currency/display-currency-provider';
 import { BucketBreakdown } from './bucket-breakdown';
 
 interface MonthlyBudgetGuideProps {
   budgets: BudgetWithCategory[];
 }
 
+type DisplayBucketAllocation = BucketAllocation & { displayCurrency: DisplayCurrency };
+
 export function MonthlyBudgetGuide({ budgets }: MonthlyBudgetGuideProps) {
-  const [allocation, setAllocation] = useState<BucketAllocation | null>(null);
+  const { displayCurrency, formatMoney, usdPerPhp } = useDisplayCurrency();
+  const [allocation, setAllocation] = useState<DisplayBucketAllocation | null>(null);
   const [editOpen, setEditOpen] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -40,13 +44,13 @@ export function MonthlyBudgetGuide({ budgets }: MonthlyBudgetGuideProps) {
 
   const load = useCallback(async () => {
     try {
-      const data = await apiFetch<BucketAllocation>('/api/budgets/monthly');
+      const data = await apiFetch<DisplayBucketAllocation>('/api/budgets/monthly?display=1');
       setAllocation(data);
     } catch (error) {
       console.error(error);
       toast.error('Failed to load the monthly budget');
     }
-  }, []);
+  }, [displayCurrency, usdPerPhp]);
 
   useEffect(() => {
     load();
@@ -64,7 +68,7 @@ export function MonthlyBudgetGuide({ budgets }: MonthlyBudgetGuideProps) {
     setSaving(true);
     setSubmitError(null);
     try {
-      const data = await apiFetch<BucketAllocation>('/api/budgets/monthly', {
+      const data = await apiFetch<DisplayBucketAllocation>('/api/budgets/monthly?display=1', {
         method: 'PUT',
         body: JSON.stringify(values),
       });
@@ -101,7 +105,9 @@ export function MonthlyBudgetGuide({ budgets }: MonthlyBudgetGuideProps) {
 
       <CardContent className="space-y-4">
         <div>
-          <div className="font-display text-3xl font-semibold">{allocation ? formatMoney(amount) : '—'}</div>
+          <div className="font-display text-3xl font-semibold">
+            {allocation ? formatProjectedMoney(amount, allocation.displayCurrency) : '—'}
+          </div>
           {allocation && (
             <p className="mt-1 text-xs text-muted-foreground">
               {allocation.persisted
@@ -112,7 +118,7 @@ export function MonthlyBudgetGuide({ budgets }: MonthlyBudgetGuideProps) {
         </div>
 
         {allocation && (
-          <BucketBreakdown allocation={allocation} />
+          <BucketBreakdown allocation={allocation} displayCurrency={allocation.displayCurrency} />
         )}
 
         {limitsOver && (
@@ -144,7 +150,7 @@ export function MonthlyBudgetGuide({ budgets }: MonthlyBudgetGuideProps) {
                 name="amount"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Amount</FormLabel>
+                    <FormLabel>Amount ({displayCurrency})</FormLabel>
                     <FormControl>
                       <Input
                         type="number"

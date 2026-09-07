@@ -10,7 +10,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Badge } from '@/components/ui/badge';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { apiFetch } from '@/lib/api';
-import { formatMoney, toNumber } from '@/lib/format';
+import { toNumber } from '@/lib/format';
+import { useDisplayCurrency } from '@/components/currency/display-currency-provider';
 import { cn } from '@/lib/utils';
 import { Skeleton } from '@/components/ui/skeleton';
 import { BudgetForm, type BudgetFormValues } from './budget-form';
@@ -19,6 +20,7 @@ import { MonthlyBudgetGuide } from './monthly-budget-guide';
 export function BudgetsManager() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const { displayCurrency, formatMoney, usdPerPhp } = useDisplayCurrency();
   const [budgets, setBudgets] = useState<BudgetWithCategory[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState(true);
@@ -49,7 +51,7 @@ export function BudgetsManager() {
   const load = useCallback(async () => {
     try {
       const [budgetData, categoryData] = await Promise.all([
-        apiFetch<BudgetWithCategory[]>('/api/budgets'),
+        apiFetch<BudgetWithCategory[]>('/api/budgets?display=1'),
         apiFetch<{ income: Category[]; expense: Category[] }>('/api/categories'),
       ]);
       setBudgets(budgetData);
@@ -60,7 +62,7 @@ export function BudgetsManager() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [displayCurrency, usdPerPhp]);
 
   useEffect(() => {
     load();

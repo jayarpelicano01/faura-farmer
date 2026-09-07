@@ -13,12 +13,12 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { ColorPicker } from '@/components/ui/color-picker';
 import { apiFetch } from '@/lib/api';
+import { useDisplayCurrency } from '@/components/currency/display-currency-provider';
 
 export interface AccountFormValues {
   id?: string;
   label: string;
   type: (typeof ACCOUNT_TYPES)[number];
-  institution?: string | null;
   currency: string;
   startingBalance: string | number;
   currentBalance?: string | number;
@@ -41,6 +41,7 @@ const ACCOUNT_LABELS: Record<(typeof ACCOUNT_TYPES)[number], string> = {
 };
 
 export function AccountForm({ open, onOpenChange, onSaved, initial }: AccountFormProps) {
+  const { convert, displayCurrency } = useDisplayCurrency();
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [currentBalance, setCurrentBalance] = useState('');
@@ -50,7 +51,6 @@ export function AccountForm({ open, onOpenChange, onSaved, initial }: AccountFor
     defaultValues: {
       label: '',
       type: 'bank',
-      institution: '',
       currency: 'PHP',
       startingBalance: 0,
       color: '#adb5bd',
@@ -62,32 +62,35 @@ export function AccountForm({ open, onOpenChange, onSaved, initial }: AccountFor
     form.reset({
       label: initial?.label ?? '',
       type: (initial?.type as CreateAccountInput['type']) ?? 'bank',
-      institution: initial?.institution ?? '',
       currency: initial?.currency ?? 'PHP',
-      startingBalance: Number(initial?.startingBalance ?? 0),
+      startingBalance: Number(initial ? convert(initial.startingBalance, initial.currency) : 0),
       color: initial?.color ?? '#adb5bd',
     });
-    setCurrentBalance(initial?.id ? String(initial.currentBalance ?? initial.startingBalance) : '');
+    setCurrentBalance(initial?.id ? convert(initial.currentBalance ?? initial.startingBalance, initial.currency) : '');
     setSubmitError(null);
-  }, [open, initial, form]);
+  }, [convert, open, initial, form]);
 
   async function onSubmit(values: CreateAccountInput) {
     setSaving(true);
     setSubmitError(null);
     try {
+      const payload = {
+        ...values,
+        startingBalance: Number(convert(values.startingBalance, displayCurrency, values.currency)),
+      };
       if (initial?.id) {
         await apiFetch(`/api/accounts/${initial.id}`, {
           method: 'PATCH',
           body: JSON.stringify({
-            ...values,
-            ...(currentBalance.trim() === '' ? {} : { currentBalance: Number(currentBalance) }),
+            ...payload,
+            ...(currentBalance.trim() === '' ? {} : { currentBalance: Number(convert(currentBalance, displayCurrency, values.currency)) }),
           }),
         });
         toast.success('Account updated');
       } else {
         await apiFetch('/api/accounts', {
           method: 'POST',
-          body: JSON.stringify(values),
+          body: JSON.stringify(payload),
         });
         toast.success('Account created');
       }
@@ -170,26 +173,13 @@ export function AccountForm({ open, onOpenChange, onSaved, initial }: AccountFor
                 )}
               />
             </div>
-            <FormField
-              control={form.control}
-              name="institution"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Institution</FormLabel>
-                  <FormControl>
-                    <Input placeholder="GCash, Maribank, BPI…" {...field} value={field.value ?? ''} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
             <div className="space-y-4">
               <FormField
                 control={form.control}
                 name="startingBalance"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Starting balance</FormLabel>
+                    <FormLabel>Starting balance ({displayCurrency})</FormLabel>
                     <FormControl>
                       <Input
                         type="number"
@@ -212,7 +202,7 @@ export function AccountForm({ open, onOpenChange, onSaved, initial }: AccountFor
               />
               {initial?.id ? (
                 <div className="space-y-2">
-                  <FormLabel>Current balance</FormLabel>
+                  <FormLabel>Current balance ({displayCurrency})</FormLabel>
                   <Input
                     type="number"
                     step="0.01"

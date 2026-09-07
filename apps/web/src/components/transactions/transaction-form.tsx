@@ -13,6 +13,7 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectItemText, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { apiFetch } from '@/lib/api';
+import { useDisplayCurrency } from '@/components/currency/display-currency-provider';
 import { ReceiptAttachments } from './receipt-attachments';
 import { categoriesByType, BUCKET_BADGE_COLOR, BUCKET_META, resolveCategoryBucket } from '@/lib/meta';
 import type { SelectAccount } from '@/lib/meta';
@@ -88,6 +89,7 @@ export function TransactionForm({
   categories,
   initial,
 }: TransactionFormProps) {
+  const { convert, displayCurrency } = useDisplayCurrency();
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [createdTransactionId, setCreatedTransactionId] = useState<string | null>(null);
@@ -190,7 +192,13 @@ export function TransactionForm({
               categoryId: values.categoryId || null,
               bucket: values.type === 'expense' ? values.bucket ?? null : null,
             }),
-        amount: Number(values.amount),
+        amount: Number(
+          convert(
+            values.amount,
+            displayCurrency,
+            accounts.find((account) => account.id === values.accountId)?.currency ?? 'PHP',
+          ),
+        ),
         type: values.type,
         date: new Date(values.date),
         note: values.note ?? null,
@@ -445,7 +453,7 @@ export function TransactionForm({
               name="amount"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Amount</FormLabel>
+                  <FormLabel>Amount ({displayCurrency})</FormLabel>
                   <FormControl>
                     <Input
                       type="number"

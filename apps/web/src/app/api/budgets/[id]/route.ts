@@ -5,6 +5,8 @@ import { badRequest, notFound, ok, unauthorized } from '@/lib/http';
 import { findConflictingBudget } from '@/lib/queries';
 import { guardMutation, readJsonBody } from '@/lib/security';
 import { recordCanonicalMobileTombstone, recordCanonicalMobileUpsert } from '@/lib/mobile/sync';
+import { currencyPreferenceSelect, serializeCurrencyPreference } from '@/lib/currency-preference';
+import { convertMoney } from '@faura-farmer/types';
 
 export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -42,9 +44,25 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     }
   }
 
+  const display = new URL(request.url).searchParams.get('display') === '1';
+  const user = display
+    ? await prisma.user.findUnique({ where: { id: session.user.id }, select: currencyPreferenceSelect })
+    : null;
+  const preference = user ? serializeCurrencyPreference(user) : null;
+  const data = {
+    ...parsed.data,
+    ...(preference && parsed.data.monthlyLimit !== undefined
+      ? {
+          monthlyLimit: Number(
+            convertMoney(parsed.data.monthlyLimit, preference.displayCurrency, 'PHP', preference.usdPerPhp),
+          ),
+        }
+      : {}),
+  };
+
   const updated = await prisma.budget.update({
     where: { id: budget.id },
-    data: parsed.data,
+    data,
   });
   await recordCanonicalMobileUpsert(session.user.id, 'budget', updated.id);
 

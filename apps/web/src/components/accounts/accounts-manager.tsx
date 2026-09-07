@@ -10,8 +10,8 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { apiFetch } from '@/lib/api';
-import { formatMoney } from '@/lib/format';
 import { Skeleton } from '@/components/ui/skeleton';
+import { useDisplayCurrency } from '@/components/currency/display-currency-provider';
 import { AccountForm, type AccountFormValues } from './account-form';
 
 const TYPE_LABELS: Record<string, string> = {
@@ -23,6 +23,7 @@ const TYPE_LABELS: Record<string, string> = {
 };
 
 export function AccountsManager() {
+  const { formatMoney } = useDisplayCurrency();
   const router = useRouter();
   const searchParams = useSearchParams();
   const [accounts, setAccounts] = useState<AccountWithBalance[]>([]);
@@ -77,7 +78,6 @@ export function AccountsManager() {
       id: account.id,
       label: account.label,
       type: account.type,
-      institution: account.institution,
       currency: account.currency,
       startingBalance: account.startingBalance,
       currentBalance: account.balance,
@@ -177,7 +177,6 @@ export function AccountsManager() {
                       <p className="font-medium text-foreground">{account.label}</p>
                       <p className="text-xs text-muted-foreground">
                         {TYPE_LABELS[account.type] ?? account.type}
-                        {account.institution ? ` · ${account.institution}` : ''}
                       </p>
                     </div>
                   </div>

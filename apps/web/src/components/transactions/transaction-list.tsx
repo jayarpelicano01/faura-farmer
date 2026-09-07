@@ -14,7 +14,8 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { cn } from '@/lib/utils';
-import { formatDate, formatMoney } from '@/lib/format';
+import { formatDate } from '@/lib/format';
+import { useDisplayCurrency } from '@/components/currency/display-currency-provider';
 import { BUCKET_BADGE_COLOR, BUCKET_META, TYPE_BADGE_VARIANT } from '@/lib/meta';
 import { Skeleton } from '@/components/ui/skeleton';
 
@@ -54,10 +55,6 @@ function amountClass(type: Transaction['type']): string {
   return 'text-foreground';
 }
 
-function amount(tx: Transaction): string {
-  return formatMoney(tx.amount, tx.account?.currency ?? 'PHP');
-}
-
 function accountPath(tx: Transaction): string {
   const source = tx.account?.label ?? 'Unknown account';
   if (tx.type !== 'transfer') return source;
@@ -77,6 +74,7 @@ function MobileItem({
   onDelete?: (tx: Transaction) => void;
   bucket: BudgetBucket | null;
 }) {
+  const { formatMoney } = useDisplayCurrency();
   const [open, setOpen] = useState(false);
 
   return (
@@ -104,7 +102,7 @@ function MobileItem({
         <div className="flex shrink-0 items-center gap-2">
           <span className={cn('text-sm font-semibold', amountClass(tx.type))}>
             {sign(tx.type)}
-            {amount(tx)}
+            {formatMoney(tx.amount, tx.account?.currency ?? 'PHP')}
           </span>
           <ChevronDown
             className={cn(
@@ -191,6 +189,7 @@ export function TransactionList({
   emptyMessage = 'No transactions.',
   getBucket,
 }: TransactionListProps) {
+  const { formatMoney } = useDisplayCurrency();
   const actionCols = variant === 'full' && (onEdit || onDelete);
   const colSpan = (variant === 'full' ? 6 : 5) + (actionCols ? 1 : 0);
 
@@ -339,7 +338,7 @@ export function TransactionList({
                   </TableCell>
                   <TableCell className={cn('text-right font-semibold', amountClass(tx.type))}>
                     {sign(tx.type)}
-                    {amount(tx)}
+                    {formatMoney(tx.amount, tx.account?.currency ?? 'PHP')}
                   </TableCell>
                   {actionCols && (
                     <TableCell>

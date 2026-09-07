@@ -1,16 +1,18 @@
-import type { BucketAllocation } from '@faura-farmer/types';
+import type { BucketAllocation, DisplayCurrency } from '@faura-farmer/types';
 import { formatMoney, toNumber } from '@/lib/format';
 import { BUCKET_META } from '@/lib/meta';
 import { cn } from '@/lib/utils';
 
 interface BucketBreakdownProps {
   allocation: BucketAllocation;
+  displayCurrency: DisplayCurrency;
   compact?: boolean;
   showUnallocated?: boolean;
 }
 
 export function BucketBreakdown({
   allocation,
+  displayCurrency,
   compact = false,
   showUnallocated = true,
 }: BucketBreakdownProps) {
@@ -46,10 +48,12 @@ export function BucketBreakdown({
               </div>
               <div className="flex items-center justify-between text-xs">
                 <span className="text-muted-foreground">
-                  {formatMoney(spent)} of {formatMoney(target)}
+                  {formatMoney(spent, displayCurrency)} of {formatMoney(target, displayCurrency)}
                 </span>
                 <span className={cn(point.over && 'font-medium text-expense')}>
-                  {point.over ? `${formatMoney(Math.abs(remaining))} over` : `${formatMoney(remaining)} left`}
+                  {point.over
+                    ? `${formatMoney(Math.abs(remaining), displayCurrency)} over`
+                    : `${formatMoney(remaining, displayCurrency)} left`}
                 </span>
               </div>
             </div>
@@ -61,7 +65,7 @@ export function BucketBreakdown({
         <div className="rounded-lg border border-dashed px-3 py-2 text-sm">
           <div className="flex items-center justify-between">
             <span className="text-muted-foreground">Unallocated spending</span>
-            <span className="font-medium">{formatMoney(unallocated)}</span>
+            <span className="font-medium">{formatMoney(unallocated, displayCurrency)}</span>
           </div>
           <p className="mt-0.5 text-xs text-muted-foreground">
             Spending in expense categories without a needs / wants / savings bucket.

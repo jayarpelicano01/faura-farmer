@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { prisma } from '@faura-farmer/database';
 import { auth } from '@/lib/auth';
 import { redirect } from 'next/navigation';
 import { format } from 'date-fns';
@@ -8,8 +9,8 @@ import {
   getBudgetVarianceReport,
   getCashFlowReport,
   getCategoryComparisonReport,
-  getReportCurrencies,
 } from '@/lib/queries';
+import { currencyPreferenceSelect, serializeCurrencyPreference } from '@/lib/currency-preference';
 import { getReportRange, parseReportDate, parseReportMonth } from '@/lib/reporting';
 import { CashFlowChart } from '@/components/reports/cash-flow-chart';
 import {
@@ -31,11 +32,11 @@ import { formatMoney, toNumber } from '@/lib/format';
 import { cn } from '@/lib/utils';
 
 interface ReportsPageProps {
-  searchParams: Promise<{ period?: string; month?: string; end?: string; currency?: string }>;
+  searchParams: Promise<{ period?: string; month?: string; end?: string }>;
 }
 
-function buildReportHref(period: ReportPeriod, anchor: Date, currency: string) {
-  const params = new URLSearchParams({ period, currency });
+function buildReportHref(period: ReportPeriod, anchor: Date) {
+  const params = new URLSearchParams({ period });
   if (period === 'week') params.set('end', format(anchor, 'yyyy-MM-dd'));
   else params.set('month', format(anchor, 'yyyy-MM'));
   return `/reports?${params.toString()}`;
@@ -76,26 +77,21 @@ export default async function ReportsPage({ searchParams }: ReportsPageProps) {
   const anchor = period === 'week'
     ? parseReportDate(params.end)
     : parseReportMonth(params.month);
-  const currencies = await getReportCurrencies(session.user.id);
-  const fallbackCurrency = currencies.includes('PHP') ? 'PHP' : (currencies[0] ?? 'PHP');
-  const requestedCurrency = params.currency?.toUpperCase();
-  const currency = requestedCurrency && currencies.includes(requestedCurrency)
-    ? requestedCurrency
-    : fallbackCurrency;
+  const user = await prisma.user.findUnique({ where: { id: session.user.id }, select: currencyPreferenceSelect });
+  if (!user) redirect('/login');
+  const preference = serializeCurrencyPreference(user);
+  const currency = preference.displayCurrency;
   const range = getReportRange(period, anchor);
-  const hasMultipleCurrencies = currencies.length > 1;
 
   const [cashFlow, budgetVariance, categoryComparison, accountSpending] = await Promise.all([
-    getCashFlowReport(session.user.id, currency, range),
-    hasMultipleCurrencies
-      ? Promise.resolve(null)
-      : getBudgetVarianceReport(session.user.id, currency, range),
-    getCategoryComparisonReport(session.user.id, currency, range),
-    getAccountSpendingReport(session.user.id, currency, range),
+    getCashFlowReport(session.user.id, preference, range),
+    getBudgetVarianceReport(session.user.id, preference, range),
+    getCategoryComparisonReport(session.user.id, preference, range),
+    getAccountSpendingReport(session.user.id, preference, range),
   ]);
 
-  const weekHref = buildReportHref('week', period === 'week' ? anchor : range.to, currency);
-  const monthHref = buildReportHref('month', anchor, currency);
+  const weekHref = buildReportHref('week', period === 'week' ? anchor : range.to);
+  const monthHref = buildReportHref('month', anchor);
   const periodField = period === 'week' ? 'end' : 'month';
   const periodValue = period === 'week' ? format(anchor, 'yyyy-MM-dd') : format(anchor, 'yyyy-MM');
   const budgetDescription = period === 'week'
@@ -121,17 +117,6 @@ export default async function ReportsPage({ searchParams }: ReportsPageProps) {
               defaultValue={periodValue}
               className="block h-10 rounded-md border border-input bg-background px-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
             />
-          </label>
-          <label className="space-y-1 text-sm font-medium text-muted-foreground">
-            <span>Currency</span>
-            <select
-              name="currency"
-              defaultValue={currency}
-              className="block h-10 rounded-md border border-input bg-background px-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
-            >
-              {currencies.length === 0 ? <option value="PHP">PHP</option> : null}
-              {currencies.map((item) => <option key={item} value={item}>{item}</option>)}
-            </select>
           </label>
           <button
             type="submit"
@@ -192,11 +177,7 @@ export default async function ReportsPage({ searchParams }: ReportsPageProps) {
           <CardDescription>{budgetDescription} · Uses current budget settings</CardDescription>
         </CardHeader>
         <CardContent>
-          {hasMultipleCurrencies ? (
-            <p className="py-6 text-sm text-muted-foreground">
-              Budget limits are not assigned to a currency. Add budget-currency support before comparing a shared limit against one currency&apos;s spending.
-            </p>
-          ) : !budgetVariance || budgetVariance.length === 0 ? (
+          {budgetVariance.length === 0 ? (
             <p className="py-6 text-sm text-muted-foreground">No budget limits or expenses recorded for this period.</p>
           ) : (
             <Table>

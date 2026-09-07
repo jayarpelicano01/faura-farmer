@@ -5,12 +5,19 @@ import { badRequest, created, ok, unauthorized } from '@/lib/http';
 import { findConflictingBudget, getBudgetsWithProgress } from '@/lib/queries';
 import { guardMutation, readJsonBody } from '@/lib/security';
 import { recordCanonicalMobileUpsert } from '@/lib/mobile/sync';
+import { currencyPreferenceSelect, serializeCurrencyPreference } from '@/lib/currency-preference';
+import { convertMoney } from '@faura-farmer/types';
 
-export async function GET() {
+export async function GET(request: Request) {
   const session = await auth();
   if (!session?.user?.id) return unauthorized();
 
-  const budgets = await getBudgetsWithProgress(session.user.id, new Date());
+  const display = new URL(request.url).searchParams.get('display') === '1';
+  const user = display
+    ? await prisma.user.findUnique({ where: { id: session.user.id }, select: currencyPreferenceSelect })
+    : null;
+  const preference = user ? serializeCurrencyPreference(user) : undefined;
+  const budgets = await getBudgetsWithProgress(session.user.id, new Date(), preference);
   return ok(budgets);
 }
 
@@ -42,11 +49,20 @@ export async function POST(request: Request) {
     );
   }
 
+  const display = new URL(request.url).searchParams.get('display') === '1';
+  const user = display
+    ? await prisma.user.findUnique({ where: { id: session.user.id }, select: currencyPreferenceSelect })
+    : null;
+  const preference = user ? serializeCurrencyPreference(user) : null;
+  const monthlyLimit = preference
+    ? Number(convertMoney(parsed.data.monthlyLimit, preference.displayCurrency, 'PHP', preference.usdPerPhp))
+    : parsed.data.monthlyLimit;
+
   const budget = await prisma.budget.create({
     data: {
       userId: session.user.id,
       categoryId: parsed.data.categoryId,
-      monthlyLimit: parsed.data.monthlyLimit,
+      monthlyLimit,
     },
   });
   await recordCanonicalMobileUpsert(session.user.id, 'budget', budget.id);

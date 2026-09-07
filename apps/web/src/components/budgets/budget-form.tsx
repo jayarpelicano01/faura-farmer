@@ -12,6 +12,7 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { apiFetch } from '@/lib/api';
+import { useDisplayCurrency } from '@/components/currency/display-currency-provider';
 
 export interface BudgetFormValues {
   id?: string;
@@ -34,6 +35,7 @@ export function BudgetForm({
   initial,
   expenseCategories,
 }: BudgetFormProps) {
+  const { displayCurrency } = useDisplayCurrency();
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
@@ -61,13 +63,13 @@ export function BudgetForm({
     setSubmitError(null);
     try {
       if (initial?.id) {
-        await apiFetch(`/api/budgets/${initial.id}`, {
+        await apiFetch(`/api/budgets/${initial.id}?display=1`, {
           method: 'PATCH',
           body: JSON.stringify(values),
         });
         toast.success('Budget updated');
       } else {
-        await apiFetch('/api/budgets', {
+        await apiFetch('/api/budgets?display=1', {
           method: 'POST',
           body: JSON.stringify(values),
         });
@@ -127,7 +129,7 @@ export function BudgetForm({
               name="monthlyLimit"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Monthly limit</FormLabel>
+                  <FormLabel>Monthly limit ({displayCurrency})</FormLabel>
                   <FormControl>
                     <Input
                       type="number"
