@@ -4,6 +4,7 @@ import { useRouter } from 'expo-router';
 import type { CurrencyPreference, MobileProfile } from '@faura-farmer/types';
 import { getProfileDetails, saveProfileDetails } from '@/data/db';
 import { useSession } from '@/auth/session';
+import { LOCK_DELAY_OPTIONS, type LockDelayMinutes } from '@/auth/session';
 import { MobileApiError, MobileConnectionError, connectionMessage, mobileRequest, refreshedSession } from '@/sync/api';
 import { BodyText, Button, Card, Field, InlineNotice, Screen, SectionTitle, Title, useUiStyles } from '@/ui/primitives';
 import { fontFamily, useAppTheme } from '@/ui/theme';
@@ -52,7 +53,7 @@ export default function MoreScreen() {
   const styles = useMoreStyles();
   const ui = useUiStyles();
   const { mode, toggleMode } = useAppTheme();
-  const { session, update, signOutLocal } = useSession();
+  const { session, update, signOutLocal, lockDelay, setLockDelay } = useSession();
   const { lastSyncFailed, syncNow } = useSync();
   const { displayCurrency, usdPerPhp, rateDate, rateRefreshedAt, setPreference } = useCurrency();
   const router = useRouter();
@@ -334,6 +335,26 @@ export default function MoreScreen() {
         </Card>
 
         <Card>
+          <SectionTitle>App lock</SectionTitle>
+          <View style={styles.sectionContent}>
+            <Text style={ui.listMeta}>Require authentication after the app leaves the screen. A privacy cover appears immediately.</Text>
+            <View style={styles.lockDelayOptions}>
+              {LOCK_DELAY_OPTIONS.map((minutes) => (
+                <Button
+                  key={minutes}
+                  size="compact"
+                  variant={lockDelay === minutes ? 'default' : 'outline'}
+                  onPress={() => void setLockDelay(minutes)}
+                >
+                  {minutes === 1 ? '1 min' : minutes === 5 ? '5 min' : minutes === 15 ? '15 min' : '30 min'}
+                </Button>
+              ))}
+            </View>
+            <Text style={styles.fieldHint}>Default is 15 minutes. The privacy cover is always immediate.</Text>
+          </View>
+        </Card>
+
+        <Card>
           <SectionTitle>Data and sync</SectionTitle>
           <View style={styles.sectionContent}>
             <Text style={ui.listMeta}>Your app data stays in this device’s protected local sandbox and syncs when online.</Text>
@@ -377,6 +398,7 @@ function useMoreStyles() {
     formActions: { gap: 12, marginTop: 8 },
     sectionContent: { gap: 12, marginTop: 16 },
     currencyActions: { flexDirection: 'row', gap: 10 },
+    lockDelayOptions: { flexDirection: 'row', gap: 10, flexWrap: 'wrap' },
     syncControl: { alignSelf: 'stretch', position: 'relative' },
     syncRetryDot: { position: 'absolute', top: -2, right: -2, width: 6, height: 6, borderRadius: 3, backgroundColor: theme.danger },
     signOutSection: { gap: 10, marginTop: 8 },

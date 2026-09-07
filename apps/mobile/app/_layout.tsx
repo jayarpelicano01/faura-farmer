@@ -12,6 +12,16 @@ import { fontFamily, ThemeProvider, useAppTheme } from '@/ui/theme';
 import { CurrencyProvider } from '@/ui/currency';
 import '../global.css';
 
+function PrivacyCover() {
+  const { theme } = useAppTheme();
+  const styles = useRootStyles();
+  return (
+    <View style={[styles.privacyCover, { backgroundColor: theme.background }]}>
+      <ActivityIndicator color={theme.primary} />
+    </View>
+  );
+}
+
 function LockScreen() {
   const { unlock } = useSession();
   const styles = useRootStyles();
@@ -33,6 +43,7 @@ function Gate() {
   const { theme } = useAppTheme();
   const styles = useRootStyles();
   if (status === 'loading') return <View style={styles.loading}><ActivityIndicator color={theme.primary} /></View>;
+  if (status === 'covered') return <PrivacyCover />;
   if (status === 'locked') return <LockScreen />;
   if (status === 'signedOut' && pathname !== '/login' && pathname !== '/register') return <Redirect href="/login" />;
   if (status === 'signedOut') return <Slot />;
@@ -70,6 +81,7 @@ function useRootStyles() {
   const { theme } = useAppTheme();
   return useMemo(() => StyleSheet.create({
     loading: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: theme.background },
+    privacyCover: { ...StyleSheet.absoluteFillObject, alignItems: 'center', justifyContent: 'center', zIndex: 9999 },
     lockScreen: { flex: 1, backgroundColor: theme.background },
     lockContent: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 28 },
     lockTitle: { marginTop: 32, color: theme.foreground, fontFamily: fontFamily.display, fontSize: 22, fontWeight: '600', letterSpacing: -0.9, textAlign: 'center' },
