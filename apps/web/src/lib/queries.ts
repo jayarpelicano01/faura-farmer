@@ -664,21 +664,29 @@ export async function getAccountSpendingReport(
   const accountsById = new Map(accounts.map((account) => [account.id, account]));
   const total = grouped.reduce((sum, row) => sum + convertForDisplay(row.amount, row.account.currency, preference), 0);
 
-  return grouped
-    .flatMap<AccountSpendingRow>((row) => {
-      const account = accountsById.get(row.accountId);
-      if (!account) return [];
-      const amount = convertForDisplay(row.amount, row.account.currency, preference);
-      return [{
-        accountId: account.id,
-        accountName: account.label,
-        accountType: account.type,
-        color: account.color,
-        isArchived: account.isArchived,
-        amount: String(amount),
-        share: total > 0 ? (amount / total) * 100 : 0,
-      }];
-    })
+  const spendingByAccount = new Map<string, { account: typeof accounts[number]; amount: number }>();
+  for (const row of grouped) {
+    const account = accountsById.get(row.accountId);
+    if (!account) continue;
+    const converted = convertForDisplay(row.amount, row.account.currency, preference);
+    const existing = spendingByAccount.get(row.accountId);
+    if (existing) {
+      existing.amount += converted;
+    } else {
+      spendingByAccount.set(row.accountId, { account, amount: converted });
+    }
+  }
+
+  return [...spendingByAccount.values()]
+    .map<AccountSpendingRow>(({ account, amount }) => ({
+      accountId: account.id,
+      accountName: account.label,
+      accountType: account.type,
+      color: account.color,
+      isArchived: account.isArchived,
+      amount: String(amount),
+      share: total > 0 ? (amount / total) * 100 : 0,
+    }))
     .sort((a, b) => toNumber(b.amount) - toNumber(a.amount));
 }
 
