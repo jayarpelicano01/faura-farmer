@@ -19,9 +19,9 @@ export const defaultCurrencyPreference: CurrencyPreference = {
 
 function cents(value: string | number): bigint {
   const source = String(value).trim();
-  const match = /^(-?)(\d+)(?:\.(\d{0,2}))?$/.exec(source);
+  const match = /^(-?)(\d+)(?:\.(\d*))?$/.exec(source);
   if (!match) return 0n;
-  const fraction = (match[3] ?? '').padEnd(2, '0');
+  const fraction = (match[3] ?? '').slice(0, 2).padEnd(2, '0');
   const amount = BigInt(match[2]) * 100n + BigInt(fraction || '0');
   return match[1] === '-' ? -amount : amount;
 }

@@ -1,8 +1,9 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { Link } from 'expo-router';
+import { Link, useFocusEffect } from 'expo-router';
 import type { MobileAccount, MobileTransaction } from '@faura-farmer/types';
 import { listRecords } from '@/data/db';
+import { localMonthKey, transactionDateKey } from '@/data/date';
 import { Button, Card, Empty, Screen, SectionTitle, Title, useUiStyles } from '@/ui/primitives';
 import { fontFamily, useAppTheme } from '@/ui/theme';
 import { useSync } from '@/sync/use-sync';
@@ -21,26 +22,41 @@ export default function DashboardScreen() {
   const ui = useUiStyles();
   const [accounts, setAccounts] = useState<MobileAccount[]>([]);
   const [transactions, setTransactions] = useState<MobileTransaction[]>([]);
+  const loadVersion = useRef(0);
   const { lastSyncFailed, syncStatus, syncNow } = useSync();
   const { convert, formatMoney } = useCurrency();
   const load = useCallback(async () => {
-    setAccounts(await listRecords('account'));
-    setTransactions(await listRecords('transaction'));
+    const requestVersion = ++loadVersion.current;
+    const [nextAccounts, nextTransactions] = await Promise.all([
+      listRecords('account'),
+      listRecords('transaction'),
+    ]);
+    if (requestVersion !== loadVersion.current) return;
+    setAccounts(nextAccounts);
+    setTransactions(nextTransactions);
   }, []);
 
-  useEffect(() => { void load(); }, [load, syncStatus]);
+  useFocusEffect(useCallback(() => { void load(); }, [load]));
+  useEffect(() => {
+    if (syncStatus === 'success') void load();
+  }, [load, syncStatus]);
 
   const balances = new Map(accounts.map((account) => [account.id, Number(account.startingBalance)]));
+  const currentMonth = localMonthKey();
   let income = 0;
   let expense = 0;
   for (const transaction of transactions) {
     const amount = Number(transaction.amount);
     if (transaction.type === 'income') {
-      income += Number(convert(amount, accounts.find((account) => account.id === transaction.accountId)?.currency ?? 'PHP'));
+      if (transactionDateKey(transaction.date)?.slice(0, 7) === currentMonth) {
+        income += Number(convert(amount, accounts.find((account) => account.id === transaction.accountId)?.currency ?? 'PHP'));
+      }
       balances.set(transaction.accountId, (balances.get(transaction.accountId) ?? 0) + amount);
     }
     if (transaction.type === 'expense') {
-      expense += Number(convert(amount, accounts.find((account) => account.id === transaction.accountId)?.currency ?? 'PHP'));
+      if (transactionDateKey(transaction.date)?.slice(0, 7) === currentMonth) {
+        expense += Number(convert(amount, accounts.find((account) => account.id === transaction.accountId)?.currency ?? 'PHP'));
+      }
       balances.set(transaction.accountId, (balances.get(transaction.accountId) ?? 0) - amount);
     }
     if (transaction.type === 'transfer') {
@@ -48,7 +64,9 @@ export default function DashboardScreen() {
       if (transaction.destinationAccountId) balances.set(transaction.destinationAccountId, (balances.get(transaction.destinationAccountId) ?? 0) + amount);
     }
   }
-  const total = accounts.reduce((sum, account) => sum + Number(convert(balances.get(account.id) ?? 0, account.currency)), 0);
+  const total = Math.round(accounts.reduce((sum, account) => sum + Number(convert(balances.get(account.id) ?? 0, account.currency)), 0) * 100) / 100;
+  const safeIncome = Math.round(income * 100) / 100;
+  const safeExpense = Math.round(expense * 100) / 100;
 
   return (
     <Screen scrollable>
@@ -77,13 +95,13 @@ export default function DashboardScreen() {
           <View style={styles.metricHalf}>
             <Card>
               <Text style={styles.metricLabel}>Income this month</Text>
-              <Text style={[styles.metricValue, styles.income]}>{formatMoney(income)}</Text>
+              <Text style={[styles.metricValue, styles.income]}>{formatMoney(safeIncome)}</Text>
             </Card>
           </View>
           <View style={styles.metricHalf}>
             <Card>
               <Text style={styles.metricLabel}>Expense this month</Text>
-              <Text style={[styles.metricValue, styles.expense]}>{formatMoney(expense)}</Text>
+              <Text style={[styles.metricValue, styles.expense]}>{formatMoney(safeExpense)}</Text>
             </Card>
           </View>
         </View>
