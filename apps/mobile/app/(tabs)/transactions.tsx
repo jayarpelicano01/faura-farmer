@@ -3,6 +3,7 @@ import { ActivityIndicator, Alert, FlatList, Modal, Pressable, StyleSheet, Text,
 import * as Crypto from 'expo-crypto';
 import type { MobileAccount, MobileCategory, MobileTransaction } from '@faura-farmer/types';
 import { listRecords, listTransactionPage, queueDelete, queueUpsert, type TransactionPageCursor } from '@/data/db';
+import { localDateKey, transactionDateKey } from '@/data/date';
 import { Button, ChoiceChip, Empty, Field, Screen, Title, useUiStyles } from '@/ui/primitives';
 import { fontFamily, useAppTheme } from '@/ui/theme';
 import { useCurrency } from '@/ui/currency';
@@ -14,7 +15,7 @@ type NewTransactionType = Extract<MobileTransaction['type'], 'income' | 'expense
 const TRANSACTION_PAGE_SIZE = 20;
 
 function blankTransaction(accountId: string, type: NewTransactionType = 'expense'): MobileTransaction {
-  return { id: Crypto.randomUUID(), accountId, categoryId: null, bucket: null, amount: '', type, destinationAccountId: null, date: new Date().toISOString().slice(0, 10), note: null, updatedAt: new Date().toISOString() };
+  return { id: Crypto.randomUUID(), accountId, categoryId: null, bucket: null, amount: '', type, destinationAccountId: null, date: localDateKey(), note: null, updatedAt: new Date().toISOString() };
 }
 
 function requestedTransactionType(value: string | string[] | undefined): NewTransactionType | null {
@@ -117,8 +118,8 @@ export default function TransactionsScreen() {
     router.setParams({ type: undefined });
   }, [begin, loaded, router, type]);
   const save = async () => {
-    if (!editing || !/^\d+(\.\d{1,2})?$/.test(editing.amount) || !editing.accountId) {
-      Alert.alert('Check this transaction', 'An account and valid amount are required.');
+    if (!editing || !/^\d+(\.\d{1,2})?$/.test(editing.amount) || !editing.accountId || !transactionDateKey(editing.date)) {
+      Alert.alert('Check this transaction', 'An account, valid amount, and valid date are required. Use YYYY-MM-DD for the date.');
       return;
     }
     if (editing.type === 'transfer' && (!editing.destinationAccountId || editing.destinationAccountId === editing.accountId)) {
@@ -126,7 +127,7 @@ export default function TransactionsScreen() {
       return;
     }
     const sourceCurrency = accounts.find((account) => account.id === editing.accountId)?.currency ?? 'PHP';
-    const record = { ...editing, amount: convert(editing.amount, displayCurrency, sourceCurrency), categoryId: editing.type === 'transfer' ? null : editing.categoryId, bucket: editing.type === 'transfer' ? null : editing.bucket, destinationAccountId: editing.type === 'transfer' ? editing.destinationAccountId : null, updatedAt: new Date().toISOString() };
+    const record = { ...editing, amount: convert(editing.amount, displayCurrency, sourceCurrency), date: transactionDateKey(editing.date)!, categoryId: editing.type === 'transfer' ? null : editing.categoryId, bucket: editing.type === 'transfer' ? null : editing.bucket, destinationAccountId: editing.type === 'transfer' ? editing.destinationAccountId : null, updatedAt: new Date().toISOString() };
     await queueUpsert('transaction', record);
     setEditing(null);
     await load();

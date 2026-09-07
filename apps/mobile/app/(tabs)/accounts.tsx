@@ -152,7 +152,7 @@ export default function AccountsScreen() {
                       </View>
                       <View style={styles.accountCopy}>
                         <Text numberOfLines={1} style={ui.listTitle}>{account.label}</Text>
-                        <Text numberOfLines={1} style={ui.listMeta}>{typeLabels[account.type]}{account.institution ? ` · ${account.institution}` : ''}</Text>
+                        <Text numberOfLines={1} style={ui.listMeta}>{typeLabels[account.type]}</Text>
                       </View>
                     </View>
                     {account.isArchived ? <Badge variant="muted">Archived</Badge> : null}

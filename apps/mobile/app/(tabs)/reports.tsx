@@ -47,7 +47,13 @@ export default function ReportsScreen() {
   const styles = useReportStyles();
   const ui = useUiStyles();
   const { syncNow, syncStatus } = useSync();
-  const { displayCurrency, usdPerPhp, formatMoney: formatDisplayMoney } = useCurrency();
+  const {
+    displayCurrency,
+    usdPerPhp,
+    rateDate,
+    rateRefreshedAt,
+    formatMoney: formatDisplayMoney,
+  } = useCurrency();
   const [accounts, setAccounts] = useState<MobileAccount[]>([]);
   const [categories, setCategories] = useState<MobileCategory[]>([]);
   const [budgets, setBudgets] = useState<MobileBudget[]>([]);
@@ -90,14 +96,18 @@ export default function ReportsScreen() {
     if (selectedAccount && selectedAccount.id !== selectedAccountId) setSelectedAccountId(selectedAccount.id);
   }, [selectedAccount, selectedAccountId]);
 
+  const preference = useMemo(
+    () => ({ displayCurrency, usdPerPhp, rateDate, rateRefreshedAt }),
+    [displayCurrency, rateDate, rateRefreshedAt, usdPerPhp],
+  );
   const timeline = useMemo(() => selectedAccount
-    ? buildBalanceTimeline({ account: selectedAccount, accounts, categories, transactions, period: timelinePeriod })
-    : [], [accounts, categories, selectedAccount, timelinePeriod, transactions]);
+    ? buildBalanceTimeline({ account: selectedAccount, accounts, categories, transactions, period: timelinePeriod, preference })
+    : [], [accounts, categories, preference, selectedAccount, timelinePeriod, transactions]);
   const categorySpending = useMemo(() => selectedAccount
-    ? buildCategorySpending({ accountId: selectedAccount.id, accountCurrency: selectedAccount.currency, preference: { displayCurrency, usdPerPhp, rateDate: null, rateRefreshedAt: null }, categories, transactions, period: categoryPeriod, anchor: categoryAnchor })
-    : [], [categoryAnchor, categoryPeriod, categories, displayCurrency, selectedAccount, transactions, usdPerPhp]);
-  const budgetVariance = useMemo(() => buildBudgetVariance({ accounts, preference: { displayCurrency, usdPerPhp, rateDate: null, rateRefreshedAt: null }, budgets, categories, transactions, period: categoryPeriod, anchor: categoryAnchor }), [accounts, budgets, categoryAnchor, categoryPeriod, categories, displayCurrency, transactions, usdPerPhp]);
-  const categoryComparison = useMemo(() => buildCategoryComparison({ accounts, preference: { displayCurrency, usdPerPhp, rateDate: null, rateRefreshedAt: null }, categories, transactions, period: categoryPeriod, anchor: categoryAnchor }), [accounts, categoryAnchor, categoryPeriod, categories, displayCurrency, transactions, usdPerPhp]);
+    ? buildCategorySpending({ accountId: selectedAccount.id, accountCurrency: selectedAccount.currency, preference, categories, transactions, period: categoryPeriod, anchor: categoryAnchor })
+    : [], [categoryAnchor, categoryPeriod, categories, preference, selectedAccount, transactions]);
+  const budgetVariance = useMemo(() => buildBudgetVariance({ accounts, preference, budgets, categories, transactions, period: categoryPeriod, anchor: categoryAnchor }), [accounts, budgets, categoryAnchor, categoryPeriod, categories, preference, transactions]);
+  const categoryComparison = useMemo(() => buildCategoryComparison({ accounts, preference, categories, transactions, period: categoryPeriod, anchor: categoryAnchor }), [accounts, categoryAnchor, categoryPeriod, categories, preference, transactions]);
   useEffect(() => { setSelectedPoint(timeline.at(-1) ?? null); }, [timeline]);
 
   const changeCategoryPeriod = (period: CategorySpendingPeriod) => {
@@ -135,7 +145,7 @@ export default function ReportsScreen() {
         </Card>
 
         <Card>
-          <SectionTitle>Balance movement</SectionTitle><Text style={ui.listMeta}>{selectedAccount.label} · {selectedAccount.currency} · Starting balance is included.</Text>
+          <SectionTitle>Balance movement</SectionTitle><Text style={ui.listMeta}>{selectedAccount.label} · shown in {displayCurrency} · Starting balance is included.</Text>
           <View style={styles.chips}>
             <ChoiceChip label="Past 7 days" selected={timelinePeriod === '7d'} onPress={() => setTimelinePeriod('7d')} />
             <ChoiceChip label="Past 30 days" selected={timelinePeriod === '30d'} onPress={() => setTimelinePeriod('30d')} />
@@ -145,25 +155,25 @@ export default function ReportsScreen() {
             adjustToWidth color={theme.primary} curved
             data={timeline.map((point) => ({ label: point.label, value: Number(point.balance), onPress: () => setSelectedPoint(point) }))}
             disableScroll height={190} initialSpacing={12} noOfSections={4} rulesColor={theme.border}
-            spacing={timelinePeriod === '365d' ? 24 : 38} textColor={theme.mutedForeground} textFontSize={10} thickness={3}
-            xAxisColor={theme.border} yAxisColor={theme.border}
-            yAxisTextStyle={{ color: theme.mutedForeground, fontFamily: fontFamily.body, fontSize: 10 }}
-            formatYLabel={(label) => compactMoney(label, selectedAccount.currency)}
+            spacing={timelinePeriod === '365d' ? 24 : 38} textColor={theme.mutedForeground} textFontSize={20} thickness={3}
+             xAxisColor={theme.border} xAxisLabelTextStyle={{ color: theme.mutedForeground, fontFamily: fontFamily.body, fontSize: 10 }} yAxisColor={theme.border}
+            yAxisTextStyle={{ color: theme.mutedForeground, fontFamily: fontFamily.body, fontSize: 10 }} dataPointsColor='white'
+            formatYLabel={(label) => compactMoney(label, displayCurrency)}
           />
-          <View style={styles.pointList}>{timeline.map((point) => <Pressable key={point.id} accessibilityLabel={`Show activity for ${point.label}`} accessibilityRole="button" onPress={() => setSelectedPoint(point)}>{({ pressed }) => <View style={[styles.pointRow, selectedPoint?.id === point.id ? styles.pointRowSelected : undefined, pressed ? styles.pressed : undefined]}><Text style={styles.pointLabel}>{point.label}</Text><View style={styles.pointValues}><Text style={styles.pointBalance}>{formatMoney(point.balance, selectedAccount.currency)}</Text><Text style={[ui.listMeta, Number(point.change) < 0 ? styles.expense : Number(point.change) > 0 ? styles.income : undefined]}>{signedMoney(point.change, selectedAccount.currency)}</Text></View></View>}</Pressable>)}</View>
+          <View style={styles.pointList}>{timeline.map((point) => <Pressable key={point.id} accessibilityLabel={`Show activity for ${point.label}`} accessibilityRole="button" onPress={() => setSelectedPoint(point)}>{({ pressed }) => <View style={[styles.pointRow, selectedPoint?.id === point.id ? styles.pointRowSelected : undefined, pressed ? styles.pressed : undefined]}><Text style={styles.pointLabel}>{point.label}</Text><View style={styles.pointValues}><Text style={styles.pointBalance}>{formatMoney(point.balance, displayCurrency)}</Text><Text style={[ui.listMeta, Number(point.change) < 0 ? styles.expense : Number(point.change) > 0 ? styles.income : undefined]}>{signedMoney(point.change, displayCurrency)}</Text></View></View>}</Pressable>)}</View>
         </Card>
 
         <Card>
           <SectionTitle>{selectedPoint ? `What changed on ${selectedPoint.label}` : 'What changed'}</SectionTitle>
-          {selectedPoint ? <Text style={ui.listMeta}>{selectedPoint.from === selectedPoint.to ? selectedPoint.from : `${selectedPoint.from} to ${selectedPoint.to}`} · Closing balance {formatMoney(selectedPoint.balance, selectedAccount.currency)}</Text> : null}
-          <View style={styles.eventList}>{!selectedPoint?.events.length ? <Text style={ui.listMeta}>No transactions changed this balance point.</Text> : selectedPoint.events.map((event, index) => <View key={event.id} style={[styles.eventRow, index > 0 ? styles.rowDivider : undefined]}><View style={[styles.eventDot, { backgroundColor: event.kind === 'income' || event.kind === 'transfer_in' ? theme.income : theme.expense }]} /><View style={styles.eventCopy}><Text numberOfLines={1} style={ui.listTitle}>{event.description}</Text><Text style={ui.listMeta}>{event.date} · Balance {formatMoney(event.balanceAfter, selectedAccount.currency)}</Text></View><Text style={[styles.eventAmount, Number(event.change) >= 0 ? styles.income : styles.expense]}>{signedMoney(event.change, selectedAccount.currency)}</Text></View>)}</View>
+          {selectedPoint ? <Text style={ui.listMeta}>{selectedPoint.from === selectedPoint.to ? selectedPoint.from : `${selectedPoint.from} to ${selectedPoint.to}`} · Closing balance {formatMoney(selectedPoint.balance, displayCurrency)}</Text> : null}
+          <View style={styles.eventList}>{!selectedPoint?.events.length ? <Text style={ui.listMeta}>No transactions changed this balance point.</Text> : selectedPoint.events.map((event, index) => <View key={event.id} style={[styles.eventRow, index > 0 ? styles.rowDivider : undefined]}><View style={[styles.eventDot, { backgroundColor: event.kind === 'income' || event.kind === 'transfer_in' ? theme.income : theme.expense }]} /><View style={styles.eventCopy}><Text numberOfLines={1} style={ui.listTitle}>{event.description}</Text><Text style={ui.listMeta}>{event.date} · Balance {formatMoney(event.balanceAfter, displayCurrency)}</Text></View><Text style={[styles.eventAmount, Number(event.change) >= 0 ? styles.income : styles.expense]}>{signedMoney(event.change, displayCurrency)}</Text></View>)}</View>
         </Card>
 
         <Card>
           <SectionTitle>Spending by category</SectionTitle><Text style={ui.listMeta}>Expense categories for {selectedAccount.label}.</Text>
           {categorySpending.length === 0 ? <View style={styles.emptyChart}><Text style={ui.listMeta}>No categorized expenses were saved for this period.</Text></View> : <>
-            <BarChart adjustToWidth barWidth={26} data={categorySpending.slice(0, 6).map((item) => ({ label: item.categoryName.slice(0, 8), value: Number(item.amount), frontColor: item.color ?? theme.primary }))} disableScroll height={190} initialSpacing={12} noOfSections={4} rulesColor={theme.border} xAxisColor={theme.border} yAxisColor={theme.border} yAxisTextStyle={{ color: theme.mutedForeground, fontFamily: fontFamily.body, fontSize: 10 }} formatYLabel={(label) => compactMoney(label, selectedAccount.currency)} />
-            <View style={styles.categoryList}>{categorySpending.map((item) => <View key={item.categoryName} style={styles.categoryRow}><View style={[styles.eventDot, { backgroundColor: item.color ?? theme.primary }]} /><Text style={ui.listTitle}>{item.categoryName}</Text><Text style={styles.categoryAmount}>{formatMoney(item.amount, selectedAccount.currency)}</Text></View>)}</View>
+            <BarChart adjustToWidth barWidth={26} data={categorySpending.slice(0, 6).map((item) => ({ label: item.categoryName.slice(0, 8), value: Number(item.amount), frontColor: item.color ?? theme.primary }))} disableScroll height={190} initialSpacing={12} noOfSections={4} rulesColor={theme.border} xAxisColor={theme.border} yAxisColor={theme.border} yAxisTextStyle={{ color: theme.mutedForeground, fontFamily: fontFamily.body, fontSize: 10 }} formatYLabel={(label) => compactMoney(label, displayCurrency)} />
+            <View style={styles.categoryList}>{categorySpending.map((item) => <View key={item.categoryName} style={styles.categoryRow}><View style={[styles.eventDot, { backgroundColor: item.color ?? theme.primary }]} /><Text style={ui.listTitle}>{item.categoryName}</Text><Text style={styles.categoryAmount}>{formatMoney(item.amount, displayCurrency)}</Text></View>)}</View>
           </>}
         </Card>
         <View style={styles.scopeDivider}><View style={styles.dividerLine} /><Text style={styles.dividerLabel}>All accounts</Text><View style={styles.dividerLine} /></View>

@@ -1,29 +1,35 @@
 import { createContext, useContext, useEffect, useMemo, useRef, type PropsWithChildren } from 'react';
-import { ActivityIndicator, Animated, Pressable, ScrollView, StyleSheet, Text, TextInput, View, type StyleProp, type TextInputProps, type ViewStyle } from 'react-native';
+import { ActivityIndicator, Animated, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View, type StyleProp, type TextInputProps, type ViewStyle } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { fontFamily, radius, type AppTheme, useAppTheme } from './theme';
 
-const AppChromeContext = createContext(false);
+const AppChromeContext = createContext({ insideAppChrome: false, keyboardVerticalOffset: 0 });
 
-export function AppChromeProvider({ children }: PropsWithChildren) {
-  return <AppChromeContext.Provider value>{children}</AppChromeContext.Provider>;
+export function AppChromeProvider({ children, keyboardVerticalOffset = 0 }: PropsWithChildren<{ keyboardVerticalOffset?: number }>) {
+  return <AppChromeContext.Provider value={{ insideAppChrome: true, keyboardVerticalOffset }}>{children}</AppChromeContext.Provider>;
 }
 
 type ScreenProps = PropsWithChildren<{ scrollable?: boolean }>;
 
 export function Screen({ children, scrollable = false }: ScreenProps) {
   const styles = usePrimitiveStyles();
-  const insideAppChrome = useContext(AppChromeContext);
-  const edges = insideAppChrome ? ['left', 'right', 'bottom'] as const : ['top', 'left', 'right'] as const;
+  const appChrome = useContext(AppChromeContext);
+  const edges = appChrome.insideAppChrome ? ['left', 'right', 'bottom'] as const : ['top', 'left', 'right'] as const;
   const content = scrollable ? (
-    <ScrollView
-      contentContainerStyle={styles.scrollContent}
-      contentInsetAdjustmentBehavior="automatic"
-      keyboardShouldPersistTaps="handled"
-      showsVerticalScrollIndicator={false}
+    <KeyboardAvoidingView
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      keyboardVerticalOffset={appChrome.keyboardVerticalOffset}
+      style={styles.keyboardAvoiding}
     >
-      {children}
-    </ScrollView>
+      <ScrollView
+        contentContainerStyle={styles.scrollContent}
+        contentInsetAdjustmentBehavior="automatic"
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
+      >
+        {children}
+      </ScrollView>
+    </KeyboardAvoidingView>
   ) : (
     <View style={styles.screenContent}>{children}</View>
   );
@@ -251,6 +257,7 @@ function usePrimitiveStyles() {
 function createStyles(theme: AppTheme) {
   return StyleSheet.create({
     screen: { flex: 1, backgroundColor: theme.background },
+    keyboardAvoiding: { flex: 1 },
     screenContent: { flex: 1, paddingHorizontal: 20, paddingTop: 20, paddingBottom: 20 },
     scrollContent: { flexGrow: 1, paddingHorizontal: 20, paddingTop: 20, paddingBottom: 36 },
     card: {

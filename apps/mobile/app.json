@@ -40,6 +40,7 @@
     "android": {
       "package": "com.faura.farmer",
       "versionCode": 2,
+      "softwareKeyboardLayoutMode": "resize",
       "adaptiveIcon": {
         "foregroundImage": "./assets/icon.png",
         "backgroundColor": "#030B26"

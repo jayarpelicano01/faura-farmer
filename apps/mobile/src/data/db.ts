@@ -117,7 +117,7 @@ export async function getProfileDetails() {
     usd_per_php: string | null;
     rate_date: string | null;
     rate_refreshed_at: string | null;
-  }>('SELECT id, email, name, username, has_password FROM profile LIMIT 1');
+  }>('SELECT id, email, name, username, has_password, display_currency, usd_per_php, rate_date, rate_refreshed_at FROM profile LIMIT 1');
   if (!profile) return null;
   return {
     id: profile.id,

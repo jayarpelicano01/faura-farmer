@@ -4,7 +4,7 @@ import { useRouter } from 'expo-router';
 import type { CurrencyPreference, MobileProfile } from '@faura-farmer/types';
 import { getProfileDetails, saveProfileDetails } from '@/data/db';
 import { useSession } from '@/auth/session';
-import { connectionMessage, mobileRequest, refreshedSession } from '@/sync/api';
+import { MobileApiError, MobileConnectionError, connectionMessage, mobileRequest, refreshedSession } from '@/sync/api';
 import { BodyText, Button, Card, Field, InlineNotice, Screen, SectionTitle, Title, useUiStyles } from '@/ui/primitives';
 import { fontFamily, useAppTheme } from '@/ui/theme';
 import { useSync } from '@/sync/use-sync';
@@ -33,6 +33,21 @@ function draftFor(profile: MobileProfile): ProfileDraft {
 
 const emptyPasswordDraft: PasswordDraft = { currentPassword: '', newPassword: '', confirmPassword: '' };
 
+function rateRefreshMessage(error: unknown) {
+  if (error instanceof MobileApiError) {
+    if (error.status === 401) return 'Your session expired. Sign in again, then retry the exchange-rate refresh.';
+    if (error.status === 429) return 'Rate refresh is temporarily limited. Please wait a moment, then try again.';
+    if (error.status >= 500) return 'The exchange-rate service is temporarily unavailable. Please try again.';
+  }
+  if (error instanceof MobileConnectionError || (error instanceof TypeError && /network|fetch/i.test(error.message))) {
+    return 'Couldn’t refresh the exchange rate. Check your connection and try again.';
+  }
+  if (error instanceof Error && /session has ended/i.test(error.message)) {
+    return 'Your session expired. Sign in again, then retry the exchange-rate refresh.';
+  }
+  return 'Unable to refresh the exchange rate. Please try again.';
+}
+
 export default function MoreScreen() {
   const styles = useMoreStyles();
   const ui = useUiStyles();
@@ -53,6 +68,7 @@ export default function MoreScreen() {
   const [savingPassword, setSavingPassword] = useState(false);
   const [savingCurrency, setSavingCurrency] = useState(false);
   const [currencyError, setCurrencyError] = useState<string | null>(null);
+  const [currencySuccess, setCurrencySuccess] = useState<string | null>(null);
 
   const activeSession = useCallback(async () => {
     if (!session) throw new Error('Your session has ended');
@@ -61,6 +77,16 @@ export default function MoreScreen() {
     await update(next);
     return next;
   }, [session, update]);
+
+  const saveRemoteProfile = useCallback(async (next: MobileProfile) => {
+    await saveProfileDetails(next);
+    await setPreference({
+      displayCurrency: next.displayCurrency,
+      usdPerPhp: next.usdPerPhp,
+      rateDate: next.rateDate,
+      rateRefreshedAt: next.rateRefreshedAt,
+    });
+  }, [setPreference]);
 
   const loadProfile = useCallback(async () => {
     if (!session) return;
@@ -79,7 +105,7 @@ export default function MoreScreen() {
     try {
       const active = await activeSession();
       const response = await mobileRequest<{ user: MobileProfile }>('/api/mobile/v1/profile', {}, active.accessToken);
-      await saveProfileDetails(response.user);
+      await saveRemoteProfile(response.user);
       setProfile(response.user);
       setDraft(draftFor(response.user));
     } catch (error) {
@@ -87,7 +113,7 @@ export default function MoreScreen() {
     } finally {
       setProfileLoading(false);
     }
-  }, [activeSession, session]);
+  }, [activeSession, saveRemoteProfile, session]);
 
   useEffect(() => { void loadProfile(); }, [loadProfile]);
 
@@ -117,7 +143,7 @@ export default function MoreScreen() {
         { method: 'PATCH', body: JSON.stringify({ name: draft.name.trim() || null, username: draft.username.trim() || null }) },
         active.accessToken,
       );
-      await saveProfileDetails(response.user);
+      await saveRemoteProfile(response.user);
       await update({ ...active, user: { ...active.user, name: response.user.name } });
       setProfile(response.user);
       setDraft(draftFor(response.user));
@@ -167,13 +193,14 @@ export default function MoreScreen() {
   };
 
   const applyPreference = useCallback(async (preference: CurrencyPreference, user: MobileProfile | null = profile) => {
-    await setPreference(preference);
     if (user) {
       const next = { ...user, ...preference };
-      await saveProfileDetails(next);
+      await saveRemoteProfile(next);
       setProfile(next);
+      return;
     }
-  }, [profile, setPreference]);
+    await setPreference(preference);
+  }, [profile, saveRemoteProfile, setPreference]);
 
   const changeDisplayCurrency = async (next: 'PHP' | 'USD') => {
     if (next === 'USD' && !usdPerPhp) {
@@ -182,6 +209,7 @@ export default function MoreScreen() {
     }
     setSavingCurrency(true);
     setCurrencyError(null);
+    setCurrencySuccess(null);
     try {
       const active = await activeSession();
       const response = await mobileRequest<{ user: MobileProfile }>('/api/mobile/v1/profile', { method: 'PATCH', body: JSON.stringify({ displayCurrency: next }) }, active.accessToken);
@@ -196,12 +224,14 @@ export default function MoreScreen() {
   const refreshRate = async () => {
     setSavingCurrency(true);
     setCurrencyError(null);
+    setCurrencySuccess(null);
     try {
       const active = await activeSession();
       const response = await mobileRequest<{ preference: CurrencyPreference }>('/api/mobile/v1/profile/currency-rate', { method: 'POST' }, active.accessToken);
       await applyPreference({ ...response.preference, displayCurrency });
+      setCurrencySuccess('Exchange rate refreshed. The latest rate details are now saved on this device.');
     } catch (error) {
-      setCurrencyError(connectionMessage(error));
+      setCurrencyError(rateRefreshMessage(error));
     } finally {
       setSavingCurrency(false);
     }
@@ -298,6 +328,7 @@ export default function MoreScreen() {
             </View>
             <Text style={styles.fieldHint}>{usdPerPhp ? `1 PHP = ${usdPerPhp} USD${rateDate ? ` · Rate date ${rateDate}` : ''}${rateRefreshedAt ? ` · refreshed ${new Date(rateRefreshedAt).toLocaleString()}` : ''}` : 'No USD rate is cached on this device.'}</Text>
             {currencyError ? <InlineNotice>{currencyError}</InlineNotice> : null}
+            {currencySuccess ? <InlineNotice tone="info">{currencySuccess}</InlineNotice> : null}
             <Button disabled={savingCurrency} size="compact" variant="outline" onPress={() => void refreshRate}>{savingCurrency ? 'Refreshing rate…' : 'Refresh rate'}</Button>
           </View>
         </Card>

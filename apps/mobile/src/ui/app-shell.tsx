@@ -23,6 +23,8 @@ const navigationItems: NavigationItem[] = [
 ];
 
 const DRAWER_WIDTH = 256;
+const HEADER_HEIGHT = 56;
+const SYNC_STATUS_HEIGHT = 28;
 
 function normalizeRoute(pathname: string) {
   const withoutGroups = pathname.replace(/\/\([^/]+\)/g, '').replace(/\/+$/, '');
@@ -69,7 +71,7 @@ export function AppShell({ children }: PropsWithChildren) {
   const SyncIcon = syncStatus === 'success' ? Check : syncStatus === 'offline' ? CloudOff : CircleAlert;
 
   return (
-    <AppChromeProvider>
+    <AppChromeProvider keyboardVerticalOffset={HEADER_HEIGHT + (syncStatus === 'idle' ? 0 : SYNC_STATUS_HEIGHT)}>
       <View style={styles.shell}>
         <SafeAreaView edges={['top', 'left', 'right']} style={styles.headerArea}>
           <View style={styles.header}>
@@ -179,7 +181,7 @@ function useShellStyles(theme: AppTheme) {
   return useMemo(() => StyleSheet.create({
     shell: { flex: 1, backgroundColor: theme.background },
     headerArea: { borderBottomColor: theme.border, borderBottomWidth: StyleSheet.hairlineWidth, backgroundColor: theme.card },
-    header: { height: 56, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12, paddingHorizontal: 16 },
+    header: { height: HEADER_HEIGHT, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12, paddingHorizontal: 16 },
     menuButton: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center', borderCurve: 'continuous', borderRadius: radius.control },
     headerBrand: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 9, minWidth: 0 },
     headerTitle: { flexShrink: 1, color: theme.foreground, fontFamily: fontFamily.display, fontSize: 14, fontWeight: '600', letterSpacing: -0.6 },

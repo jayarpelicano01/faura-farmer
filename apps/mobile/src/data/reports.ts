@@ -126,8 +126,13 @@ function timelineBuckets(period: BalanceTimelinePeriod, anchor = localDate()) {
   });
 }
 
-function transactionEffect(transaction: MobileTransaction, accountId: string) {
-  const amount = number(transaction.amount);
+function transactionEffect(
+  transaction: MobileTransaction,
+  accountId: string,
+  accountCurrency: string,
+  preference: CurrencyPreference,
+) {
+  const amount = converted(transaction.amount, accountCurrency, preference);
   if (transaction.type === 'income' && transaction.accountId === accountId) return amount;
   if (transaction.type === 'expense' && transaction.accountId === accountId) return -amount;
   if (transaction.type === 'transfer') {
@@ -143,8 +148,10 @@ function eventFor(
   accountsById: Map<string, MobileAccount>,
   categoriesById: Map<string, MobileCategory>,
   balanceAfter: number,
+  accountCurrency: string,
+  preference: CurrencyPreference,
 ): BalanceEvent {
-  const change = transactionEffect(transaction, accountId);
+  const change = transactionEffect(transaction, accountId, accountCurrency, preference);
   const category = transaction.categoryId ? categoriesById.get(transaction.categoryId)?.name : null;
   const otherAccountId = transaction.accountId === accountId ? transaction.destinationAccountId : transaction.accountId;
   const otherAccount = otherAccountId ? accountsById.get(otherAccountId)?.label : null;
@@ -185,22 +192,24 @@ export function buildBalanceTimeline({
   categories,
   transactions,
   period,
+  preference,
 }: {
   account: MobileAccount;
   accounts: MobileAccount[];
   categories: MobileCategory[];
   transactions: MobileTransaction[];
   period: BalanceTimelinePeriod;
+  preference: CurrencyPreference;
 }): BalancePoint[] {
   const buckets = timelineBuckets(period);
   const ledger = relevantTransactions(transactions, account.id);
   const accountsById = new Map(accounts.map((item) => [item.id, item]));
   const categoriesById = new Map(categories.map((item) => [item.id, item]));
-  let balance = number(account.startingBalance);
+  let balance = converted(account.startingBalance, account.currency, preference);
   let transactionIndex = 0;
 
   while (transactionIndex < ledger.length && ledger[transactionIndex]!.date < buckets[0]!.from) {
-    balance += transactionEffect(ledger[transactionIndex]!, account.id);
+    balance += transactionEffect(ledger[transactionIndex]!, account.id, account.currency, preference);
     transactionIndex += 1;
   }
 
@@ -210,8 +219,18 @@ export function buildBalanceTimeline({
     while (transactionIndex < ledger.length && ledger[transactionIndex]!.date <= bucket.to) {
       const transaction = ledger[transactionIndex]!;
       if (transaction.date >= bucket.from) {
-        balance += transactionEffect(transaction, account.id);
-        events.push(eventFor(transaction, account.id, accountsById, categoriesById, balance));
+        balance += transactionEffect(transaction, account.id, account.currency, preference);
+        events.push(
+          eventFor(
+            transaction,
+            account.id,
+            accountsById,
+            categoriesById,
+            balance,
+            account.currency,
+            preference,
+          ),
+        );
       }
       transactionIndex += 1;
     }
