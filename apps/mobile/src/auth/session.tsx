@@ -2,7 +2,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState, t
 import { AppState } from 'react-native';
 import * as LocalAuthentication from 'expo-local-authentication';
 import * as SecureStore from 'expo-secure-store';
-import { clearLocalData, saveProfile } from '@/data/db';
+import { clearLocalData, getProfile, saveProfile } from '@/data/db';
 
 const SESSION_KEY = 'mobile-session-v1';
 const INSTALLATION_KEY = 'mobile-installation-id-v1';
@@ -21,6 +21,8 @@ type SessionContextValue = {
   unlock: () => Promise<boolean>;
   establish: (session: StoredSession) => Promise<void>;
   update: (session: StoredSession) => Promise<void>;
+  authNotice: string | null;
+  requireReauthentication: () => Promise<void>;
   signOutLocal: () => Promise<void>;
 };
 
@@ -43,6 +45,7 @@ export function SessionProvider({ children }: PropsWithChildren) {
   const [status, setStatus] = useState<SessionContextValue['status']>('loading');
   const [session, setSession] = useState<StoredSession | null>(null);
   const [deviceId, setDeviceId] = useState<string | null>(null);
+  const [authNotice, setAuthNotice] = useState<string | null>(null);
 
   useEffect(() => {
     void Promise.all([getStoredSession(), getInstallationId()]).then(([stored, installation]) => {
@@ -71,9 +74,12 @@ export function SessionProvider({ children }: PropsWithChildren) {
   }, []);
 
   const establish = useCallback(async (next: StoredSession) => {
+    const cachedProfile = await getProfile();
+    if (cachedProfile && cachedProfile.id !== next.user.id) await clearLocalData();
     await SecureStore.setItemAsync(SESSION_KEY, JSON.stringify(next));
     await saveProfile(next.user);
     setSession(next);
+    setAuthNotice(null);
     setStatus('ready');
   }, []);
 
@@ -86,10 +92,20 @@ export function SessionProvider({ children }: PropsWithChildren) {
     await SecureStore.deleteItemAsync(SESSION_KEY);
     await clearLocalData();
     setSession(null);
+    setAuthNotice(null);
     setStatus('signedOut');
   }, []);
 
-  const value = useMemo(() => ({ status, session, deviceId, unlock, establish, update, signOutLocal }), [status, session, deviceId, unlock, establish, update, signOutLocal]);
+  const requireReauthentication = useCallback(async () => {
+    await SecureStore.deleteItemAsync(SESSION_KEY);
+    setSession(null);
+    setAuthNotice('Your session ended. Sign in again to restore your offline data.');
+    setStatus('signedOut');
+  }, []);
+
+  const value = useMemo(() => ({
+    status, session, deviceId, unlock, establish, update, authNotice, requireReauthentication, signOutLocal,
+  }), [status, session, deviceId, unlock, establish, update, authNotice, requireReauthentication, signOutLocal]);
   return <SessionContext.Provider value={value}>{children}</SessionContext.Provider>;
 }
 

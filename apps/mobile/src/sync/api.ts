@@ -16,6 +16,18 @@ export class MobileConnectionError extends Error {
   }
 }
 
+export class MobileApiError extends Error {
+  constructor(
+    public readonly status: number,
+    public readonly code: string | undefined,
+    public readonly requestId: string | undefined,
+    message: string,
+  ) {
+    super(message);
+    this.name = 'MobileApiError';
+  }
+}
+
 export function connectionMessage(error: unknown) {
   if (error instanceof MobileConnectionError) return error.message;
   if (error instanceof TypeError && /network|fetch/i.test(error.message)) {
@@ -44,15 +56,19 @@ function apiBase() {
 }
 
 async function decode<T>(response: Response): Promise<T> {
-  const data = (await response.json().catch(() => ({ error: 'Invalid server response' }))) as T & { error?: string };
+  const data = (await response.json().catch(() => ({ error: 'Invalid server response' }))) as T & { error?: string; code?: string; requestId?: string };
   if (response.status === 404 && /mobile api is not enabled/i.test(data.error ?? '')) {
     throw new MobileConnectionError(
       'mobile_api_disabled',
       'Mobile sync is temporarily unavailable. Please try again later.',
     );
   }
-  if (!response.ok) throw new Error(data.error ?? `Request failed (${response.status})`);
+  if (!response.ok) throw new MobileApiError(response.status, data.code, data.requestId, data.error ?? `Request failed (${response.status})`);
   return data;
+}
+
+export function isMobileUnauthorized(error: unknown) {
+  return error instanceof MobileApiError && error.status === 401;
 }
 
 export async function mobileRequest<T>(path: string, options: RequestInit = {}, accessToken?: string) {

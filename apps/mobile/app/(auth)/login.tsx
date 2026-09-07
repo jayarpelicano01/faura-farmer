@@ -13,7 +13,7 @@ export default function LoginScreen() {
   const [password, setPassword] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const { establish } = useSession();
+  const { authNotice, establish } = useSession();
   const router = useRouter();
   const styles = useLoginStyles();
 
@@ -41,7 +41,7 @@ export default function LoginScreen() {
         <Card>
           <AuthModeSelector mode="login" />
           <View style={styles.form}>
-            {error ? <InlineNotice>{error}</InlineNotice> : null}
+            {error ?? authNotice ? <InlineNotice>{error ?? authNotice}</InlineNotice> : null}
             <Field
               autoCapitalize="none"
               autoComplete="email"

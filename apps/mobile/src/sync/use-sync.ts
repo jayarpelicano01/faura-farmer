@@ -2,7 +2,7 @@ import { createContext, createElement, useCallback, useContext, useEffect, useMe
 import { AppState } from 'react-native';
 import NetInfo from '@react-native-community/netinfo';
 import { useSession } from '@/auth/session';
-import { MobileConnectionError } from './api';
+import { MobileApiError, MobileConnectionError, isMobileUnauthorized } from './api';
 import { synchronize } from './sync';
 
 export type SyncStatus = 'idle' | 'syncing' | 'success' | 'offline' | 'attention';
@@ -21,11 +21,18 @@ const RESULT_STATUS_DURATION_MS = 5_000;
 
 function messageFor(error: unknown) {
   if (error instanceof MobileConnectionError && error.problem === 'server_unavailable') return OFFLINE_MESSAGE;
+  if (error instanceof MobileApiError) {
+    if (error.status === 401) return 'Your session ended. Sign in again to restore your offline data.';
+    if (error.requestId || error.code === 'SYNC_PULL_FAILED' || error.code === 'SYNC_PUSH_FAILED') {
+      return `Sync server error. Reference: ${error.requestId ?? 'unavailable'}.`;
+    }
+    return error.message;
+  }
   return 'Sync needs attention. Your changes stay on this device.';
 }
 
 export function SyncProvider({ children }: PropsWithChildren) {
-  const { status, update } = useSession();
+  const { status, update, requireReauthentication } = useSession();
   const [lastSyncFailed, setLastSyncFailed] = useState(false);
   const [syncStatus, setSyncStatus] = useState<SyncStatus>('idle');
   const [syncMessage, setSyncMessage] = useState<string | null>(null);
@@ -67,11 +74,15 @@ export function SyncProvider({ children }: PropsWithChildren) {
       }
     } catch (error) {
       setLastSyncFailed(true);
+      if (isMobileUnauthorized(error)) {
+        await requireReauthentication();
+        return;
+      }
       showStatus(error instanceof MobileConnectionError && error.problem === 'server_unavailable' ? 'offline' : 'attention', messageFor(error), RESULT_STATUS_DURATION_MS);
     } finally {
       syncingRef.current = false;
     }
-  }, [showStatus, status, update]);
+  }, [requireReauthentication, showStatus, status, update]);
 
   useEffect(() => {
     if (status !== 'ready') {
