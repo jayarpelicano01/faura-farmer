@@ -5,7 +5,6 @@ import { badRequest, fail, notFound, ok, unauthorized } from '@/lib/http';
 import { toNumber } from '@/lib/format';
 import { lockAccountsInOrder } from '@/lib/queries';
 import { guardMutation, readJsonBody } from '@/lib/security';
-import { deleteReceiptObjects } from '@/lib/storage/receipts';
 import { recordCanonicalMobileTombstone, recordCanonicalMobileUpsert } from '@/lib/mobile/sync';
 
 async function createBalanceAdjustment(
@@ -274,19 +273,11 @@ export async function DELETE(request: Request, { params }: { params: Promise<{ i
         where: transactionsWhere,
         select: { id: true, transferGroupId: true, transferRole: true },
       });
-      const attachments = await tx.transactionAttachment.findMany({
-        where: {
-          transactionId: { in: transactions.map((transaction) => transaction.id) },
-          userId: session.user.id,
-        },
-        select: { storagePath: true },
-      });
       await tx.transaction.deleteMany({ where: transactionsWhere });
       await tx.recurringRule.deleteMany({ where: { accountId: account.id } });
       await tx.account.delete({ where: { id: account.id } });
       return {
         status: 'deleted' as const,
-        receiptPaths: attachments.map((attachment) => attachment.storagePath),
         deletedTransactionIds: transactions
           .filter((transaction) => !transaction.transferGroupId || transaction.transferRole === 'outgoing')
           .map((transaction) => transaction.id),
@@ -305,11 +296,6 @@ export async function DELETE(request: Request, { params }: { params: Promise<{ i
         'ACCOUNT_DELETE_CONFLICT',
       );
     }
-    await deleteReceiptObjects(result.receiptPaths).catch((error) => {
-      console.error('Unable to remove receipt objects after account deletion', {
-        error: error instanceof Error ? error.message : 'unknown',
-      });
-    });
     for (const transactionId of result.deletedTransactionIds) {
       await recordCanonicalMobileTombstone(session.user.id, 'transaction', transactionId);
     }

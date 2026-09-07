@@ -14,7 +14,6 @@ import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectItemText, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { apiFetch } from '@/lib/api';
 import { useDisplayCurrency } from '@/components/currency/display-currency-provider';
-import { ReceiptAttachments } from './receipt-attachments';
 import { categoriesByType, BUCKET_BADGE_COLOR, BUCKET_META, resolveCategoryBucket } from '@/lib/meta';
 import type { SelectAccount } from '@/lib/meta';
 
@@ -485,9 +484,6 @@ export function TransactionForm({
                 </FormItem>
               )}
             />
-            {(initial?.id || createdTransactionId) && (
-              <ReceiptAttachments transactionId={initial?.id ?? createdTransactionId!} />
-            )}
             <DialogFooter>
               <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
                 {createdTransactionId ? 'Done' : 'Cancel'}

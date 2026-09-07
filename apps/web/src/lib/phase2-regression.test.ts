@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest';
 import { createRecurringRuleSchema } from '@faura-farmer/types';
 import { advanceRecurringDate, dateKey } from './services/recurring-transactions';
 import { CSV_COLUMNS, parseTransactionCsv } from './csv/transactions';
-import { newReceiptStoragePath, validateReceiptFile } from './storage/receipts';
 
 const transactionId = '11111111-1111-4111-8111-111111111111';
 const accountId = '22222222-2222-4222-8222-222222222222';
@@ -44,22 +43,5 @@ describe('Phase 2 financial workflows', () => {
     const rows = parseTransactionCsv(csv);
     expect(rows[1]?.errors.join(' ')).toMatch(/Duplicate transaction_id/);
     expect(rows[1]?.errors.join(' ')).toMatch(/destination account/i);
-  });
-
-  it('validates receipt signatures and generates scoped storage paths', async () => {
-    const png = Object.assign(
-      new Blob([new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])], { type: 'image/png' }),
-      { name: 'receipt.png' },
-    ) as File;
-    await expect(validateReceiptFile(png)).resolves.toMatchObject({ mimeType: 'image/png' });
-    expect(newReceiptStoragePath('user-id', 'transaction-id', 'image/webp')).toMatch(/^receipts\/user-id\/transaction-id\//);
-  });
-
-  it('rejects a spoofed receipt MIME type', async () => {
-    const spoofed = Object.assign(
-      new Blob([new Uint8Array([0x52, 0x49, 0x46, 0x46, 0, 0, 0, 0, 0x57, 0x45, 0x42, 0x50])], { type: 'image/png' }),
-      { name: 'receipt.png' },
-    ) as File;
-    await expect(validateReceiptFile(spoofed)).rejects.toThrow(/signature/i);
   });
 });

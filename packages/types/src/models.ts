@@ -101,19 +101,6 @@ export interface RecurringRule {
   isActive: boolean;
 }
 
-export interface TransactionAttachment {
-  id: string;
-  transactionId: string;
-  userId: string;
-  storagePath: string;
-  originalFilename: string;
-  mimeType: 'image/jpeg' | 'image/png' | 'image/webp';
-  fileSize: number;
-  createdAt: Date;
-  updatedAt: Date;
-  signedUrl?: string;
-}
-
 export interface Budget {
   id: string;
   userId: string;
