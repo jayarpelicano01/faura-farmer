@@ -1,13 +1,21 @@
 import type { ReportPeriod } from '@faura-farmer/types';
-import {
-  endOfDay,
-  endOfMonth,
-  format,
-  startOfDay,
-  startOfMonth,
-  subDays,
-  subMonths,
-} from 'date-fns';
+import { endOfDay, format, startOfDay, subDays, subMonths } from 'date-fns';
+
+export function utcStartOfMonth(date: Date): Date {
+  return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), 1));
+}
+
+export function utcEndOfMonth(date: Date): Date {
+  return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth() + 1, 0, 23, 59, 59, 999));
+}
+
+export function utcStartOfYear(date: Date): Date {
+  return new Date(Date.UTC(date.getUTCFullYear(), 0, 1));
+}
+
+export function utcEndOfYear(date: Date): Date {
+  return new Date(Date.UTC(date.getUTCFullYear(), 11, 31, 23, 59, 59, 999));
+}
 
 export interface ReportRange {
   period: ReportPeriod;
@@ -20,8 +28,8 @@ export interface ReportRange {
 }
 
 function validCalendarDate(year: number, month: number, day: number) {
-  const date = new Date(year, month - 1, day, 12);
-  return date.getFullYear() === year && date.getMonth() === month - 1 && date.getDate() === day;
+  const date = new Date(Date.UTC(year, month - 1, day, 12));
+  return date.getUTCFullYear() === year && date.getUTCMonth() === month - 1 && date.getUTCDate() === day;
 }
 
 /** Parse a date-only URL value without shifting it across time zones. */
@@ -30,7 +38,7 @@ export function parseReportDate(value: string | undefined, fallback = new Date()
 
   const [year, month, day] = value.split('-').map(Number);
   if (!validCalendarDate(year, month, day)) return fallback;
-  return new Date(year, month - 1, day, 12);
+  return new Date(Date.UTC(year, month - 1, day, 12));
 }
 
 export function parseReportMonth(value: string | undefined, fallback = new Date()): Date {
@@ -38,7 +46,7 @@ export function parseReportMonth(value: string | undefined, fallback = new Date(
 
   const [year, month] = value.split('-').map(Number);
   if (!validCalendarDate(year, month, 1)) return fallback;
-  return new Date(year, month - 1, 1, 12);
+  return new Date(Date.UTC(year, month - 1, 1, 12));
 }
 
 export function getReportRange(period: ReportPeriod, anchor: Date): ReportRange {
@@ -59,11 +67,11 @@ export function getReportRange(period: ReportPeriod, anchor: Date): ReportRange 
     };
   }
 
-  const from = startOfMonth(anchor);
-  const to = endOfMonth(anchor);
+  const from = utcStartOfMonth(anchor);
+  const to = utcEndOfMonth(anchor);
   const previousAnchor = subMonths(anchor, 1);
-  const previousFrom = startOfMonth(previousAnchor);
-  const previousTo = endOfMonth(previousAnchor);
+  const previousFrom = utcStartOfMonth(previousAnchor);
+  const previousTo = utcEndOfMonth(previousAnchor);
 
   return {
     period,
