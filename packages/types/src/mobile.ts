@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { ACCOUNT_TYPES, BUDGET_BUCKETS, CATEGORY_TYPES, TRANSACTION_TYPES } from './models';
-import { DISPLAY_CURRENCIES, type DisplayCurrency } from './currency';
+import { ACCOUNT_CURRENCIES, DISPLAY_CURRENCIES, type DisplayCurrency } from './currency';
 
 const uuid = z.string().uuid();
 const decimalString = z.string().regex(/^\d+(?:\.\d{1,2})?$/, 'Amount must be a decimal string');
@@ -13,7 +13,7 @@ export const mobileAccountSchema = z.object({
   label: z.string().trim().min(1).max(120),
   type: z.enum(ACCOUNT_TYPES),
   institution: z.string().trim().max(120).nullable(),
-  currency: z.string().trim().min(3).max(8),
+  currency: z.enum(ACCOUNT_CURRENCIES),
   startingBalance: decimalString,
   color: z.string().trim().max(40).nullable(),
   icon: z.string().trim().max(40).nullable(),

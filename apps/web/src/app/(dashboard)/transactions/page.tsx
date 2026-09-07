@@ -2,6 +2,7 @@ import { auth } from '@/lib/auth';
 import { redirect } from 'next/navigation';
 import { prisma } from '@faura-farmer/database';
 import { TransactionsManager } from '@/components/transactions/transactions-manager';
+import type { AccountCurrency } from '@faura-farmer/types';
 
 export default async function TransactionsPage() {
   const session = await auth();
@@ -20,7 +21,7 @@ export default async function TransactionsPage() {
 
   return (
     <TransactionsManager
-      accounts={accounts.map((a) => ({ ...a, startingBalance: String(a.startingBalance) }))}
+      accounts={accounts.map((a) => ({ ...a, startingBalance: String(a.startingBalance), currency: a.currency as AccountCurrency }))}
       categories={categories}
     />
   );

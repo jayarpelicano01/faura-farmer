@@ -1,3 +1,5 @@
+import type { AccountCurrency } from './currency';
+
 export const ACCOUNT_TYPES = ['bank', 'e_wallet', 'cash', 'credit_card', 'investment'] as const;
 export type AccountType = (typeof ACCOUNT_TYPES)[number];
 
@@ -42,7 +44,7 @@ export interface Account {
   type: AccountType;
   institution?: string | null;
   externalAccountId?: string | null;
-  currency: string;
+  currency: AccountCurrency;
   startingBalance: string;
   color?: string | null;
   icon?: string | null;

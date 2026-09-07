@@ -59,7 +59,7 @@ function serializeAccount(record: {
 }): MobileAccount {
   return {
     id: record.id, label: record.label, type: record.type, institution: record.institution,
-    currency: record.currency, startingBalance: String(record.startingBalance), color: record.color,
+    currency: record.currency as MobileAccount['currency'], startingBalance: String(record.startingBalance), color: record.color,
     icon: record.icon, isArchived: record.isArchived, updatedAt: record.updatedAt.toISOString(),
   };
 }

@@ -197,7 +197,10 @@ function AccountEditor({ account, currentBalance, displayCurrency, exists, onCha
             onChange({ ...account, startingBalance });
           }} />
           {exists ? <Field label={`Current balance (${displayCurrency})`} keyboardType="decimal-pad" value={currentBalance} onChangeText={onCurrentBalanceChange} /> : null}
-          <Field label="Currency" autoCapitalize="characters" value={account.currency} onChangeText={(currency) => onChange({ ...account, currency })} />
+          <View style={styles.formSection}>
+            <Text style={styles.fieldLabel}>Currency</Text>
+            <View style={styles.chips}>{(['PHP', 'USD'] as const).map((currency) => <ChoiceChip key={currency} label={currency} selected={account.currency === currency} onPress={() => onChange({ ...account, currency })} />)}</View>
+          </View>
           <View style={styles.formSection}>
             <Text style={styles.fieldLabel}>Account type</Text>
             <View style={styles.chips}>{accountTypes.map((type) => <ChoiceChip key={type} label={typeLabels[type]} selected={account.type === type} onPress={() => onChange({ ...account, type })} />)}</View>

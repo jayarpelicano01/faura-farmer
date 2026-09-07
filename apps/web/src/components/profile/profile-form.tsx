@@ -17,6 +17,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Separator } from '@/components/ui/separator';
 import { Spinner } from '@/components/ui/spinner';
 import { GoogleIcon, FacebookIcon } from '@/components/ui/social-icons';
@@ -231,9 +232,15 @@ export function ProfileForm({ user }: { user: ProfileUser }) {
         <CardHeader><CardTitle className="font-display text-lg">Display currency</CardTitle></CardHeader>
         <CardContent className="space-y-4">
           <p className="text-sm text-muted-foreground">Show amounts in PHP or USD. Saved balances and transactions remain unchanged.</p>
-          <div className="flex gap-2">
-            {(['PHP', 'USD'] as const).map((currency) => <Button key={currency} disabled={currencyPending || preference.displayCurrency === currency} type="button" variant={preference.displayCurrency === currency ? 'default' : 'outline'} onClick={() => void changeCurrency(currency)}>{currency}</Button>)}
-          </div>
+          <Select value={preference.displayCurrency} onValueChange={(value) => void changeCurrency(value as 'PHP' | 'USD')} disabled={currencyPending}>
+            <SelectTrigger className="w-32 bg-background">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="PHP">PHP</SelectItem>
+              <SelectItem value="USD">USD</SelectItem>
+            </SelectContent>
+          </Select>
           <p className="text-xs text-muted-foreground">{preference.usdPerPhp ? `1 PHP = ${preference.usdPerPhp} USD${preference.rateDate ? ` · rate date ${preference.rateDate}` : ''}` : 'No USD rate is cached yet.'}</p>
           <Button disabled={currencyPending} type="button" variant="outline" onClick={() => void refreshRate()}>{currencyPending ? 'Refreshing…' : 'Refresh rate'}</Button>
         </CardContent>

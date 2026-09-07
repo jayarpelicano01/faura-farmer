@@ -6,7 +6,7 @@ import { getProfileDetails, saveProfileDetails } from '@/data/db';
 import { useSession } from '@/auth/session';
 import { LOCK_DELAY_OPTIONS, type LockDelayMinutes } from '@/auth/session';
 import { MobileApiError, MobileConnectionError, connectionMessage, mobileRequest, refreshedSession } from '@/sync/api';
-import { BodyText, Button, Card, Field, InlineNotice, Screen, SectionTitle, Title, useUiStyles } from '@/ui/primitives';
+import { BodyText, Button, Card, ChoiceChip, Field, InlineNotice, Screen, SectionTitle, Title, useUiStyles } from '@/ui/primitives';
 import { fontFamily, useAppTheme } from '@/ui/theme';
 import { useSync } from '@/sync/use-sync';
 import { useCurrency } from '@/ui/currency';
@@ -324,8 +324,9 @@ export default function MoreScreen() {
           <View style={styles.sectionContent}>
             <Text style={ui.listMeta}>Show amounts in PHP or USD. Your saved balances and transaction history stay unchanged.</Text>
             <View style={styles.currencyActions}>
-              <Button disabled={savingCurrency || displayCurrency === 'PHP'} size="compact" variant={displayCurrency === 'PHP' ? 'default' : 'outline'} onPress={() => void changeDisplayCurrency('PHP')}>PHP</Button>
-              <Button disabled={savingCurrency || displayCurrency === 'USD'} size="compact" variant={displayCurrency === 'USD' ? 'default' : 'outline'} onPress={() => void changeDisplayCurrency('USD')}>USD</Button>
+              {(['PHP', 'USD'] as const).map((currency) => (
+                <ChoiceChip key={currency} label={currency} selected={displayCurrency === currency} onPress={() => void changeDisplayCurrency(currency)} />
+              ))}
             </View>
             <Text style={styles.fieldHint}>{usdPerPhp ? `1 PHP = ${usdPerPhp} USD${rateDate ? ` · Rate date ${rateDate}` : ''}${rateRefreshedAt ? ` · refreshed ${new Date(rateRefreshedAt).toLocaleString()}` : ''}` : 'No USD rate is cached on this device.'}</Text>
             {currencyError ? <InlineNotice>{currencyError}</InlineNotice> : null}

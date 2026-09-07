@@ -1,6 +1,8 @@
 export const DISPLAY_CURRENCIES = ['PHP', 'USD'] as const;
+export const ACCOUNT_CURRENCIES = ['PHP', 'USD'] as const;
 
 export type DisplayCurrency = (typeof DISPLAY_CURRENCIES)[number];
+export type AccountCurrency = (typeof ACCOUNT_CURRENCIES)[number];
 
 export type CurrencyPreference = {
   displayCurrency: DisplayCurrency;

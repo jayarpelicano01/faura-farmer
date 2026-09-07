@@ -6,7 +6,7 @@ import {
   TRANSACTION_TYPES,
   FREQUENCIES,
 } from './models';
-import { DISPLAY_CURRENCIES } from './currency';
+import { DISPLAY_CURRENCIES, ACCOUNT_CURRENCIES } from './currency';
 
 const emailField = z.string().trim().email('Enter a valid email address').max(255);
 
@@ -79,7 +79,7 @@ export const accountSchema = z.object({
   label: z.string().trim().min(1, 'Label is required').max(120),
   type: z.enum(ACCOUNT_TYPES),
   institution: z.string().trim().max(120).optional().nullable(),
-  currency: z.string().trim().min(3).max(8).default('PHP'),
+  currency: z.enum(ACCOUNT_CURRENCIES).default('PHP'),
   startingBalance: z
     .coerce
     .number()

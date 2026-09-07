@@ -1,5 +1,6 @@
 import { prisma, Prisma } from '@faura-farmer/database';
 import type {
+  AccountCurrency,
   AccountSpendingRow,
   AccountWithBalance,
   BudgetVarianceRow,
@@ -167,6 +168,7 @@ export async function getAccountsWithBalance(userId: string): Promise<AccountWit
     ...a,
     startingBalance: String(a.startingBalance),
     balance: String(toNumber(a.startingBalance) + (netByAccount.get(a.id) ?? 0)),
+    currency: a.currency as AccountCurrency,
   }));
 }
 

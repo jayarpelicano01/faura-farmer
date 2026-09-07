@@ -5,7 +5,7 @@ import { toast } from 'sonner';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
 import { createAccountSchema, type CreateAccountInput } from '@/lib/validations';
-import { ACCOUNT_TYPES } from '@faura-farmer/types';
+import { ACCOUNT_TYPES, ACCOUNT_CURRENCIES, type AccountCurrency } from '@faura-farmer/types';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
@@ -19,7 +19,7 @@ export interface AccountFormValues {
   id?: string;
   label: string;
   type: (typeof ACCOUNT_TYPES)[number];
-  currency: string;
+  currency: AccountCurrency;
   startingBalance: string | number;
   currentBalance?: string | number;
   color?: string | null;
@@ -166,7 +166,18 @@ export function AccountForm({ open, onOpenChange, onSaved, initial }: AccountFor
                   <FormItem>
                     <FormLabel>Currency</FormLabel>
                     <FormControl>
-                      <Input {...field} />
+                      <Select value={field.value} onValueChange={field.onChange}>
+                        <SelectTrigger className="bg-background">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {ACCOUNT_CURRENCIES.map((currency) => (
+                            <SelectItem key={currency} value={currency}>
+                              {currency}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
                     </FormControl>
                     <FormMessage />
                   </FormItem>
