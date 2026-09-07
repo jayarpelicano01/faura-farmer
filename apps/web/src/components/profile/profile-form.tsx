@@ -19,6 +19,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
 import { Spinner } from '@/components/ui/spinner';
+import { GoogleIcon, FacebookIcon } from '@/components/ui/social-icons';
 import { apiFetch } from '@/lib/api';
 
 type OAuthProvider = 'google' | 'facebook';
@@ -37,15 +38,17 @@ interface ProfileUser {
   rateRefreshedAt: string | null;
 }
 
-const connectionOptions: Array<{ provider: OAuthProvider; label: string; enabled: boolean }> = [
+const connectionOptions: Array<{ provider: OAuthProvider; label: string; icon: React.ComponentType<{ className?: string }>; enabled: boolean }> = [
   {
     provider: 'google',
     label: 'Google',
+    icon: GoogleIcon,
     enabled: process.env.NEXT_PUBLIC_GOOGLE_ENABLED === 'true',
   },
   {
     provider: 'facebook',
     label: 'Facebook',
+    icon: FacebookIcon,
     enabled: process.env.NEXT_PUBLIC_FACEBOOK_ENABLED === 'true',
   },
 ];
@@ -171,6 +174,7 @@ export function ProfileForm({ user }: { user: ProfileUser }) {
       const response = await apiFetch<{ preference: CurrencyPreference }>('/api/profile/currency-rate', { method: 'POST' });
       setPreference((current) => ({ ...response.preference, displayCurrency: current.displayCurrency }));
       toast.success('Exchange rate refreshed');
+      router.refresh();
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Unable to refresh the exchange rate.');
     } finally { setCurrencyPending(false); }
@@ -260,7 +264,10 @@ export function ProfileForm({ user }: { user: ProfileUser }) {
                   className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between"
                 >
                   <div>
-                    <p className="font-medium text-foreground">{option.label}</p>
+                    <p className="flex items-center gap-2 font-medium text-foreground">
+                      <option.icon className="h-4 w-4" />
+                      {option.label}
+                    </p>
                     <p className="text-sm text-muted-foreground">
                       {connected
                         ? 'Connected'

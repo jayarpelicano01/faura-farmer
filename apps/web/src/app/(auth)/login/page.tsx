@@ -19,6 +19,7 @@ import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
 import { cn } from '@/lib/utils';
 import { Spinner } from '@/components/ui/spinner';
+import { GoogleIcon, FacebookIcon } from '@/components/ui/social-icons';
 
 const googleEnabled = process.env.NEXT_PUBLIC_GOOGLE_ENABLED === 'true';
 const facebookEnabled = process.env.NEXT_PUBLIC_FACEBOOK_ENABLED === 'true';
@@ -285,7 +286,7 @@ export default function AuthPage() {
                 disabled={socialProvider !== null}
                 onClick={() => onSocial('google')}
               >
-                {socialProvider === 'google' && <Spinner />}
+                {socialProvider === 'google' ? <Spinner /> : <GoogleIcon className="h-4 w-4" />}
                 {socialProvider === 'google' ? 'Connecting…' : 'Continue with Google'}
               </Button>
             )}
@@ -297,7 +298,7 @@ export default function AuthPage() {
                 disabled={socialProvider !== null}
                 onClick={() => onSocial('facebook')}
               >
-                {socialProvider === 'facebook' && <Spinner />}
+                {socialProvider === 'facebook' ? <Spinner /> : <FacebookIcon className="h-4 w-4" />}
                 {socialProvider === 'facebook' ? 'Connecting…' : 'Continue with Facebook'}
               </Button>
             )}
