@@ -71,6 +71,9 @@ export default function LoginScreen() {
               </Pressable>
             </Link>
           </View>
+          <Pressable accessibilityRole="link" style={styles.backLink} onPress={() => router.replace('/welcome')}>
+            <Text style={styles.backLinkText}>Back to options</Text>
+          </Pressable>
         </Card>
       </View>
     </Screen>
@@ -87,5 +90,7 @@ function useLoginStyles() {
     footerText: { color: theme.mutedForeground, fontFamily: fontFamily.body, fontSize: 14 },
     footerLink: { minHeight: 32, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 4 },
     footerLinkText: { color: theme.primary, fontFamily: fontFamily.body, fontSize: 14, fontWeight: '600' },
+    backLink: { alignItems: 'center', justifyContent: 'center', marginTop: 20, minHeight: 44 },
+    backLinkText: { color: theme.mutedForeground, fontFamily: fontFamily.body, fontSize: 14 },
   }), [theme]);
 }

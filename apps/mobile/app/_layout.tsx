@@ -46,7 +46,7 @@ function Gate() {
   if (status === 'loading') return <View style={styles.loading}><ActivityIndicator color={theme.primary} /></View>;
   if (status === 'covered') return <PrivacyCover />;
   if (status === 'locked') return <LockScreen />;
-  if (status === 'signedOut' && pathname !== '/login' && pathname !== '/register') return <Redirect href="/login" />;
+  if (status === 'signedOut' && pathname !== '/welcome' && pathname !== '/login' && pathname !== '/register') return <Redirect href="/welcome" />;
   if (status === 'signedOut') return <Slot />;
   return <AppShell><Slot /></AppShell>;
 }
