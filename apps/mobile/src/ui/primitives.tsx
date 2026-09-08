@@ -214,9 +214,9 @@ export function ChoiceChip({ label, selected, onPress }: { label: string; select
   );
 }
 
-type DropdownOption<T extends string> = { label: string; value: T };
+type DropdownOption = { label: string; value: string };
 
-export function DropdownSelect<T extends string>({ label, options, value, onValueChange, disabled = false }: { label: string; options: DropdownOption<T>[]; value: T; onValueChange: (value: T) => void; disabled?: boolean }) {
+export function DropdownSelect({ label, options, value, onValueChange, disabled = false }: { label: string; options: DropdownOption[]; value: string; onValueChange: (value: string) => void; disabled?: boolean }) {
   const styles = usePrimitiveStyles();
   const { theme } = useAppTheme();
   const [open, setOpen] = useState(false);

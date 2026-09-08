@@ -381,7 +381,7 @@ export default function MoreScreen() {
               label="Currency"
               options={[{ label: 'PHP — Philippine Peso', value: 'PHP' }, { label: 'USD — US Dollar', value: 'USD' }]}
               value={displayCurrency}
-              onValueChange={(next) => void changeDisplayCurrency(next)}
+              onValueChange={(next) => void changeDisplayCurrency(next as 'PHP' | 'USD')}
               disabled={savingCurrency}
             />
             <Text style={styles.fieldHint}>{usdPerPhp ? `1 PHP = ${usdPerPhp} USD${rateDate ? ` · Rate date ${rateDate}` : ''}${rateRefreshedAt ? ` · refreshed ${new Date(rateRefreshedAt).toLocaleString()}` : ''}` : 'No USD rate is cached on this device.'}</Text>
