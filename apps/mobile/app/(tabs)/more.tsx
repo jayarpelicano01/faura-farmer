@@ -6,7 +6,7 @@ import { useWorkspace } from '@/data/workspace-provider';
 import { useSession } from '@/auth/session';
 import { LOCK_DELAY_OPTIONS, type LockDelayMinutes } from '@/auth/session';
 import { MobileApiError, MobileConnectionError, connectionMessage, mobileRequest, refreshedSession } from '@/sync/api';
-import { BodyText, Button, Card, ChoiceChip, Field, InlineNotice, Screen, SectionTitle, Title, useUiStyles } from '@/ui/primitives';
+import { BodyText, Button, Card, DropdownSelect, Field, InlineNotice, Screen, SectionTitle, Title, useUiStyles } from '@/ui/primitives';
 import { fontFamily, useAppTheme } from '@/ui/theme';
 import { useSync } from '@/sync/use-sync';
 import { useCurrency } from '@/ui/currency';
@@ -54,7 +54,7 @@ export default function MoreScreen() {
   const ui = useUiStyles();
   const { mode, toggleMode } = useAppTheme();
   const { session, update, signOutLocal, lockDelay, setLockDelay } = useSession();
-  const { db, activeWorkspace } = useWorkspace();
+  const { db, activeWorkspace, resetToOnline } = useWorkspace();
   const { lastSyncFailed, syncNow } = useSync();
   const { displayCurrency, usdPerPhp, rateDate, rateRefreshedAt, setPreference } = useCurrency();
   const router = useRouter();
@@ -299,7 +299,7 @@ export default function MoreScreen() {
             <SectionTitle>Offline mode</SectionTitle>
             <View style={styles.sectionContent}>
               <Text style={ui.listMeta}>Your data stays on this device and never syncs.</Text>
-              <Button size="compact" variant="outline" onPress={() => { void signOutLocal(); router.replace('/login'); }}>Switch to online</Button>
+              <Button size="compact" variant="outline" onPress={async () => { await signOutLocal(); await resetToOnline(); router.replace('/login'); }}>Switch to online</Button>
             </View>
           </Card>
         ) : null}
@@ -377,11 +377,13 @@ export default function MoreScreen() {
           <SectionTitle>Display currency</SectionTitle>
           <View style={styles.sectionContent}>
             <Text style={ui.listMeta}>Show amounts in PHP or USD. Your saved balances and transaction history stay unchanged.</Text>
-            <View style={styles.currencyActions}>
-              {(['PHP', 'USD'] as const).map((currency) => (
-                <ChoiceChip key={currency} label={currency} selected={displayCurrency === currency} onPress={() => void changeDisplayCurrency(currency)} />
-              ))}
-            </View>
+            <DropdownSelect
+              label="Currency"
+              options={[{ label: 'PHP — Philippine Peso', value: 'PHP' }, { label: 'USD — US Dollar', value: 'USD' }]}
+              value={displayCurrency}
+              onValueChange={(next) => void changeDisplayCurrency(next)}
+              disabled={savingCurrency}
+            />
             <Text style={styles.fieldHint}>{usdPerPhp ? `1 PHP = ${usdPerPhp} USD${rateDate ? ` · Rate date ${rateDate}` : ''}${rateRefreshedAt ? ` · refreshed ${new Date(rateRefreshedAt).toLocaleString()}` : ''}` : 'No USD rate is cached on this device.'}</Text>
             {currencyError ? <InlineNotice>{currencyError}</InlineNotice> : null}
             {currencySuccess ? <InlineNotice tone="info">{currencySuccess}</InlineNotice> : null}

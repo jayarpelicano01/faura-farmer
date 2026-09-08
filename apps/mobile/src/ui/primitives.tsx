@@ -1,5 +1,5 @@
-import { createContext, useContext, useEffect, useMemo, useRef, type PropsWithChildren } from 'react';
-import { ActivityIndicator, Animated, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View, type StyleProp, type TextInputProps, type ViewStyle } from 'react-native';
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type PropsWithChildren } from 'react';
+import { ActivityIndicator, Animated, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View, type StyleProp, type TextInputProps, type ViewStyle } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { fontFamily, radius, type AppTheme, useAppTheme } from './theme';
 
@@ -214,6 +214,64 @@ export function ChoiceChip({ label, selected, onPress }: { label: string; select
   );
 }
 
+type DropdownOption<T extends string> = { label: string; value: T };
+
+export function DropdownSelect<T extends string>({ label, options, value, onValueChange, disabled = false }: { label: string; options: DropdownOption<T>[]; value: T; onValueChange: (value: T) => void; disabled?: boolean }) {
+  const styles = usePrimitiveStyles();
+  const { theme } = useAppTheme();
+  const [open, setOpen] = useState(false);
+  const selected = options.find((opt) => opt.value === value);
+
+  return (
+    <>
+      <Pressable
+        accessibilityLabel={label}
+        accessibilityRole="button"
+        disabled={disabled}
+        onPress={() => setOpen(true)}
+      >
+        {({ pressed }) => (
+          <View style={[styles.dropdownTrigger, pressed ? styles.dropdownTriggerPressed : undefined, disabled ? styles.dropdownTriggerDisabled : undefined]}>
+            <Text style={[styles.dropdownLabel]}>{label}</Text>
+            <Text style={[styles.dropdownValue]}>{selected?.label ?? value}</Text>
+            <Text style={styles.dropdownChevron}>▾</Text>
+          </View>
+        )}
+      </Pressable>
+      <Modal visible={open} transparent animationType="fade" onRequestClose={() => setOpen(false)}>
+        <Pressable style={styles.dropdownOverlay} onPress={() => setOpen(false)}>
+          <Pressable style={styles.dropdownSheet} onPress={(e) => e.stopPropagation()}>
+            <Text style={styles.dropdownTitle}>{label}</Text>
+            <ScrollView style={styles.dropdownScroll}>
+              {options.map((opt) => {
+                const isSelected = opt.value === value;
+                return (
+                  <Pressable
+                    key={opt.value}
+                    accessibilityRole="radio"
+                    accessibilityState={{ selected: isSelected }}
+                    onPress={() => { onValueChange(opt.value); setOpen(false); }}
+                  >
+                    {({ pressed }) => (
+                      <View style={[styles.dropdownItem, pressed ? styles.dropdownItemPressed : undefined, isSelected ? styles.dropdownItemSelected : undefined]}>
+                        <Text style={[styles.dropdownItemText, isSelected ? styles.dropdownItemTextSelected : undefined]}>{opt.label}</Text>
+                        {isSelected ? <Text style={styles.dropdownCheck}>✓</Text> : null}
+                      </View>
+                    )}
+                  </Pressable>
+                );
+              })}
+            </ScrollView>
+            <Pressable style={styles.dropdownCancel} onPress={() => setOpen(false)}>
+              <Text style={styles.dropdownCancelText}>Cancel</Text>
+            </Pressable>
+          </Pressable>
+        </Pressable>
+      </Modal>
+    </>
+  );
+}
+
 export function Field({ label, editable = true, style, ...props }: TextInputProps & { label: string }) {
   const styles = usePrimitiveStyles();
   const { theme } = useAppTheme();
@@ -315,6 +373,24 @@ function createStyles(theme: AppTheme) {
     chipPressed: { opacity: 0.86, transform: [{ scale: 0.985 }] },
     chipText: { color: theme.foreground, fontFamily: fontFamily.body, fontSize: 14, fontWeight: '600' },
     chipTextSelected: { color: theme.primarySolidForeground },
+    dropdownTrigger: { minHeight: 46, flexDirection: 'row', alignItems: 'center', borderWidth: 1, borderColor: theme.input, borderRadius: radius.control, backgroundColor: theme.background, paddingHorizontal: 12, paddingVertical: 10 },
+    dropdownTriggerPressed: { opacity: 0.86 },
+    dropdownTriggerDisabled: { opacity: 0.5 },
+    dropdownLabel: { color: theme.mutedForeground, fontFamily: fontFamily.body, fontSize: 12, marginRight: 8 },
+    dropdownValue: { flex: 1, color: theme.foreground, fontFamily: fontFamily.body, fontSize: 14 },
+    dropdownChevron: { color: theme.mutedForeground, fontFamily: fontFamily.body, fontSize: 14 },
+    dropdownOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'center', alignItems: 'center' },
+    dropdownSheet: { width: '80%', maxWidth: 320, maxHeight: '60%', backgroundColor: theme.card, borderRadius: radius.card, overflow: 'hidden', shadowColor: theme.shadow, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.25, shadowRadius: 12, elevation: 8 },
+    dropdownTitle: { paddingHorizontal: 16, paddingTop: 16, paddingBottom: 8, color: theme.foreground, fontFamily: fontFamily.display, fontSize: 16, fontWeight: '600' },
+    dropdownScroll: { maxHeight: 300 },
+    dropdownItem: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 14, minHeight: 48 },
+    dropdownItemPressed: { backgroundColor: theme.accent },
+    dropdownItemSelected: { backgroundColor: theme.accent },
+    dropdownItemText: { color: theme.foreground, fontFamily: fontFamily.body, fontSize: 15 },
+    dropdownItemTextSelected: { color: theme.primary, fontWeight: '600' },
+    dropdownCheck: { color: theme.primary, fontFamily: fontFamily.body, fontSize: 16, fontWeight: '600' },
+    dropdownCancel: { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: theme.border, paddingVertical: 14, alignItems: 'center' },
+    dropdownCancelText: { color: theme.primary, fontFamily: fontFamily.body, fontSize: 15, fontWeight: '500' },
     badge: { alignSelf: 'flex-start', borderCurve: 'continuous', borderRadius: 999, borderColor: 'transparent', borderWidth: 1, paddingHorizontal: 10, paddingVertical: 2 },
     badgeDefault: { backgroundColor: theme.primary },
     badgeSecondary: { backgroundColor: theme.secondary },

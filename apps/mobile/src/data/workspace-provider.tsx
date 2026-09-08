@@ -17,6 +17,7 @@ type WorkspaceContextValue = {
   onlineDb: DatabaseHandle;
   localDb: DatabaseHandle;
   enterOfflineMode: () => Promise<void>;
+  resetToOnline: () => Promise<void>;
   createLocalProfile: () => Promise<void>;
   deleteLocalProfile: () => Promise<void>;
   localProfileExists: boolean;
@@ -71,6 +72,11 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
     await setActiveWorkspaceId('local');
   }, []);
 
+  const resetToOnline = useCallback(async () => {
+    setActiveWorkspace('online');
+    await setActiveWorkspaceId('online');
+  }, []);
+
   const createLocalProfile = useCallback(async () => {
     const existing = await localDb.getProfileDetails();
     if (existing) return;
@@ -103,10 +109,11 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
     onlineDb,
     localDb,
     enterOfflineMode,
+    resetToOnline,
     createLocalProfile,
     deleteLocalProfile,
     localProfileExists,
-  }), [activeWorkspace, db, enterOfflineMode, createLocalProfile, deleteLocalProfile, localProfileExists]);
+  }), [activeWorkspace, db, enterOfflineMode, resetToOnline, createLocalProfile, deleteLocalProfile, localProfileExists]);
 
   if (!ready) return null;
 
