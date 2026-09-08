@@ -46,7 +46,7 @@ export default function ReportsScreen() {
   const { theme } = useAppTheme();
   const styles = useReportStyles();
   const ui = useUiStyles();
-  const { db } = useWorkspace();
+  const { db, activeWorkspace } = useWorkspace();
   const { syncNow, syncStatus } = useSync();
   const {
     displayCurrency,
@@ -132,7 +132,9 @@ export default function ReportsScreen() {
     <Screen scrollable>
       <View style={styles.pageHeader}>
         <View style={styles.headingCopy}><Title>Reports</Title><Text style={styles.subtitle}>Your balances and spending, calculated on this device.</Text></View>
-        <Button accessibilityLabel="Sync report data" onPress={() => void syncNow(true)} size="compact" variant="outline">Sync</Button>
+        {activeWorkspace === 'online' ? (
+          <Button accessibilityLabel="Sync report data" onPress={() => void syncNow(true)} size="compact" variant="outline">Sync</Button>
+        ) : null}
       </View>
       <Text style={styles.syncCopy}>{lastSyncedCopy(lastSyncedAt)}</Text>
 

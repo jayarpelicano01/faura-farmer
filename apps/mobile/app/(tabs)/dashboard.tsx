@@ -20,7 +20,7 @@ export default function DashboardScreen() {
   const { theme } = useAppTheme();
   const styles = useDashboardStyles();
   const ui = useUiStyles();
-  const { db } = useWorkspace();
+  const { db, activeWorkspace } = useWorkspace();
   const [accounts, setAccounts] = useState<MobileAccount[]>([]);
   const [transactions, setTransactions] = useState<MobileTransaction[]>([]);
   const loadVersion = useRef(0);
@@ -76,6 +76,7 @@ export default function DashboardScreen() {
           <Title>Dashboard</Title>
           <Text style={styles.subtitle}>Here’s your money at a glance.</Text>
         </View>
+        {activeWorkspace === 'online' ? (
         <View style={styles.syncControl}>
           <Button
             accessibilityLabel="Sync your data"
@@ -85,6 +86,7 @@ export default function DashboardScreen() {
           >Sync</Button>
           {lastSyncFailed ? <View pointerEvents="none" style={styles.syncRetryDot} /> : null}
         </View>
+        ) : null}
       </View>
 
       <View style={styles.metrics}>
