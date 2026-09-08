@@ -15,7 +15,7 @@ export default function LoginScreen() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const { authNotice, establish } = useSession();
-  const { createLocalProfile, switchWorkspace, localProfileExists } = useWorkspace();
+  const { enterOfflineMode } = useWorkspace();
   const router = useRouter();
   const styles = useLoginStyles();
 
@@ -34,8 +34,7 @@ export default function LoginScreen() {
 
   const goOffline = async () => {
     try {
-      if (!localProfileExists) await createLocalProfile();
-      await switchWorkspace('local');
+      await enterOfflineMode();
       router.replace('/dashboard');
     } catch { /* ignore */ }
   };

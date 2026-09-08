@@ -17,7 +17,7 @@ export default function RegisterScreen() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const { establish } = useSession();
-  const { createLocalProfile, switchWorkspace, localProfileExists } = useWorkspace();
+  const { enterOfflineMode } = useWorkspace();
   const router = useRouter();
   const styles = useRegisterStyles();
 
@@ -36,8 +36,7 @@ export default function RegisterScreen() {
 
   const goOffline = async () => {
     try {
-      if (!localProfileExists) await createLocalProfile();
-      await switchWorkspace('local');
+      await enterOfflineMode();
       router.replace('/dashboard');
     } catch { /* ignore */ }
   };

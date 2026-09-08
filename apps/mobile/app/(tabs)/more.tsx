@@ -54,7 +54,7 @@ export default function MoreScreen() {
   const ui = useUiStyles();
   const { mode, toggleMode } = useAppTheme();
   const { session, update, signOutLocal, lockDelay, setLockDelay } = useSession();
-  const { db, activeWorkspace, switchWorkspace, localProfileExists, createLocalProfile, deleteLocalProfile } = useWorkspace();
+  const { db, activeWorkspace } = useWorkspace();
   const { lastSyncFailed, syncNow } = useSync();
   const { displayCurrency, usdPerPhp, rateDate, rateRefreshedAt, setPreference } = useCurrency();
   const router = useRouter();
@@ -91,6 +91,23 @@ export default function MoreScreen() {
   }, [db, setPreference]);
 
   const loadProfile = useCallback(async () => {
+    if (activeWorkspace === 'local') {
+      setProfileLoading(true);
+      setProfileError(null);
+      try {
+        const cached = await db.getProfileDetails();
+        if (cached) {
+          setProfile(cached);
+          setDraft(draftFor(cached));
+        }
+      } catch {
+        // Offline mode - profile loading failed
+      } finally {
+        setProfileLoading(false);
+      }
+      return;
+    }
+
     if (!session) return;
     setProfileLoading(true);
     setProfileError(null);
@@ -115,7 +132,7 @@ export default function MoreScreen() {
     } finally {
       setProfileLoading(false);
     }
-  }, [activeSession, saveRemoteProfile, session, db]);
+  }, [activeSession, activeWorkspace, db, saveRemoteProfile, session]);
 
   useEffect(() => { void loadProfile(); }, [loadProfile]);
 
@@ -139,6 +156,20 @@ export default function MoreScreen() {
     setSavingProfile(true);
     setProfileError(null);
     try {
+      if (activeWorkspace === 'local') {
+        const next = { ...displayedProfile, name: draft.name.trim() || null, username: draft.username.trim() || null };
+        await db.saveProfileDetails(next);
+        await setPreference({
+          displayCurrency: next.displayCurrency,
+          usdPerPhp: next.usdPerPhp,
+          rateDate: next.rateDate,
+          rateRefreshedAt: next.rateRefreshedAt,
+        });
+        setProfile(next);
+        setDraft(draftFor(next));
+        setEditingProfile(false);
+        return;
+      }
       const active = await activeSession();
       const response = await mobileRequest<{ user: MobileProfile }>(
         '/api/mobile/v1/profile',
@@ -184,13 +215,15 @@ export default function MoreScreen() {
 
   const logout = async () => {
     try {
-      const active = await activeSession();
-      await mobileRequest('/api/mobile/v1/auth/logout', { method: 'POST', body: JSON.stringify({ refreshToken: active.refreshToken }) }, active.accessToken);
+      if (session) {
+        const active = await activeSession();
+        await mobileRequest('/api/mobile/v1/auth/logout', { method: 'POST', body: JSON.stringify({ refreshToken: active.refreshToken }) }, active.accessToken);
+      }
     } catch {
       // Local logout is still required to protect cached data when the server is unavailable.
     } finally {
       await signOutLocal();
-      router.replace('/login');
+      router.replace('/welcome');
     }
   };
 
@@ -213,6 +246,16 @@ export default function MoreScreen() {
     setCurrencyError(null);
     setCurrencySuccess(null);
     try {
+      if (activeWorkspace === 'local') {
+        const updated = { displayCurrency: next } as CurrencyPreference;
+        await setPreference(updated);
+        if (profile) {
+          const nextProfile = { ...profile, ...updated };
+          await db.saveProfileDetails(nextProfile);
+          setProfile(nextProfile);
+        }
+        return;
+      }
       const active = await activeSession();
       const response = await mobileRequest<{ user: MobileProfile }>('/api/mobile/v1/profile', { method: 'PATCH', body: JSON.stringify({ displayCurrency: next }) }, active.accessToken);
       await applyPreference(response.user, response.user);
@@ -251,25 +294,15 @@ export default function MoreScreen() {
 
         {profileError ? <InlineNotice>{profileError}</InlineNotice> : null}
 
-        <Card>
-          <SectionTitle>Workspace</SectionTitle>
-          <View style={styles.sectionContent}>
-            <Text style={ui.listMeta}>Switch between your online account and local-only data.</Text>
-            <View style={styles.workspaceOptions}>
-              <ChoiceChip label="Online" selected={activeWorkspace === 'online'} onPress={() => void switchWorkspace('online')} />
-              <ChoiceChip label="Local only" selected={activeWorkspace === 'local'} onPress={() => void switchWorkspace('local')} />
+        {activeWorkspace === 'local' ? (
+          <Card>
+            <SectionTitle>Offline mode</SectionTitle>
+            <View style={styles.sectionContent}>
+              <Text style={ui.listMeta}>Your data stays on this device and never syncs.</Text>
+              <Button size="compact" variant="outline" onPress={() => { void signOutLocal(); router.replace('/login'); }}>Switch to online</Button>
             </View>
-            {activeWorkspace === 'local' ? (
-              <Text style={styles.fieldHint}>Local data stays on this device and never syncs.</Text>
-            ) : null}
-            {activeWorkspace === 'online' && localProfileExists ? (
-              <Button size="compact" variant="outline" onPress={() => void switchWorkspace('local')}>Switch to local</Button>
-            ) : null}
-            {activeWorkspace === 'online' && !localProfileExists ? (
-              <Button size="compact" variant="outline" onPress={() => void createLocalProfile()}>Create local workspace</Button>
-            ) : null}
-          </View>
-        </Card>
+          </Card>
+        ) : null}
 
         <Card>
           <SectionTitle>Personal information</SectionTitle>
@@ -308,7 +341,7 @@ export default function MoreScreen() {
           ) : null}
         </Card>
 
-        {displayedProfile?.hasPassword ? (
+        {displayedProfile?.hasPassword && activeWorkspace === 'online' ? (
           <Card>
             <SectionTitle>Change password</SectionTitle>
             {!editingPassword ? (
@@ -352,7 +385,9 @@ export default function MoreScreen() {
             <Text style={styles.fieldHint}>{usdPerPhp ? `1 PHP = ${usdPerPhp} USD${rateDate ? ` · Rate date ${rateDate}` : ''}${rateRefreshedAt ? ` · refreshed ${new Date(rateRefreshedAt).toLocaleString()}` : ''}` : 'No USD rate is cached on this device.'}</Text>
             {currencyError ? <InlineNotice>{currencyError}</InlineNotice> : null}
             {currencySuccess ? <InlineNotice tone="info">{currencySuccess}</InlineNotice> : null}
-            <Button disabled={savingCurrency} size="compact" variant="outline" onPress={() => void refreshRate}>{savingCurrency ? 'Refreshing rate…' : 'Refresh rate'}</Button>
+            {activeWorkspace === 'online' ? (
+              <Button disabled={savingCurrency} size="compact" variant="outline" onPress={() => void refreshRate}>{savingCurrency ? 'Refreshing rate…' : 'Refresh rate'}</Button>
+            ) : null}
           </View>
         </Card>
 
@@ -376,19 +411,21 @@ export default function MoreScreen() {
           </View>
         </Card>
 
+        {activeWorkspace === 'online' ? (
         <Card>
           <SectionTitle>Data and sync</SectionTitle>
           <View style={styles.sectionContent}>
-            <Text style={ui.listMeta}>Your app data stays in this device’s protected local sandbox and syncs when online.</Text>
+            <Text style={ui.listMeta}>Your app data stays in this device's protected local sandbox and syncs when online.</Text>
             <View style={styles.syncControl}>
               <Button size="full" onPress={() => void syncNow(true)}>Sync now</Button>
               {lastSyncFailed ? <View pointerEvents="none" style={styles.syncRetryDot} /> : null}
             </View>
           </View>
         </Card>
+        ) : null}
 
         <View style={styles.signOutSection}>
-          <Text style={styles.signOutHint}>Signing out removes access to this device until you sign in again.</Text>
+          <Text style={styles.signOutHint}>{activeWorkspace === 'local' ? 'This will clear all offline data from this device.' : 'Signing out removes access to this device until you sign in again.'}</Text>
           <Button size="full" variant="destructive" onPress={() => void logout()}>Log out of this device</Button>
         </View>
       </View>

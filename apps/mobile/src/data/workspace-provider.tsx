@@ -8,7 +8,6 @@ import {
   type WorkspaceId,
   getActiveWorkspaceId,
   setActiveWorkspaceId,
-  authenticateForLocalWorkspace,
 } from '@/data/workspace';
 import { useSession } from '@/auth/session';
 
@@ -17,7 +16,7 @@ type WorkspaceContextValue = {
   db: DatabaseHandle;
   onlineDb: DatabaseHandle;
   localDb: DatabaseHandle;
-  switchWorkspace: (id: WorkspaceId) => Promise<void>;
+  enterOfflineMode: () => Promise<void>;
   createLocalProfile: () => Promise<void>;
   deleteLocalProfile: () => Promise<void>;
   localProfileExists: boolean;
@@ -52,15 +51,24 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
 
   const db = activeWorkspace === 'local' ? localDb : onlineDb;
 
-  const switchWorkspace = useCallback(async (id: WorkspaceId) => {
-    if (id === 'local') {
-      const localProfile = await localDb.getProfileDetails();
-      if (!localProfile) return;
-      const authed = await authenticateForLocalWorkspace();
-      if (!authed) return;
+  const enterOfflineMode = useCallback(async () => {
+    const existing = await localDb.getProfileDetails();
+    if (!existing) {
+      await localDb.saveProfileDetails({
+        id: LOCAL_PROFILE_ID,
+        email: '',
+        name: 'Local',
+        username: null,
+        hasPassword: false,
+        displayCurrency: 'PHP',
+        usdPerPhp: null,
+        rateDate: null,
+        rateRefreshedAt: null,
+      });
+      setLocalProfileExists(true);
     }
-    setActiveWorkspace(id);
-    await setActiveWorkspaceId(id);
+    setActiveWorkspace('local');
+    await setActiveWorkspaceId('local');
   }, []);
 
   const createLocalProfile = useCallback(async () => {
@@ -94,11 +102,11 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
     db,
     onlineDb,
     localDb,
-    switchWorkspace,
+    enterOfflineMode,
     createLocalProfile,
     deleteLocalProfile,
     localProfileExists,
-  }), [activeWorkspace, db, switchWorkspace, createLocalProfile, deleteLocalProfile, localProfileExists]);
+  }), [activeWorkspace, db, enterOfflineMode, createLocalProfile, deleteLocalProfile, localProfileExists]);
 
   if (!ready) return null;
 

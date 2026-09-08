@@ -9,7 +9,7 @@ import { fontFamily, useAppTheme } from '@/ui/theme';
 export default function WelcomeScreen() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const { createLocalProfile, switchWorkspace, localProfileExists } = useWorkspace();
+  const { enterOfflineMode } = useWorkspace();
   const router = useRouter();
   const styles = useWelcomeStyles();
 
@@ -17,8 +17,7 @@ export default function WelcomeScreen() {
     setLoading(true);
     setError(null);
     try {
-      if (!localProfileExists) await createLocalProfile();
-      await switchWorkspace('local');
+      await enterOfflineMode();
       router.replace('/dashboard');
     } catch {
       setError('Offline mode is not available on this device.');

@@ -4,7 +4,7 @@ import { useFonts } from 'expo-font';
 import { Redirect, Slot, usePathname } from 'expo-router';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { SessionProvider, useSession } from '@/auth/session';
-import { WorkspaceProvider } from '@/data/workspace-provider';
+import { WorkspaceProvider, useWorkspace } from '@/data/workspace-provider';
 import { SyncProvider } from '@/sync/use-sync';
 import { BrandLockup } from '@/ui/brand';
 import { AppShell } from '@/ui/app-shell';
@@ -40,12 +40,14 @@ function LockScreen() {
 
 function Gate() {
   const { status } = useSession();
+  const { activeWorkspace } = useWorkspace();
   const pathname = usePathname();
   const { theme } = useAppTheme();
   const styles = useRootStyles();
   if (status === 'loading') return <View style={styles.loading}><ActivityIndicator color={theme.primary} /></View>;
   if (status === 'covered') return <PrivacyCover />;
   if (status === 'locked') return <LockScreen />;
+  if (activeWorkspace === 'local') return <AppShell><Slot /></AppShell>;
   if (status === 'signedOut' && pathname !== '/welcome' && pathname !== '/login' && pathname !== '/register') return <Redirect href="/welcome" />;
   if (status === 'signedOut') return <Slot />;
   return <AppShell><Slot /></AppShell>;
