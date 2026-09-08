@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Link, useFocusEffect } from 'expo-router';
 import type { MobileAccount, MobileTransaction } from '@faura-farmer/types';
-import { listRecords } from '@/data/db';
+import { useWorkspace } from '@/data/workspace-provider';
 import { localMonthKey, transactionDateKey } from '@/data/date';
 import { Button, Card, Empty, Screen, SectionTitle, Title, useUiStyles } from '@/ui/primitives';
 import { fontFamily, useAppTheme } from '@/ui/theme';
@@ -20,6 +20,7 @@ export default function DashboardScreen() {
   const { theme } = useAppTheme();
   const styles = useDashboardStyles();
   const ui = useUiStyles();
+  const { db } = useWorkspace();
   const [accounts, setAccounts] = useState<MobileAccount[]>([]);
   const [transactions, setTransactions] = useState<MobileTransaction[]>([]);
   const loadVersion = useRef(0);
@@ -28,13 +29,13 @@ export default function DashboardScreen() {
   const load = useCallback(async () => {
     const requestVersion = ++loadVersion.current;
     const [nextAccounts, nextTransactions] = await Promise.all([
-      listRecords('account'),
-      listRecords('transaction'),
+      db.listRecords('account'),
+      db.listRecords('transaction'),
     ]);
     if (requestVersion !== loadVersion.current) return;
     setAccounts(nextAccounts);
     setTransactions(nextTransactions);
-  }, []);
+  }, [db]);
 
   useFocusEffect(useCallback(() => { void load(); }, [load]));
   useEffect(() => {

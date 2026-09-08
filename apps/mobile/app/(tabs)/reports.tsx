@@ -4,7 +4,7 @@ import { BarChart, LineChart } from 'react-native-gifted-charts';
 import { useFocusEffect } from 'expo-router';
 import type { MobileAccount, MobileBudget, MobileCategory, MobileTransaction } from '@faura-farmer/types';
 import { buildBalanceTimeline, buildBudgetVariance, buildCategoryComparison, buildCategorySpending, categorySpendingRange, defaultCategoryAnchor, type BalancePoint, type BalanceTimelinePeriod, type CategorySpendingPeriod } from '@/data/reports';
-import { getLastSyncedAt, listRecords } from '@/data/db';
+import { useWorkspace } from '@/data/workspace-provider';
 import { Button, Card, ChoiceChip, Empty, Field, Screen, SectionTitle, Spinner, Title, useUiStyles } from '@/ui/primitives';
 import { useSync } from '@/sync/use-sync';
 import { fontFamily, useAppTheme } from '@/ui/theme';
@@ -46,6 +46,7 @@ export default function ReportsScreen() {
   const { theme } = useAppTheme();
   const styles = useReportStyles();
   const ui = useUiStyles();
+  const { db } = useWorkspace();
   const { syncNow, syncStatus } = useSync();
   const {
     displayCurrency,
@@ -72,11 +73,11 @@ export default function ReportsScreen() {
     setLoading(true);
     try {
       const [nextAccounts, nextCategories, nextBudgets, nextTransactions, nextLastSyncedAt] = await Promise.all([
-        listRecords('account'),
-        listRecords('category'),
-        listRecords('budget'),
-        listRecords('transaction'),
-        getLastSyncedAt(),
+        db.listRecords('account'),
+        db.listRecords('category'),
+        db.listRecords('budget'),
+        db.listRecords('transaction'),
+        db.getLastSyncedAt(),
       ]);
       setAccounts(nextAccounts);
       setCategories(nextCategories);
@@ -86,7 +87,7 @@ export default function ReportsScreen() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [db]);
 
   useFocusEffect(useCallback(() => { void load(); }, [load]));
   useEffect(() => { if (syncStatus === 'success') void load(); }, [load, syncStatus]);

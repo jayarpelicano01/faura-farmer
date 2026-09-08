@@ -3,7 +3,7 @@ import { Alert, Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 import * as Crypto from 'expo-crypto';
 import { useLocalSearchParams } from 'expo-router';
 import type { BudgetBucket, MobileAccount, MobileBudget, MobileCategory, MobileMonthlyBudget, MobileTransaction } from '@faura-farmer/types';
-import { listRecords, queueDelete, queueUpsert } from '@/data/db';
+import { useWorkspace } from '@/data/workspace-provider';
 import { Button, Card, ChoiceChip, Empty, Field, Screen, Title, useUiStyles } from '@/ui/primitives';
 import { useSync } from '@/sync/use-sync';
 import { fontFamily, useAppTheme } from '@/ui/theme';
@@ -74,6 +74,7 @@ export default function BudgetsScreen() {
   const { theme } = useAppTheme();
   const styles = useBudgetStyles();
   const ui = useUiStyles();
+  const { db } = useWorkspace();
   const { syncNow } = useSync();
   const { convert, displayCurrency, formatMoney: formatDisplayMoney } = useCurrency();
   const [budgets, setBudgets] = useState<MobileBudget[]>([]);
@@ -89,11 +90,11 @@ export default function BudgetsScreen() {
 
   const load = useCallback(async () => {
     const [nextBudgets, nextMonthlyBudgets, nextCategories, nextTransactions, nextAccounts] = await Promise.all([
-      listRecords('budget'),
-      listRecords('monthly_budget'),
-      listRecords('category'),
-      listRecords('transaction'),
-      listRecords('account'),
+      db.listRecords('budget'),
+      db.listRecords('monthly_budget'),
+      db.listRecords('category'),
+      db.listRecords('transaction'),
+      db.listRecords('account'),
     ]);
     setBudgets(nextBudgets);
     setMonthlyBudgets(nextMonthlyBudgets);
@@ -101,7 +102,7 @@ export default function BudgetsScreen() {
     setTransactions(nextTransactions);
     setAccounts(nextAccounts);
     setLoaded(true);
-  }, []);
+  }, [db]);
 
   useEffect(() => { void load(); }, [load]);
 
@@ -158,7 +159,7 @@ export default function BudgetsScreen() {
       Alert.alert('Budget conflict', `A budget already exists for ${conflictName} or a related category.`);
       return;
     }
-    await queueUpsert('budget', {
+    await db.queueUpsert('budget', {
       id: editor.id ?? Crypto.randomUUID(),
       categoryId: editor.categoryId,
       monthlyLimit: convert(editor.monthlyLimit, displayCurrency, 'PHP'),
@@ -174,7 +175,7 @@ export default function BudgetsScreen() {
       Alert.alert('Check this budget', 'Enter a positive monthly budget amount.');
       return;
     }
-    await queueUpsert('monthly_budget', {
+    await db.queueUpsert('monthly_budget', {
       id: monthlyBudget?.id ?? Crypto.randomUUID(),
       amount: convert(monthlyAmount, displayCurrency, 'PHP'),
       updatedAt: new Date().toISOString(),
@@ -186,7 +187,7 @@ export default function BudgetsScreen() {
 
   const remove = (budget: MobileBudget) => Alert.alert('Delete budget?', 'This will synchronize as a deletion when online.', [
     { text: 'Cancel', style: 'cancel' },
-    { text: 'Delete', style: 'destructive', onPress: () => { void queueDelete('budget', budget.id).then(load).then(() => syncNow()); } },
+    { text: 'Delete', style: 'destructive', onPress: () => { void db.queueDelete('budget', budget.id).then(load).then(() => syncNow()); } },
   ]);
 
   return (

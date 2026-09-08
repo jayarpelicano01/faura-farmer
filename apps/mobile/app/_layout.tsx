@@ -4,6 +4,7 @@ import { useFonts } from 'expo-font';
 import { Redirect, Slot, usePathname } from 'expo-router';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { SessionProvider, useSession } from '@/auth/session';
+import { WorkspaceProvider } from '@/data/workspace-provider';
 import { SyncProvider } from '@/sync/use-sync';
 import { BrandLockup } from '@/ui/brand';
 import { AppShell } from '@/ui/app-shell';
@@ -59,7 +60,7 @@ function RootContent({ fontsLoaded, fontError }: { fontsLoaded: boolean; fontErr
   return (
     <SafeAreaProvider>
       <StatusBar barStyle={mode === 'dark' ? 'light-content' : 'dark-content'} backgroundColor={theme.background} />
-      <SessionProvider><CurrencyProvider><SyncProvider><Gate /></SyncProvider></CurrencyProvider></SessionProvider>
+      <SessionProvider><WorkspaceProvider><CurrencyProvider><SyncProvider><Gate /></SyncProvider></CurrencyProvider></WorkspaceProvider></SessionProvider>
     </SafeAreaProvider>
   );
 }

@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import * as Crypto from 'expo-crypto';
 import type { MobileAccount, MobileTransaction } from '@faura-farmer/types';
-import { listRecords, queueDelete, queueUpsert } from '@/data/db';
+import { useWorkspace } from '@/data/workspace-provider';
 import { Badge, Button, Card, ChoiceChip, Empty, Field, Screen, Title, useUiStyles } from '@/ui/primitives';
 import { fontFamily, useAppTheme } from '@/ui/theme';
 import { useCurrency } from '@/ui/currency';
@@ -50,6 +50,7 @@ export default function AccountsScreen() {
   const { theme } = useAppTheme();
   const styles = useAccountsStyles();
   const ui = useUiStyles();
+  const { db } = useWorkspace();
   const { convert, displayCurrency, formatMoney: formatDisplayMoney } = useCurrency();
   const [accounts, setAccounts] = useState<MobileAccount[]>([]);
   const [transactions, setTransactions] = useState<MobileTransaction[]>([]);
@@ -59,11 +60,11 @@ export default function AccountsScreen() {
   const handledCreateParam = useRef(false);
   const { syncNow } = useSync();
   const load = useCallback(async () => {
-    const [nextAccounts, nextTransactions] = await Promise.all([listRecords('account'), listRecords('transaction')]);
+    const [nextAccounts, nextTransactions] = await Promise.all([db.listRecords('account'), db.listRecords('transaction')]);
     setAccounts(nextAccounts);
     setTransactions(nextTransactions);
     setLoaded(true);
-  }, []);
+  }, [db]);
   useEffect(() => { void load(); }, [load, editing]);
 
   useEffect(() => {
@@ -91,11 +92,11 @@ export default function AccountsScreen() {
       Alert.alert('Check this account', 'Enter a valid current balance.');
       return;
     }
-    await queueUpsert('account', updatedAccount);
+    await db.queueUpsert('account', updatedAccount);
     if (accounts.some((account) => account.id === editing.id)) {
       const difference = Math.round((targetBalance - currentBalance(updatedAccount, transactions)) * 100) / 100;
       if (Math.abs(difference) >= 0.005) {
-        await queueUpsert('transaction', {
+        await db.queueUpsert('transaction', {
           id: Crypto.randomUUID(),
           accountId: updatedAccount.id,
           categoryId: null,
@@ -116,7 +117,7 @@ export default function AccountsScreen() {
 
   const remove = (id: string) => Alert.alert('Delete account?', 'Transactions in this account will also be removed when synchronized.', [
     { text: 'Cancel', style: 'cancel' },
-    { text: 'Delete', style: 'destructive', onPress: () => { void queueDelete('account', id).then(load).then(() => syncNow()); } },
+    { text: 'Delete', style: 'destructive', onPress: () => { void db.queueDelete('account', id).then(load).then(() => syncNow()); } },
   ]);
 
   return (

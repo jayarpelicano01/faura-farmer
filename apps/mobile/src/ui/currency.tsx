@@ -1,7 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import type { CurrencyPreference, DisplayCurrency } from '@faura-farmer/types';
 import { convertMoney, defaultCurrencyPreference, formatDisplayMoney } from '@faura-farmer/types';
-import { getProfileDetails, saveProfileDetails } from '@/data/db';
+import { useWorkspace } from '@/data/workspace-provider';
 import { useSession } from '@/auth/session';
 
 type CurrencyContextValue = CurrencyPreference & {
@@ -15,6 +15,7 @@ const CurrencyContext = createContext<CurrencyContextValue | null>(null);
 
 export function CurrencyProvider({ children }: { children: React.ReactNode }) {
   const { session } = useSession();
+  const { db } = useWorkspace();
   const [preference, setStoredPreference] = useState<CurrencyPreference>(defaultCurrencyPreference);
   const [ready, setReady] = useState(false);
 
@@ -26,19 +27,19 @@ export function CurrencyProvider({ children }: { children: React.ReactNode }) {
       return () => { active = false; };
     }
     setReady(false);
-    void getProfileDetails().then((profile) => {
+    void db.getProfileDetails().then((profile) => {
       if (!active) return;
       if (profile?.id === session.user.id) setStoredPreference(profile);
       setReady(true);
     }).catch(() => { if (active) setReady(true); });
     return () => { active = false; };
-  }, [session]);
+  }, [session, db]);
 
   const setPreference = useCallback(async (next: CurrencyPreference) => {
     setStoredPreference(next);
-    const profile = await getProfileDetails();
-    if (profile) await saveProfileDetails({ ...profile, ...next });
-  }, []);
+    const profile = await db.getProfileDetails();
+    if (profile) await db.saveProfileDetails({ ...profile, ...next });
+  }, [db]);
 
   const value = useMemo<CurrencyContextValue>(() => ({
     ...preference,

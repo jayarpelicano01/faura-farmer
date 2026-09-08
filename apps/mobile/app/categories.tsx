@@ -3,7 +3,7 @@ import { Alert, Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'rea
 import * as Crypto from 'expo-crypto';
 import { useRouter } from 'expo-router';
 import type { MobileCategory } from '@faura-farmer/types';
-import { listRecords, queueDelete, queueUpsert } from '@/data/db';
+import { useWorkspace } from '@/data/workspace-provider';
 import { BodyText, Button, Card, ChoiceChip, Empty, Field, Screen, SectionTitle, Title, useUiStyles } from '@/ui/primitives';
 import { fontFamily, useAppTheme } from '@/ui/theme';
 import { useSync } from '@/sync/use-sync';
@@ -15,11 +15,12 @@ function blankCategory(type: MobileCategory['type'] = 'expense'): MobileCategory
 export default function CategoriesScreen() {
   const styles = useCategoriesStyles();
   const ui = useUiStyles();
+  const { db } = useWorkspace();
   const [categories, setCategories] = useState<MobileCategory[]>([]);
   const [editing, setEditing] = useState<MobileCategory | null>(null);
   const router = useRouter();
   const { syncNow } = useSync();
-  const load = useCallback(async () => setCategories(await listRecords('category')), []);
+  const load = useCallback(async () => setCategories(await db.listRecords('category')), [db]);
   useEffect(() => { void load(); }, [load, editing]);
 
   const incomeCategories = useMemo(() => categories.filter((category) => category.type === 'income'), [categories]);
@@ -30,7 +31,7 @@ export default function CategoriesScreen() {
       Alert.alert('Enter a category name');
       return;
     }
-    await queueUpsert('category', { ...editing, name: editing.name.trim(), updatedAt: new Date().toISOString() });
+    await db.queueUpsert('category', { ...editing, name: editing.name.trim(), updatedAt: new Date().toISOString() });
     setEditing(null);
     await load();
     void syncNow();
@@ -46,7 +47,7 @@ export default function CategoriesScreen() {
         style: 'destructive',
         onPress: () => {
           setEditing(null);
-          void queueDelete('category', id).then(load).then(() => syncNow());
+          void db.queueDelete('category', id).then(load).then(() => syncNow());
         },
       },
     ],

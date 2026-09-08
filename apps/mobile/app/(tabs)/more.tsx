@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import type { CurrencyPreference, MobileProfile } from '@faura-farmer/types';
-import { getProfileDetails, saveProfileDetails } from '@/data/db';
+import { useWorkspace } from '@/data/workspace-provider';
 import { useSession } from '@/auth/session';
 import { LOCK_DELAY_OPTIONS, type LockDelayMinutes } from '@/auth/session';
 import { MobileApiError, MobileConnectionError, connectionMessage, mobileRequest, refreshedSession } from '@/sync/api';
@@ -54,6 +54,7 @@ export default function MoreScreen() {
   const ui = useUiStyles();
   const { mode, toggleMode } = useAppTheme();
   const { session, update, signOutLocal, lockDelay, setLockDelay } = useSession();
+  const { db, activeWorkspace, switchWorkspace, localProfileExists, createLocalProfile, deleteLocalProfile } = useWorkspace();
   const { lastSyncFailed, syncNow } = useSync();
   const { displayCurrency, usdPerPhp, rateDate, rateRefreshedAt, setPreference } = useCurrency();
   const router = useRouter();
@@ -80,21 +81,21 @@ export default function MoreScreen() {
   }, [session, update]);
 
   const saveRemoteProfile = useCallback(async (next: MobileProfile) => {
-    await saveProfileDetails(next);
+    await db.saveProfileDetails(next);
     await setPreference({
       displayCurrency: next.displayCurrency,
       usdPerPhp: next.usdPerPhp,
       rateDate: next.rateDate,
       rateRefreshedAt: next.rateRefreshedAt,
     });
-  }, [setPreference]);
+  }, [db, setPreference]);
 
   const loadProfile = useCallback(async () => {
     if (!session) return;
     setProfileLoading(true);
     setProfileError(null);
     try {
-      const cached = await getProfileDetails();
+      const cached = await db.getProfileDetails();
       if (cached?.id === session.user.id) {
         setProfile(cached);
         setDraft(draftFor(cached));
@@ -114,7 +115,7 @@ export default function MoreScreen() {
     } finally {
       setProfileLoading(false);
     }
-  }, [activeSession, saveRemoteProfile, session]);
+  }, [activeSession, saveRemoteProfile, session, db]);
 
   useEffect(() => { void loadProfile(); }, [loadProfile]);
 
@@ -249,6 +250,26 @@ export default function MoreScreen() {
         </View>
 
         {profileError ? <InlineNotice>{profileError}</InlineNotice> : null}
+
+        <Card>
+          <SectionTitle>Workspace</SectionTitle>
+          <View style={styles.sectionContent}>
+            <Text style={ui.listMeta}>Switch between your online account and local-only data.</Text>
+            <View style={styles.workspaceOptions}>
+              <ChoiceChip label="Online" selected={activeWorkspace === 'online'} onPress={() => void switchWorkspace('online')} />
+              <ChoiceChip label="Local only" selected={activeWorkspace === 'local'} onPress={() => void switchWorkspace('local')} />
+            </View>
+            {activeWorkspace === 'local' ? (
+              <Text style={styles.fieldHint}>Local data stays on this device and never syncs.</Text>
+            ) : null}
+            {activeWorkspace === 'online' && localProfileExists ? (
+              <Button size="compact" variant="outline" onPress={() => void switchWorkspace('local')}>Switch to local</Button>
+            ) : null}
+            {activeWorkspace === 'online' && !localProfileExists ? (
+              <Button size="compact" variant="outline" onPress={() => void createLocalProfile()}>Create local workspace</Button>
+            ) : null}
+          </View>
+        </Card>
 
         <Card>
           <SectionTitle>Personal information</SectionTitle>
@@ -399,6 +420,7 @@ function useMoreStyles() {
     formActions: { gap: 12, marginTop: 8 },
     sectionContent: { gap: 12, marginTop: 16 },
     currencyActions: { flexDirection: 'row', gap: 10 },
+    workspaceOptions: { flexDirection: 'row', gap: 10, flexWrap: 'wrap' },
     lockDelayOptions: { flexDirection: 'row', gap: 10, flexWrap: 'wrap' },
     syncControl: { alignSelf: 'stretch', position: 'relative' },
     syncRetryDot: { position: 'absolute', top: -2, right: -2, width: 6, height: 6, borderRadius: 3, backgroundColor: theme.danger },

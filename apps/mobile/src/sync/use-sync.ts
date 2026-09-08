@@ -2,6 +2,7 @@ import { createContext, createElement, useCallback, useContext, useEffect, useMe
 import { AppState } from 'react-native';
 import NetInfo from '@react-native-community/netinfo';
 import { useSession } from '@/auth/session';
+import { useWorkspace } from '@/data/workspace-provider';
 import { MobileApiError, MobileConnectionError, isMobileUnauthorized } from './api';
 import { synchronize } from './sync';
 
@@ -33,6 +34,7 @@ function messageFor(error: unknown) {
 
 export function SyncProvider({ children }: PropsWithChildren) {
   const { status, update, requireReauthentication } = useSession();
+  const { activeWorkspace } = useWorkspace();
   const [lastSyncFailed, setLastSyncFailed] = useState(false);
   const [syncStatus, setSyncStatus] = useState<SyncStatus>('idle');
   const [syncMessage, setSyncMessage] = useState<string | null>(null);
@@ -53,7 +55,7 @@ export function SyncProvider({ children }: PropsWithChildren) {
   }, []);
 
   const syncNow = useCallback(async (manual = false) => {
-    if (status !== 'ready' || syncingRef.current) return;
+    if (status !== 'ready' || activeWorkspace !== 'online' || syncingRef.current) return;
     syncingRef.current = true;
     if (manual) setLastSyncFailed(false);
     showStatus('syncing', 'Syncing...');
@@ -82,7 +84,7 @@ export function SyncProvider({ children }: PropsWithChildren) {
     } finally {
       syncingRef.current = false;
     }
-  }, [requireReauthentication, showStatus, status, update]);
+  }, [activeWorkspace, requireReauthentication, showStatus, status, update]);
 
   useEffect(() => {
     if (status !== 'ready') {
