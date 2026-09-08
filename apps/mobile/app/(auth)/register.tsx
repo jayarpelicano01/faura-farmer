@@ -3,6 +3,7 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Link, useRouter } from 'expo-router';
 import { useSession } from '@/auth/session';
 import { asStoredSession, connectionMessage, register } from '@/sync/api';
+import { useWorkspace } from '@/data/workspace-provider';
 import { BrandLockup } from '@/ui/brand';
 import { AuthModeSelector } from '@/ui/auth-mode';
 import { BodyText, Button, Card, Field, InlineNotice, Screen } from '@/ui/primitives';
@@ -16,6 +17,7 @@ export default function RegisterScreen() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const { establish } = useSession();
+  const { createLocalProfile, switchWorkspace, localProfileExists } = useWorkspace();
   const router = useRouter();
   const styles = useRegisterStyles();
 
@@ -30,6 +32,14 @@ export default function RegisterScreen() {
     } finally {
       setSaving(false);
     }
+  };
+
+  const goOffline = async () => {
+    try {
+      if (!localProfileExists) await createLocalProfile();
+      await switchWorkspace('local');
+      router.replace('/dashboard');
+    } catch { /* ignore */ }
   };
 
   return (
@@ -83,9 +93,15 @@ export default function RegisterScreen() {
               </Pressable>
             </Link>
           </View>
-          <Pressable accessibilityRole="link" style={styles.backLink} onPress={() => router.replace('/welcome')}>
-            <Text style={styles.backLinkText}>Back to options</Text>
-          </Pressable>
+          <View style={styles.altActions}>
+            <Pressable style={styles.altLink} onPress={() => void goOffline()}>
+              <Text style={styles.altLinkText}>Use offline</Text>
+            </Pressable>
+            <Text style={styles.altSeparator}>·</Text>
+            <Pressable style={styles.altLink} onPress={() => router.replace('/welcome')}>
+              <Text style={styles.altLinkText}>Back</Text>
+            </Pressable>
+          </View>
         </Card>
       </View>
     </Screen>
@@ -103,7 +119,9 @@ function useRegisterStyles() {
     footerText: { color: theme.mutedForeground, fontFamily: fontFamily.body, fontSize: 14 },
     footerLink: { minHeight: 32, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 4 },
     footerLinkText: { color: theme.primary, fontFamily: fontFamily.body, fontSize: 14, fontWeight: '600' },
-    backLink: { alignItems: 'center', justifyContent: 'center', marginTop: 20, minHeight: 44 },
-    backLinkText: { color: theme.mutedForeground, fontFamily: fontFamily.body, fontSize: 14 },
+    altActions: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, marginTop: 20, minHeight: 44 },
+    altLink: { minHeight: 44, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 4 },
+    altLinkText: { color: theme.mutedForeground, fontFamily: fontFamily.body, fontSize: 14 },
+    altSeparator: { color: theme.mutedForeground, fontFamily: fontFamily.body, fontSize: 14 },
   }), [theme]);
 }
