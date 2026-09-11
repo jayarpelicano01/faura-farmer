@@ -4,6 +4,7 @@ import { badRequest, fail, notFound, ok, unauthorized } from '@/lib/http';
 import { guardMutation, readJsonBody } from '@/lib/security';
 import { updateRecurringRuleSchema } from '@/lib/validations';
 import { serializeRecurringRule, updateRecurringRule } from '@/lib/services/recurring-transactions';
+import { recordCanonicalMobileTombstone, recordCanonicalMobileUpsert } from '@/lib/mobile/sync';
 
 export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -35,6 +36,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   if (result.status === 'category_type_mismatch') {
     return badRequest('Category type must match the recurring transaction type');
   }
+  await recordCanonicalMobileUpsert(session.user.id, 'recurring_rule', result.rule.id);
   return ok(result.rule);
 }
 
@@ -47,5 +49,6 @@ export async function DELETE(request: Request, { params }: { params: Promise<{ i
   const rule = await prisma.recurringRule.findFirst({ where: { id, userId: session.user.id } });
   if (!rule) return notFound('Recurring rule not found');
   await prisma.recurringRule.delete({ where: { id: rule.id } });
+  await recordCanonicalMobileTombstone(session.user.id, 'recurring_rule', rule.id);
   return ok({ id: rule.id, deleted: true });
 }

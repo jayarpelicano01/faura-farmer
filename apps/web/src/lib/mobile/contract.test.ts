@@ -16,4 +16,24 @@ describe('mobile sync contract', () => {
     const parsed = mobileSyncPushSchema.safeParse({ baseCursor: 42, mutations: [] });
     expect(parsed.success).toBe(false);
   });
+
+  it('requires an expected due date and client transaction ID for an approved recurring occurrence', () => {
+    const parsed = mobileSyncPushSchema.safeParse({
+      baseCursor: '42',
+      mutations: [{
+        mutationId: 'd8d9019d-61af-4d0a-9331-1761e017b98c', entity: 'recurring_rule', recordId: '8eab2672-d5a9-4483-8fa5-072561cbd1d4',
+        operation: 'approve', baseCursor: '42', expectedDueDate: '2026-09-11', transactionId: '4b7816ce-5d80-4ebc-8692-2b7c0d1e59f0',
+      }],
+    });
+    expect(parsed.success).toBe(true);
+
+    const incomplete = mobileSyncPushSchema.safeParse({
+      baseCursor: '42',
+      mutations: [{
+        mutationId: 'd8d9019d-61af-4d0a-9331-1761e017b98c', entity: 'recurring_rule', recordId: '8eab2672-d5a9-4483-8fa5-072561cbd1d4',
+        operation: 'approve', baseCursor: '42', expectedDueDate: '2026-09-11',
+      }],
+    });
+    expect(incomplete.success).toBe(false);
+  });
 });

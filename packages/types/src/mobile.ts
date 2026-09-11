@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { ACCOUNT_TYPES, BUDGET_BUCKETS, CATEGORY_TYPES, TRANSACTION_TYPES } from './models';
+import { ACCOUNT_TYPES, BUDGET_BUCKETS, CATEGORY_TYPES, FREQUENCIES, TRANSACTION_TYPES } from './models';
 import { ACCOUNT_CURRENCIES, DISPLAY_CURRENCIES, type DisplayCurrency } from './currency';
 
 const uuid = z.string().uuid();
@@ -25,7 +25,9 @@ export const mobileCategorySchema = z.object({
   id: uuid,
   name: z.string().trim().min(1).max(120),
   type: z.enum(CATEGORY_TYPES),
-  parentId: uuid.nullable(),
+  // Release N compatibility: old clients send null while new clients omit it.
+  // The sync boundary rejects a non-null value before persistence.
+  parentId: uuid.nullable().optional(),
   icon: z.string().trim().max(40).nullable(),
   color: z.string().trim().max(40).nullable(),
   bucket: z.enum(BUDGET_BUCKETS).nullable(),
@@ -41,6 +43,7 @@ export const mobileTransactionSchema = z
     amount: positiveDecimalString,
     type: z.enum(TRANSACTION_TYPES),
     destinationAccountId: uuid.nullable(),
+    recurringRuleId: uuid.nullable().optional(),
     date: dateString,
     note: z.string().max(500).nullable(),
     updatedAt: z.string().datetime(),
@@ -69,29 +72,61 @@ export const mobileMonthlyBudgetSchema = z.object({
   updatedAt: z.string().datetime(),
 });
 
+export const mobileRecurringRuleSchema = z.object({
+  id: uuid,
+  accountId: uuid,
+  userId: uuid,
+  categoryId: uuid.nullable(),
+  label: z.string().trim().max(120).nullable(),
+  amount: positiveDecimalString,
+  type: z.enum(['income', 'expense']),
+  frequency: z.enum(FREQUENCIES),
+  nextDueDate: dateString,
+  isActive: z.boolean(),
+  updatedAt: z.string().datetime(),
+});
+
 export const mobileEntitySchema = z.discriminatedUnion('entity', [
   z.object({ entity: z.literal('account'), record: mobileAccountSchema }),
   z.object({ entity: z.literal('category'), record: mobileCategorySchema }),
   z.object({ entity: z.literal('transaction'), record: mobileTransactionSchema }),
   z.object({ entity: z.literal('budget'), record: mobileBudgetSchema }),
   z.object({ entity: z.literal('monthly_budget'), record: mobileMonthlyBudgetSchema }),
+  z.object({ entity: z.literal('recurring_rule'), record: mobileRecurringRuleSchema }),
 ]);
 
 export const mobileSyncMutationSchema = z.discriminatedUnion('operation', [
   z.object({
     mutationId: uuid,
-    entity: z.enum(['account', 'category', 'transaction', 'budget', 'monthly_budget']),
+    entity: z.enum(['account', 'category', 'transaction', 'budget', 'monthly_budget', 'recurring_rule']),
     recordId: uuid,
     operation: z.literal('upsert'),
     baseCursor: cursor.nullable(),
-    record: z.union([mobileAccountSchema, mobileCategorySchema, mobileTransactionSchema, mobileBudgetSchema, mobileMonthlyBudgetSchema]),
+    record: z.union([mobileAccountSchema, mobileCategorySchema, mobileTransactionSchema, mobileBudgetSchema, mobileMonthlyBudgetSchema, mobileRecurringRuleSchema]),
   }),
   z.object({
     mutationId: uuid,
-    entity: z.enum(['account', 'category', 'transaction', 'budget', 'monthly_budget']),
+    entity: z.enum(['account', 'category', 'transaction', 'budget', 'monthly_budget', 'recurring_rule']),
     recordId: uuid,
     operation: z.literal('delete'),
     baseCursor: cursor.nullable(),
+  }),
+  z.object({
+    mutationId: uuid,
+    entity: z.literal('recurring_rule'),
+    recordId: uuid,
+    operation: z.literal('approve'),
+    baseCursor: cursor.nullable(),
+    expectedDueDate: dateString,
+    transactionId: uuid,
+  }),
+  z.object({
+    mutationId: uuid,
+    entity: z.literal('recurring_rule'),
+    recordId: uuid,
+    operation: z.literal('skip'),
+    baseCursor: cursor.nullable(),
+    expectedDueDate: dateString,
   }),
 ]);
 
@@ -107,6 +142,7 @@ export type MobileCategory = z.infer<typeof mobileCategorySchema>;
 export type MobileTransaction = z.infer<typeof mobileTransactionSchema>;
 export type MobileBudget = z.infer<typeof mobileBudgetSchema>;
 export type MobileMonthlyBudget = z.infer<typeof mobileMonthlyBudgetSchema>;
+export type MobileRecurringRule = z.infer<typeof mobileRecurringRuleSchema>;
 export type MobileSyncMutation = z.infer<typeof mobileSyncMutationSchema>;
 export type MobileSyncPush = z.infer<typeof mobileSyncPushSchema>;
 
@@ -131,10 +167,10 @@ export type MobileProfile = {
 
 export type MobileSyncChange = {
   cursor: string;
-  entity: 'account' | 'category' | 'transaction' | 'budget' | 'monthly_budget';
+  entity: 'account' | 'category' | 'transaction' | 'budget' | 'monthly_budget' | 'recurring_rule';
   recordId: string;
   operation: 'upsert' | 'delete';
-  record: MobileAccount | MobileCategory | MobileTransaction | MobileBudget | MobileMonthlyBudget | null;
+  record: MobileAccount | MobileCategory | MobileTransaction | MobileBudget | MobileMonthlyBudget | MobileRecurringRule | null;
 };
 
 export type MobileApiError = { error: string; code: string };

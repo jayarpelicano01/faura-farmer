@@ -3,6 +3,7 @@ import { badRequest, fail, notFound, ok, unauthorized } from '@/lib/http';
 import { guardMutation, readJsonBody } from '@/lib/security';
 import { recurringOccurrenceSchema } from '@/lib/validations';
 import { skipRecurringOccurrence } from '@/lib/services/recurring-transactions';
+import { recordCanonicalMobileUpsert } from '@/lib/mobile/sync';
 
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -20,5 +21,6 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   if (result.status !== 'skipped') {
     return fail('This occurrence has changed or is not due', 409, 'RECURRING_OCCURRENCE_CONFLICT');
   }
+  await recordCanonicalMobileUpsert(session.user.id, 'recurring_rule', id);
   return ok({ nextDueDate: result.nextDueDate });
 }

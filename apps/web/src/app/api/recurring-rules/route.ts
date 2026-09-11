@@ -3,6 +3,7 @@ import { badRequest, created, fail, ok, unauthorized } from '@/lib/http';
 import { guardMutation, readJsonBody } from '@/lib/security';
 import { createRecurringRuleSchema } from '@/lib/validations';
 import { createRecurringRule, listRecurringRules } from '@/lib/services/recurring-transactions';
+import { recordCanonicalMobileUpsert } from '@/lib/mobile/sync';
 
 export async function GET() {
   const session = await auth();
@@ -27,5 +28,6 @@ export async function POST(request: Request) {
   if (result.status === 'category_type_mismatch') {
     return badRequest('Category type must match the recurring transaction type');
   }
+  await recordCanonicalMobileUpsert(session.user.id, 'recurring_rule', result.rule.id);
   return created(result.rule);
 }

@@ -5,21 +5,24 @@ import {
   mobileBudgetSchema,
   mobileCategorySchema,
   mobileMonthlyBudgetSchema,
+  mobileRecurringRuleSchema,
   mobileTransactionSchema,
   type MobileAccount,
   type MobileBudget,
   type MobileCategory,
   type MobileMonthlyBudget,
+  type MobileRecurringRule,
   type MobileSyncChange,
   type MobileSyncMutation,
   type MobileTransaction,
 } from '@faura-farmer/types';
 import { lockAccountsInOrder } from '@/lib/queries';
+import { advanceRecurringDate, dateKey } from '@/lib/services/recurring-transactions';
 
 type Tx = Prisma.TransactionClient;
-type Entity = 'account' | 'category' | 'transaction' | 'budget' | 'monthly_budget';
+type Entity = 'account' | 'category' | 'transaction' | 'budget' | 'monthly_budget' | 'recurring_rule';
 type MutationResult =
-  | { mutationId: string; status: 'accepted'; entity: Entity; recordId: string; operation: 'upsert' | 'delete'; record?: MobileAccount | MobileCategory | MobileTransaction | MobileBudget | MobileMonthlyBudget }
+  | { mutationId: string; status: 'accepted'; entity: Entity; recordId: string; operation: 'upsert' | 'delete' | 'approve' | 'skip'; record?: MobileAccount | MobileCategory | MobileTransaction | MobileBudget | MobileMonthlyBudget | MobileRecurringRule }
   | { mutationId: string; status: 'rejected'; code: string; message: string };
 
 class SyncRejection extends Error {
@@ -65,11 +68,11 @@ function serializeAccount(record: {
 }
 
 function serializeCategory(record: {
-  id: string; name: string; type: MobileCategory['type']; parentId: string | null; icon: string | null;
+  id: string; name: string; type: MobileCategory['type']; icon: string | null;
   color: string | null; bucket: MobileCategory['bucket']; updatedAt: Date;
 }): MobileCategory {
   return {
-    id: record.id, name: record.name, type: record.type, parentId: record.parentId,
+    id: record.id, name: record.name, type: record.type, parentId: null,
     icon: record.icon, color: record.color, bucket: record.bucket, updatedAt: record.updatedAt.toISOString(),
   };
 }
@@ -77,14 +80,14 @@ function serializeCategory(record: {
 function serializeTransaction(
   source: {
     id: string; accountId: string; categoryId: string | null; bucket: MobileTransaction['bucket']; amount: Prisma.Decimal;
-    type: MobileTransaction['type']; date: Date; note: string | null; updatedAt: Date;
+    type: MobileTransaction['type']; date: Date; note: string | null; recurringRuleId: string | null; updatedAt: Date;
   },
   destinationAccountId: string | null,
 ): MobileTransaction {
   return {
     id: source.id, accountId: source.accountId, categoryId: source.categoryId, bucket: source.bucket,
     amount: String(source.amount), type: source.type, destinationAccountId,
-    date: source.date.toISOString().slice(0, 10), note: source.note, updatedAt: source.updatedAt.toISOString(),
+    recurringRuleId: source.recurringRuleId, date: source.date.toISOString().slice(0, 10), note: source.note, updatedAt: source.updatedAt.toISOString(),
   };
 }
 
@@ -96,13 +99,24 @@ function serializeMonthlyBudget(record: { id: string; amount: Prisma.Decimal }, 
   return { id: record.id, amount: String(record.amount), updatedAt };
 }
 
+function serializeRecurringRule(record: {
+  id: string; accountId: string; userId: string; categoryId: string | null; label: string | null; amount: Prisma.Decimal;
+  type: string; frequency: MobileRecurringRule['frequency']; nextDueDate: Date; isActive: boolean;
+}): MobileRecurringRule {
+  return {
+    id: record.id, accountId: record.accountId, userId: record.userId, categoryId: record.categoryId, label: record.label,
+    amount: String(record.amount), type: record.type as MobileRecurringRule['type'], frequency: record.frequency,
+    nextDueDate: record.nextDueDate.toISOString().slice(0, 10), isActive: record.isActive, updatedAt: new Date().toISOString(),
+  };
+}
+
 async function appendChange(
   tx: Tx,
   userId: string,
   entity: Entity,
   recordId: string,
   operation: 'upsert' | 'delete',
-  record: MobileAccount | MobileCategory | MobileTransaction | MobileBudget | MobileMonthlyBudget | null,
+  record: MobileAccount | MobileCategory | MobileTransaction | MobileBudget | MobileMonthlyBudget | MobileRecurringRule | null,
 ) {
   return tx.mobileSyncChange.create({
     data: { userId, entity, recordId, operation, data: record === null ? Prisma.JsonNull : json(record) },
@@ -150,13 +164,12 @@ async function applyCategoryUpsert(tx: Tx, userId: string, mutation: Extract<Mob
   if (await tombstoneAfter(tx, userId, 'category', record.id, mutation.baseCursor)) {
     throw new SyncRejection('TOMBSTONED', 'This category was deleted on another device; create a new category instead');
   }
-  if (record.parentId) {
-    const parent = await tx.category.findFirst({ where: { id: record.parentId, userId }, select: { type: true } });
-    if (!parent || parent.type !== record.type) throw new SyncRejection('INVALID_PARENT', 'Category parent is unavailable or has another type');
+  if (record.parentId !== undefined && record.parentId !== null) {
+    throw new SyncRejection('INVALID_PARENT', 'Categories cannot have a parent');
   }
   const existing = await tx.category.findUnique({ where: { id: record.id }, select: { id: true, userId: true } });
   isOwned(existing, userId);
-  const data = { name: record.name, type: record.type, parentId: record.parentId, icon: record.icon, color: record.color, bucket: record.bucket };
+  const data = { name: record.name, type: record.type, icon: record.icon, color: record.color, bucket: record.bucket };
   const saved = existing
     ? await tx.category.update({ where: { id: record.id }, data })
     : await tx.category.create({ data: { id: record.id, userId, ...data } });
@@ -171,7 +184,7 @@ async function applyTransactionUpsert(tx: Tx, userId: string, mutation: Extract<
   if (await tombstoneAfter(tx, userId, 'transaction', record.id, mutation.baseCursor)) {
     throw new SyncRejection('TOMBSTONED', 'This transaction was deleted on another device; create a new transaction instead');
   }
-  const existing = await tx.transaction.findUnique({ where: { id: record.id }, select: { id: true, userId: true, accountId: true, transferGroupId: true, transferRole: true } });
+  const existing = await tx.transaction.findUnique({ where: { id: record.id }, select: { id: true, userId: true, accountId: true, recurringRuleId: true, transferGroupId: true, transferRole: true } });
   isOwned(existing, userId);
   const accountIds = [record.accountId, ...(record.destinationAccountId ? [record.destinationAccountId] : []), ...(existing ? [existing.accountId] : [])];
   const accounts = await lockAccountsInOrder(tx, accountIds, userId);
@@ -184,7 +197,8 @@ async function applyTransactionUpsert(tx: Tx, userId: string, mutation: Extract<
   }
 
   if (record.type !== 'transfer') {
-    const data = { accountId: record.accountId, categoryId: record.categoryId, bucket: record.bucket, amount: record.amount, type: record.type, transferGroupId: null, transferRole: null, date: date(record.date), note: record.note };
+    if (record.recurringRuleId && record.recurringRuleId !== existing?.recurringRuleId) throw new SyncRejection('INVALID_RECURRING_LINK', 'Recurring transaction links are created only by approving a recurring rule');
+    const data = { accountId: record.accountId, categoryId: record.categoryId, bucket: record.bucket, amount: record.amount, type: record.type, transferGroupId: null, transferRole: null, recurringRuleId: existing?.recurringRuleId ?? null, date: date(record.date), note: record.note };
     const saved = existing
       ? await tx.transaction.update({ where: { id: record.id }, data })
       : await tx.transaction.create({ data: { id: record.id, userId, source: 'manual', ...data } });
@@ -226,30 +240,14 @@ async function applyTransactionUpsert(tx: Tx, userId: string, mutation: Extract<
 }
 
 async function findBudgetConflict(tx: Tx, userId: string, categoryId: string, excludeBudgetId?: string) {
-  const [categories, budgets] = await Promise.all([
-    tx.category.findMany({ where: { userId }, select: { id: true, parentId: true } }),
-    tx.budget.findMany({
-      where: excludeBudgetId ? { userId, NOT: { id: excludeBudgetId } } : { userId },
-      select: { id: true, categoryId: true },
-    }),
-  ]);
-  const parentById = new Map(categories.map((category) => [category.id, category.parentId]));
-  const related = new Set<string>([categoryId]);
-  for (const category of categories) {
-    let current = category.id;
-    let parent = parentById.get(current);
-    while (parent) {
-      if (parent === categoryId) related.add(category.id);
-      current = parent;
-      parent = parentById.get(current);
-    }
-  }
-  let parent = parentById.get(categoryId);
-  while (parent) {
-    related.add(parent);
-    parent = parentById.get(parent);
-  }
-  return budgets.some((budget) => related.has(budget.categoryId));
+  return Boolean(await tx.budget.findFirst({
+    where: {
+      userId,
+      categoryId,
+      ...(excludeBudgetId ? { NOT: { id: excludeBudgetId } } : {}),
+    },
+    select: { id: true },
+  }));
 }
 
 async function applyBudgetUpsert(tx: Tx, userId: string, mutation: Extract<MobileSyncMutation, { operation: 'upsert' }>) {
@@ -264,7 +262,7 @@ async function applyBudgetUpsert(tx: Tx, userId: string, mutation: Extract<Mobil
   const existing = await tx.budget.findUnique({ where: { id: record.id }, select: { id: true, userId: true } });
   isOwned(existing, userId);
   if (await findBudgetConflict(tx, userId, record.categoryId, existing?.id)) {
-    throw new SyncRejection('BUDGET_CONFLICT', 'A budget already exists for this category, its parent, or one of its sub-categories');
+    throw new SyncRejection('BUDGET_CONFLICT', 'A budget already exists for this category');
   }
   const saved = existing
     ? await tx.budget.update({ where: { id: record.id }, data: { categoryId: record.categoryId, monthlyLimit: new Prisma.Decimal(record.monthlyLimit) } })
@@ -292,6 +290,59 @@ async function applyMonthlyBudgetUpsert(tx: Tx, userId: string, mutation: Extrac
   return serialized;
 }
 
+async function applyRecurringRuleUpsert(tx: Tx, userId: string, mutation: Extract<MobileSyncMutation, { operation: 'upsert' }>) {
+  const record = requireRecord(mobileRecurringRuleSchema.safeParse(mutation.record));
+  if (record.id !== mutation.recordId || record.userId !== userId) throw new SyncRejection('INVALID_MUTATION', 'Recurring rule does not match this mutation');
+  if (await tombstoneAfter(tx, userId, 'recurring_rule', record.id, mutation.baseCursor)) {
+    throw new SyncRejection('TOMBSTONED', 'This recurring rule was deleted on another device; create a new rule instead');
+  }
+  const [account, category] = await Promise.all([
+    ownedAccount(tx, userId, record.accountId),
+    record.categoryId ? tx.category.findFirst({ where: { id: record.categoryId, userId }, select: { id: true, type: true } }) : null,
+  ]);
+  if (!account) throw new SyncRejection('ACCOUNT_NOT_FOUND', 'Recurring rule account was not found');
+  if (record.categoryId && !category) throw new SyncRejection('CATEGORY_NOT_FOUND', 'Recurring rule category was not found');
+  if (category && category.type !== record.type) throw new SyncRejection('CATEGORY_TYPE_MISMATCH', 'Recurring rule category type does not match the rule');
+  const existing = await tx.recurringRule.findUnique({ where: { id: record.id }, select: { id: true, userId: true } });
+  isOwned(existing, userId);
+  const data = { accountId: record.accountId, categoryId: record.categoryId, label: record.label, amount: record.amount, type: record.type, frequency: record.frequency, nextDueDate: date(record.nextDueDate), isActive: record.isActive };
+  const saved = existing
+    ? await tx.recurringRule.update({ where: { id: record.id }, data })
+    : await tx.recurringRule.create({ data: { id: record.id, userId, ...data } });
+  const serialized = serializeRecurringRule(saved);
+  await appendChange(tx, userId, 'recurring_rule', saved.id, 'upsert', serialized);
+  return serialized;
+}
+
+async function applyRecurringOccurrence(tx: Tx, userId: string, mutation: Extract<MobileSyncMutation, { operation: 'approve' | 'skip' }>) {
+  const expectedDueDate = date(mutation.expectedDueDate);
+  const today = new Date();
+  const todayKey = dateKey(today);
+  const rule = await tx.recurringRule.findFirst({ where: { id: mutation.recordId, userId }, include: { account: true, category: true } });
+  if (!rule) throw new SyncRejection('NOT_FOUND', 'Recurring rule was not found');
+  if (!rule.isActive) throw new SyncRejection('INACTIVE', 'Recurring rule is inactive');
+  if (dateKey(rule.nextDueDate) !== dateKey(expectedDueDate)) throw new SyncRejection('STALE_DUE_DATE', 'This recurring rule changed on another device. Refresh and try again.');
+  if (dateKey(rule.nextDueDate) > todayKey) throw new SyncRejection('NOT_DUE', 'This recurring rule is not due yet');
+  if (!rule.account || rule.account.userId !== userId || (rule.category && (rule.category.userId !== userId || rule.category.type !== rule.type))) {
+    throw new SyncRejection('INVALID_RULE', 'Recurring rule has invalid account or category ownership');
+  }
+  const nextDueDate = advanceRecurringDate(rule.nextDueDate, rule.frequency);
+  const advanced = await tx.recurringRule.updateMany({ where: { id: rule.id, userId, isActive: true, nextDueDate: rule.nextDueDate }, data: { nextDueDate } });
+  if (advanced.count !== 1) throw new SyncRejection('STALE_DUE_DATE', 'This recurring rule changed on another device. Refresh and try again.');
+  const savedRule = await tx.recurringRule.findUniqueOrThrow({ where: { id: rule.id } });
+  let transaction: MobileTransaction | undefined;
+  if (mutation.operation === 'approve') {
+    const existingTransaction = await tx.transaction.findUnique({ where: { id: mutation.transactionId }, select: { userId: true } });
+    if (existingTransaction) throw new SyncRejection('RECORD_ID_CONFLICT', 'Transaction ID is already in use');
+    const created = await tx.transaction.create({ data: { id: mutation.transactionId, userId, accountId: rule.accountId, categoryId: rule.categoryId, amount: rule.amount, type: rule.type, date: rule.nextDueDate, note: rule.label, source: 'recurring', recurringRuleId: rule.id } });
+    transaction = serializeTransaction(created, null);
+    await appendChange(tx, userId, 'transaction', created.id, 'upsert', transaction);
+  }
+  const serializedRule = serializeRecurringRule(savedRule);
+  await appendChange(tx, userId, 'recurring_rule', savedRule.id, 'upsert', serializedRule);
+  return { rule: serializedRule, transaction };
+}
+
 async function deleteAccount(tx: Tx, userId: string, recordId: string) {
   const account = await tx.account.findUnique({ where: { id: recordId }, select: { id: true, userId: true } });
   isOwned(account, userId);
@@ -299,11 +350,13 @@ async function deleteAccount(tx: Tx, userId: string, recordId: string) {
   const directRows = await tx.transaction.findMany({ where: { accountId: recordId, userId }, select: { id: true, transferGroupId: true, transferRole: true } });
   const groups = directRows.flatMap((row) => (row.transferGroupId ? [row.transferGroupId] : []));
   const rows = await tx.transaction.findMany({ where: { userId, OR: [{ accountId: recordId }, ...(groups.length ? [{ transferGroupId: { in: groups } }] : [])] }, select: { id: true, transferGroupId: true, transferRole: true } });
+  const recurringRules = await tx.recurringRule.findMany({ where: { accountId: recordId, userId }, select: { id: true } });
   const logicalIds = new Set(rows.filter((row) => !row.transferGroupId || row.transferRole === 'outgoing').map((row) => row.id));
   await tx.transaction.deleteMany({ where: { id: { in: rows.map((row) => row.id) } } });
   await tx.recurringRule.deleteMany({ where: { accountId: recordId, userId } });
   await tx.account.delete({ where: { id: recordId } });
   for (const id of logicalIds) await appendChange(tx, userId, 'transaction', id, 'delete', null);
+  for (const rule of recurringRules) await appendChange(tx, userId, 'recurring_rule', rule.id, 'delete', null);
   await appendChange(tx, userId, 'account', recordId, 'delete', null);
 }
 
@@ -311,16 +364,16 @@ async function deleteCategory(tx: Tx, userId: string, recordId: string) {
   const category = await tx.category.findUnique({ where: { id: recordId }, select: { id: true, userId: true } });
   isOwned(category, userId);
   if (!category) return;
-  const children = await tx.category.findMany({ where: { userId, parentId: recordId } });
   const transactions = await tx.transaction.findMany({ where: { userId, categoryId: recordId } });
   const budgets = await tx.budget.findMany({ where: { userId, categoryId: recordId }, select: { id: true } });
-  for (const child of children) {
-    const updated = await tx.category.update({ where: { id: child.id }, data: { parentId: null } });
-    await appendChange(tx, userId, 'category', updated.id, 'upsert', serializeCategory(updated));
-  }
+  const recurringRules = await tx.recurringRule.findMany({ where: { userId, categoryId: recordId } });
   for (const transaction of transactions) {
     const updated = await tx.transaction.update({ where: { id: transaction.id }, data: { categoryId: null, bucket: null } });
     await appendChange(tx, userId, 'transaction', updated.id, 'upsert', serializeTransaction(updated, null));
+  }
+  for (const rule of recurringRules) {
+    const updated = await tx.recurringRule.update({ where: { id: rule.id }, data: { categoryId: null } });
+    await appendChange(tx, userId, 'recurring_rule', updated.id, 'upsert', serializeRecurringRule(updated));
   }
   await tx.category.delete({ where: { id: recordId } });
   for (const budget of budgets) await appendChange(tx, userId, 'budget', budget.id, 'delete', null);
@@ -355,15 +408,28 @@ async function deleteMonthlyBudget(tx: Tx, userId: string, recordId: string) {
   await appendChange(tx, userId, 'monthly_budget', recordId, 'delete', null);
 }
 
+async function deleteRecurringRule(tx: Tx, userId: string, recordId: string) {
+  const rule = await tx.recurringRule.findUnique({ where: { id: recordId }, select: { id: true, userId: true } });
+  isOwned(rule, userId);
+  if (!rule) return;
+  await tx.recurringRule.delete({ where: { id: recordId } });
+  await appendChange(tx, userId, 'recurring_rule', recordId, 'delete', null);
+}
+
 async function applyDelete(tx: Tx, userId: string, mutation: Extract<MobileSyncMutation, { operation: 'delete' }>) {
   if (mutation.entity === 'account') await deleteAccount(tx, userId, mutation.recordId);
   if (mutation.entity === 'category') await deleteCategory(tx, userId, mutation.recordId);
   if (mutation.entity === 'transaction') await deleteTransaction(tx, userId, mutation.recordId);
   if (mutation.entity === 'budget') await deleteBudget(tx, userId, mutation.recordId);
   if (mutation.entity === 'monthly_budget') await deleteMonthlyBudget(tx, userId, mutation.recordId);
+  if (mutation.entity === 'recurring_rule') await deleteRecurringRule(tx, userId, mutation.recordId);
 }
 
 async function applyMutation(tx: Tx, userId: string, mutation: MobileSyncMutation): Promise<MutationResult> {
+  if (mutation.operation === 'approve' || mutation.operation === 'skip') {
+    await applyRecurringOccurrence(tx, userId, mutation);
+    return { mutationId: mutation.mutationId, status: 'accepted', entity: mutation.entity, recordId: mutation.recordId, operation: mutation.operation };
+  }
   if (mutation.operation === 'delete') {
     await applyDelete(tx, userId, mutation);
     return { mutationId: mutation.mutationId, status: 'accepted', entity: mutation.entity, recordId: mutation.recordId, operation: 'delete' };
@@ -376,7 +442,9 @@ async function applyMutation(tx: Tx, userId: string, mutation: MobileSyncMutatio
         ? await applyTransactionUpsert(tx, userId, mutation)
         : mutation.entity === 'budget'
           ? await applyBudgetUpsert(tx, userId, mutation)
-          : await applyMonthlyBudgetUpsert(tx, userId, mutation);
+          : mutation.entity === 'monthly_budget'
+            ? await applyMonthlyBudgetUpsert(tx, userId, mutation)
+            : await applyRecurringRuleUpsert(tx, userId, mutation);
   return { mutationId: mutation.mutationId, status: 'accepted', entity: mutation.entity, recordId: mutation.recordId, operation: 'upsert', record };
 }
 
@@ -427,8 +495,19 @@ async function backfillBudgetChanges(userId: string) {
   });
 }
 
+async function backfillRecurringRuleChanges(userId: string) {
+  await prisma.$transaction(async (tx) => {
+    const rules = await tx.recurringRule.findMany({ where: { userId } });
+    if (!rules.length) return;
+    const changes = await tx.mobileSyncChange.findMany({ where: { userId, entity: 'recurring_rule', recordId: { in: rules.map((rule) => rule.id) } }, select: { recordId: true }, distinct: ['recordId'] });
+    const changed = new Set(changes.map((change) => change.recordId));
+    for (const rule of rules) if (!changed.has(rule.id)) await appendChange(tx, userId, 'recurring_rule', rule.id, 'upsert', serializeRecurringRule(rule));
+  });
+}
+
 export async function pullMobileChanges(userId: string, afterCursor: string): Promise<{ cursor: string; changes: MobileSyncChange[]; hasMore: boolean }> {
   await backfillBudgetChanges(userId);
+  await backfillRecurringRuleChanges(userId);
   const after = cursor(afterCursor);
   const rows = await prisma.mobileSyncChange.findMany({
     where: { userId, cursor: { gt: after } }, orderBy: { cursor: 'asc' }, take: 501,
@@ -442,7 +521,11 @@ export async function pullMobileChanges(userId: string, afterCursor: string): Pr
     changes: visible.map((row) => ({
       cursor: row.cursor.toString(), entity: row.entity as Entity, recordId: row.recordId,
       operation: row.operation as 'upsert' | 'delete',
-      record: row.operation === 'delete' ? null : (row.data as unknown as MobileAccount | MobileCategory | MobileTransaction | MobileBudget | MobileMonthlyBudget),
+      record: row.operation === 'delete'
+        ? null
+        : row.entity === 'category'
+          ? { ...(row.data as object), parentId: null } as MobileCategory
+          : row.data as unknown as MobileAccount | MobileTransaction | MobileBudget | MobileMonthlyBudget | MobileRecurringRule,
     })),
   };
 }
@@ -472,6 +555,11 @@ export async function recordCanonicalMobileUpsert(userId: string, entity: Entity
     if (entity === 'monthly_budget') {
       const record = await tx.monthlyBudget.findFirst({ where: { id: recordId, userId } });
       if (record) await appendChange(tx, userId, entity, record.id, 'upsert', serializeMonthlyBudget(record, new Date().toISOString()));
+      return;
+    }
+    if (entity === 'recurring_rule') {
+      const record = await tx.recurringRule.findFirst({ where: { id: recordId, userId } });
+      if (record) await appendChange(tx, userId, entity, record.id, 'upsert', serializeRecurringRule(record));
       return;
     }
     const source = await tx.transaction.findFirst({ where: { id: recordId, userId } });
