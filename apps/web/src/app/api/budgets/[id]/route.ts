@@ -37,9 +37,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
 
     const conflict = await findConflictingBudget(session.user.id, parsed.data.categoryId, budget.id);
     if (conflict) {
-      return badRequest(
-        `A budget already exists for a parent or sub-category of "${conflict.categoryName}"`,
-      );
+      return badRequest('A budget already exists for this category');
     }
   }
 

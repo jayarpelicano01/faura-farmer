@@ -9,7 +9,7 @@ import { fontFamily, useAppTheme } from '@/ui/theme';
 import { useSync } from '@/sync/use-sync';
 
 function blankCategory(type: MobileCategory['type'] = 'expense'): MobileCategory {
-  return { id: Crypto.randomUUID(), name: '', type, parentId: null, icon: null, color: null, bucket: null, updatedAt: new Date().toISOString() };
+  return { id: Crypto.randomUUID(), name: '', type, icon: null, color: null, bucket: null, updatedAt: new Date().toISOString() };
 }
 
 export default function CategoriesScreen() {
@@ -31,7 +31,8 @@ export default function CategoriesScreen() {
       Alert.alert('Enter a category name');
       return;
     }
-    await db.queueUpsert('category', { ...editing, name: editing.name.trim(), updatedAt: new Date().toISOString() });
+    const { parentId: _legacyParentId, ...category } = editing;
+    await db.queueUpsert('category', { ...category, name: category.name.trim(), updatedAt: new Date().toISOString() });
     setEditing(null);
     await load();
     void syncNow();

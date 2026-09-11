@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { BarChart, LineChart } from 'react-native-gifted-charts';
 import { useFocusEffect } from 'expo-router';
-import { buildBalanceTimeline, buildBudgetVariance, buildCategoryComparison, buildCategorySpending, categorySpendingRange, defaultCategoryAnchor, type BalancePoint, type BalanceTimelinePeriod, type CategorySpendingPeriod } from '@/data/reports';
+import { buildBalanceTimeline, buildBudgetVariance, buildCategoryComparison, buildCategorySpending, buildCombinedBalanceTimeline, categorySpendingRange, defaultCategoryAnchor, type BalancePoint, type BalanceTimelinePeriod, type CategorySpendingPeriod } from '@/data/reports';
 import { useWorkspace } from '@/data/workspace-provider';
 import { useWorkspaceData } from '@/data/hooks/use-workspace-data';
 import { Button, Card, ChoiceChip, Empty, Field, Screen, SectionTitle, Spinner, Title, useUiStyles } from '@/ui/primitives';
@@ -47,10 +47,7 @@ export default function ReportsScreen() {
 
   useFocusEffect(useCallback(() => { void reload(); }, [reload]));
 
-  const selectedAccount = accounts.find((account) => account.id === selectedAccountId) ?? accounts.find((account) => !account.isArchived) ?? accounts[0] ?? null;
-  useEffect(() => {
-    if (selectedAccount && selectedAccount.id !== selectedAccountId) setSelectedAccountId(selectedAccount.id);
-  }, [selectedAccount, selectedAccountId]);
+  const selectedAccount = accounts.find((account) => account.id === selectedAccountId) ?? null;
 
   const preference = useMemo(
     () => ({ displayCurrency, usdPerPhp, rateDate, rateRefreshedAt }),
@@ -58,10 +55,8 @@ export default function ReportsScreen() {
   );
   const timeline = useMemo(() => selectedAccount
     ? buildBalanceTimeline({ account: selectedAccount, accounts, categories, transactions, period: timelinePeriod, preference })
-    : [], [accounts, categories, preference, selectedAccount, timelinePeriod, transactions]);
-  const categorySpending = useMemo(() => selectedAccount
-    ? buildCategorySpending({ accountId: selectedAccount.id, accountCurrency: selectedAccount.currency, preference, categories, transactions, period: categoryPeriod, anchor: categoryAnchor })
-    : [], [categoryAnchor, categoryPeriod, categories, preference, selectedAccount, transactions]);
+    : buildCombinedBalanceTimeline({ accounts, categories, transactions, period: timelinePeriod, preference }), [accounts, categories, preference, selectedAccount, timelinePeriod, transactions]);
+  const categorySpending = useMemo(() => buildCategorySpending({ accountId: selectedAccountId, accountCurrency: selectedAccount?.currency, accounts, preference, categories, transactions, period: categoryPeriod, anchor: categoryAnchor }), [accounts, categoryAnchor, categoryPeriod, categories, preference, selectedAccount?.currency, selectedAccountId, transactions]);
   const budgetVariance = useMemo(() => buildBudgetVariance({ accounts, preference, budgets, categories, transactions, period: categoryPeriod, anchor: categoryAnchor }), [accounts, budgets, categoryAnchor, categoryPeriod, categories, preference, transactions]);
   const categoryComparison = useMemo(() => buildCategoryComparison({ accounts, preference, categories, transactions, period: categoryPeriod, anchor: categoryAnchor }), [accounts, categoryAnchor, categoryPeriod, categories, preference, transactions]);
   useEffect(() => { setSelectedPoint(timeline.at(-1) ?? null); }, [timeline]);
@@ -96,14 +91,14 @@ export default function ReportsScreen() {
       {loading && accounts.length === 0 ? <View style={styles.loading}><Spinner size={24} /><Text style={ui.listMeta}>Loading local reports…</Text></View> : null}
       {!loading && accounts.length === 0 ? <Empty>Add an account and transactions to see your reports.</Empty> : null}
 
-      {selectedAccount ? <View>
+      {accounts.length > 0 ? <View>
         <Card>
-          <SectionTitle>Account</SectionTitle><Text style={ui.listMeta}>Choose the account whose balance movement you want to inspect.</Text>
-          <View style={styles.chips}>{accounts.map((account) => <ChoiceChip key={account.id} label={`${account.label}${account.isArchived ? ' (archived)' : ''}`} selected={selectedAccount.id === account.id} onPress={() => setSelectedAccountId(account.id)} />)}</View>
+          <SectionTitle>Account</SectionTitle><Text style={ui.listMeta}>Choose an account or view all accounts together.</Text>
+          <View style={styles.chips}><ChoiceChip label="All accounts" selected={selectedAccountId === null} onPress={() => setSelectedAccountId(null)} />{accounts.map((account) => <ChoiceChip key={account.id} label={`${account.label}${account.isArchived ? ' (archived)' : ''}`} selected={selectedAccountId === account.id} onPress={() => setSelectedAccountId(account.id)} />)}</View>
         </Card>
 
         <Card>
-          <SectionTitle>Balance movement</SectionTitle><Text style={ui.listMeta}>{selectedAccount.label} · shown in {displayCurrency} · Starting balance is included.</Text>
+          <SectionTitle>Balance movement</SectionTitle><Text style={ui.listMeta}>{selectedAccount?.label ?? 'All accounts'} · shown in {displayCurrency} · Starting balances are included.</Text>
           <View style={styles.chips}>
             <ChoiceChip label="Past 7 days" selected={timelinePeriod === '7d'} onPress={() => setTimelinePeriod('7d')} />
             <ChoiceChip label="Past 30 days" selected={timelinePeriod === '30d'} onPress={() => setTimelinePeriod('30d')} />
@@ -124,11 +119,11 @@ export default function ReportsScreen() {
         <Card>
           <SectionTitle>{selectedPoint ? `What changed on ${selectedPoint.label}` : 'What changed'}</SectionTitle>
           {selectedPoint ? <Text style={ui.listMeta}>{selectedPoint.from === selectedPoint.to ? selectedPoint.from : `${selectedPoint.from} to ${selectedPoint.to}`} · Closing balance {formatDisplayMoney(selectedPoint.balance, displayCurrency)}</Text> : null}
-          <View style={styles.eventList}>{!selectedPoint?.events.length ? <Text style={ui.listMeta}>No transactions changed this balance point.</Text> : selectedPoint.events.map((event, index) => <View key={event.id} style={[styles.eventRow, index > 0 ? styles.rowDivider : undefined]}><View style={[styles.eventDot, { backgroundColor: event.kind === 'income' || event.kind === 'transfer_in' ? theme.income : theme.expense }]} /><View style={styles.eventCopy}><Text numberOfLines={1} style={ui.listTitle}>{event.description}</Text><Text style={ui.listMeta}>{event.date} · Balance {formatDisplayMoney(event.balanceAfter, displayCurrency)}</Text></View><Text style={[styles.eventAmount, Number(event.change) >= 0 ? styles.income : styles.expense]}>{signedMoney(event.change, displayCurrency)}</Text></View>)}</View>
+          <View style={styles.eventList}>{!selectedPoint?.events.length ? <Text style={ui.listMeta}>No transactions changed this balance point.</Text> : selectedPoint.events.map((event, index) => <View key={`${event.accountId}:${event.id}`} style={[styles.eventRow, index > 0 ? styles.rowDivider : undefined]}><View style={[styles.eventDot, { backgroundColor: event.kind === 'income' || event.kind === 'transfer_in' ? theme.income : theme.expense }]} /><View style={styles.eventCopy}><Text numberOfLines={1} style={ui.listTitle}>{event.description}</Text><Text style={ui.listMeta}>{event.date} · Balance {formatDisplayMoney(event.balanceAfter, displayCurrency)}</Text></View><Text style={[styles.eventAmount, Number(event.change) >= 0 ? styles.income : styles.expense]}>{signedMoney(event.change, displayCurrency)}</Text></View>)}</View>
         </Card>
 
         <Card>
-          <SectionTitle>Spending by category</SectionTitle><Text style={ui.listMeta}>Expense categories for {selectedAccount.label}.</Text>
+          <SectionTitle>Spending by category</SectionTitle><Text style={ui.listMeta}>Expense categories for {selectedAccount?.label ?? 'all accounts'}.</Text>
           {categorySpending.length === 0 ? <View style={styles.emptyChart}><Text style={ui.listMeta}>No categorized expenses were saved for this period.</Text></View> : <>
             <BarChart adjustToWidth barWidth={26} data={categorySpending.slice(0, 6).map((item) => ({ label: item.categoryName.slice(0, 8), value: Number(item.amount), frontColor: item.color ?? theme.primary }))} disableScroll height={190} initialSpacing={12} noOfSections={4} rulesColor={theme.border} xAxisColor={theme.border} yAxisColor={theme.border} yAxisTextStyle={{ color: theme.mutedForeground, fontFamily: fontFamily.body, fontSize: 10 }} formatYLabel={(label) => compactMoney(label, displayCurrency)} />
             <View style={styles.categoryList}>{categorySpending.map((item) => <View key={item.categoryName} style={styles.categoryRow}><View style={[styles.eventDot, { backgroundColor: item.color ?? theme.primary }]} /><Text style={ui.listTitle}>{item.categoryName}</Text><Text style={styles.categoryAmount}>{formatDisplayMoney(item.amount, displayCurrency)}</Text></View>)}</View>

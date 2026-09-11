@@ -33,21 +33,18 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
 
   const bodyResult = await readJsonBody(request);
   if ('response' in bodyResult) return bodyResult.response;
+  if (
+    typeof bodyResult.data === 'object'
+    && bodyResult.data !== null
+    && 'parentId' in bodyResult.data
+    && bodyResult.data.parentId !== null
+    && bodyResult.data.parentId !== undefined
+  ) {
+    return badRequest('Categories cannot have a parent');
+  }
   const parsed = updateCategorySchema.safeParse(bodyResult.data);
   if (!parsed.success) {
     return badRequest(parsed.error.issues[0]?.message ?? 'Invalid input');
-  }
-
-  if (parsed.data.parentId && parsed.data.parentId !== category.id) {
-    const parent = await prisma.category.findFirst({
-      where: { id: parsed.data.parentId, userId: session.user.id },
-      select: { id: true, type: true },
-    });
-    if (!parent) return badRequest('Parent category not found');
-    const effectiveType = parsed.data.type ?? category.type;
-    if (effectiveType !== parent.type) {
-      return badRequest('Child category must match parent type');
-    }
   }
 
   const updated = await prisma.category.update({
@@ -73,23 +70,21 @@ export async function DELETE(request: Request, { params }: { params: Promise<{ i
   });
   if (!category) return notFound('Category not found');
 
-  // Prisma's SetNull relations are correct for the browser, but mobile peers
-  // also need canonical upserts for the affected children and transactions.
-  const [children, transactions, budgets] = await prisma.$transaction([
-    prisma.category.findMany({ where: { userId: session.user.id, parentId: category.id }, select: { id: true } }),
+  const [transactions, budgets, recurringRules] = await prisma.$transaction([
     prisma.transaction.findMany({ where: { userId: session.user.id, categoryId: category.id }, select: { id: true } }),
     prisma.budget.findMany({ where: { userId: session.user.id, categoryId: category.id }, select: { id: true } }),
+    prisma.recurringRule.findMany({ where: { userId: session.user.id, categoryId: category.id }, select: { id: true } }),
   ]);
 
   await prisma.category.delete({ where: { id: category.id } });
-  for (const child of children) {
-    await recordCanonicalMobileUpsert(session.user.id, 'category', child.id);
-  }
   for (const transaction of transactions) {
     await recordCanonicalMobileUpsert(session.user.id, 'transaction', transaction.id);
   }
   for (const budget of budgets) {
     await recordCanonicalMobileTombstone(session.user.id, 'budget', budget.id);
+  }
+  for (const recurringRule of recurringRules) {
+    await recordCanonicalMobileUpsert(session.user.id, 'recurring_rule', recurringRule.id);
   }
   await recordCanonicalMobileTombstone(session.user.id, 'category', category.id);
 

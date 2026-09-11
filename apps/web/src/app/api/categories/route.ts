@@ -23,20 +23,18 @@ export async function POST(request: Request) {
 
   const bodyResult = await readJsonBody(request);
   if ('response' in bodyResult) return bodyResult.response;
+  if (
+    typeof bodyResult.data === 'object'
+    && bodyResult.data !== null
+    && 'parentId' in bodyResult.data
+    && bodyResult.data.parentId !== null
+    && bodyResult.data.parentId !== undefined
+  ) {
+    return badRequest('Categories cannot have a parent');
+  }
   const parsed = createCategorySchema.safeParse(bodyResult.data);
   if (!parsed.success) {
     return badRequest(parsed.error.issues[0]?.message ?? 'Invalid input');
-  }
-
-  if (parsed.data.parentId) {
-    const parent = await prisma.category.findFirst({
-      where: { id: parsed.data.parentId, userId: session.user.id },
-      select: { id: true, type: true },
-    });
-    if (!parent) return badRequest('Parent category not found');
-    if (parsed.data.type !== parent.type) {
-      return badRequest('Child category must match parent type');
-    }
   }
 
   const category = await prisma.category.create({
@@ -44,7 +42,6 @@ export async function POST(request: Request) {
       userId: session.user.id,
       name: parsed.data.name,
       type: parsed.data.type,
-      parentId: parsed.data.parentId ?? null,
       icon: parsed.data.icon ?? null,
       color: parsed.data.color ?? null,
       bucket: parsed.data.bucket ?? null,

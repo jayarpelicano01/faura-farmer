@@ -4,6 +4,7 @@ import type {
   MobileBudget,
   MobileCategory,
   MobileMonthlyBudget,
+  MobileRecurringRule,
   MobileTransaction,
 } from '@faura-farmer/types';
 import { useWorkspace } from '@/data/workspace-provider';
@@ -18,6 +19,7 @@ type WorkspaceData = {
   lastSyncedAt: string | null;
   loading: boolean;
   monthlyBudgets: MobileMonthlyBudget[];
+  recurringRules: MobileRecurringRule[];
   reload: () => Promise<void>;
   transactions: MobileTransaction[];
 };
@@ -32,6 +34,7 @@ const emptySnapshot: WorkspaceSnapshot = {
   lastSyncedAt: null,
   loading: true,
   monthlyBudgets: [],
+  recurringRules: [],
   transactions: [],
 };
 
@@ -56,8 +59,9 @@ export function WorkspaceDataProvider({ children }: PropsWithChildren) {
       db.listRecords('category'),
       db.getLastSyncedAt(),
       db.listRecords('monthly_budget'),
+      db.listRecords('recurring_rule'),
       db.listRecords('transaction'),
-    ]).then(([accounts, budgets, categories, lastSyncedAt, monthlyBudgets, transactions]) => {
+    ]).then(([accounts, budgets, categories, lastSyncedAt, monthlyBudgets, recurringRules, transactions]) => {
       if (version !== requestVersion.current) return;
       setSnapshot({
         accounts,
@@ -67,6 +71,7 @@ export function WorkspaceDataProvider({ children }: PropsWithChildren) {
         lastSyncedAt,
         loading: false,
         monthlyBudgets,
+        recurringRules,
         transactions,
       });
     }).catch(() => {
@@ -86,7 +91,7 @@ export function WorkspaceDataProvider({ children }: PropsWithChildren) {
 
   useEffect(() => { void reload(); }, [activeWorkspace, reload]);
   useEffect(() => {
-    if (syncStatus === 'success') void reload();
+    if (syncStatus === 'success' || syncStatus === 'attention') void reload();
   }, [reload, syncStatus]);
 
   const value = useMemo<WorkspaceData>(() => ({ ...snapshot, reload }), [reload, snapshot]);

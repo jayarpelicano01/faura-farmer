@@ -15,7 +15,6 @@ import { TransactionList } from '@/components/transactions/transaction-list';
 import { apiFetch } from '@/lib/api';
 import { useDisplayCurrency } from '@/components/currency/display-currency-provider';
 import { cn } from '@/lib/utils';
-import { resolveTransactionBucket } from '@/lib/meta';
 import { TransactionForm, type TransactionFormValues } from './transaction-form';
 import { CsvExportButton } from './csv-export-button';
 import { CsvImportDialog } from './csv-import-dialog';
@@ -312,7 +311,7 @@ export function TransactionsManager({ accounts, categories }: TransactionsManage
             emptyMessage="No transactions match your filters."
             onEdit={openEdit}
             onDelete={(tx) => setPendingDelete(tx)}
-            getBucket={(tx) => resolveTransactionBucket(categories, tx)}
+            getBucket={(tx) => tx.bucket ?? tx.category?.bucket ?? categories.find((category) => category.id === tx.categoryId)?.bucket ?? null}
           />
           {total > 0 && (
             <div className="flex flex-col items-center justify-between gap-3 border-t border-border p-4 sm:flex-row">

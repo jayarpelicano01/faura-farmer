@@ -39,9 +39,7 @@ export async function POST(request: Request) {
 
   const conflict = await findConflictingBudget(session.user.id, parsed.data.categoryId);
   if (conflict) {
-    return badRequest(
-      `A budget already exists for a parent or sub-category of "${conflict.categoryName}"`,
-    );
+    return badRequest('A budget already exists for this category');
   }
 
   const { toStorage } = await loadDisplayPreference(request.url, session.user.id);

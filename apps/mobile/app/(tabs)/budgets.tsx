@@ -23,45 +23,6 @@ function amount(value: string) {
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
-function descendantsOf(categoryId: string, categories: MobileCategory[]) {
-  const ids = new Set<string>([categoryId]);
-  const pending = [categoryId];
-  while (pending.length) {
-    const parentId = pending.pop()!;
-    for (const category of categories) {
-      if (category.parentId === parentId && !ids.has(category.id)) {
-        ids.add(category.id);
-        pending.push(category.id);
-      }
-    }
-  }
-  return ids;
-}
-
-function relatedCategories(categoryId: string, categories: MobileCategory[]) {
-  const related = descendantsOf(categoryId, categories);
-  const byId = new Map(categories.map((category) => [category.id, category]));
-  let parentId = byId.get(categoryId)?.parentId;
-  while (parentId) {
-    related.add(parentId);
-    parentId = byId.get(parentId)?.parentId;
-  }
-  return related;
-}
-
-function bucketFor(categoryId: string | null, categories: MobileCategory[]): BudgetBucket | null {
-  if (!categoryId) return null;
-  const byId = new Map(categories.map((category) => [category.id, category]));
-  let current = byId.get(categoryId);
-  let guard = 0;
-  while (current && guard <= categories.length) {
-    if (current.bucket) return current.bucket;
-    current = current.parentId ? byId.get(current.parentId) : undefined;
-    guard += 1;
-  }
-  return null;
-}
-
 export default function BudgetsScreen() {
   const { new: newParam } = useLocalSearchParams<{ new?: string | string[] }>();
   const { theme } = useAppTheme();
@@ -94,17 +55,16 @@ export default function BudgetsScreen() {
   const totalBudgetLimits = budgets.reduce((sum, budget) => sum + amount(budget.monthlyLimit), 0);
 
   const spendingFor = useCallback((categoryId: string) => {
-    const categoryIds = descendantsOf(categoryId, categories);
     return monthTransactions
-      .filter((transaction) => transaction.type === 'expense' && transaction.categoryId && categoryIds.has(transaction.categoryId))
+      .filter((transaction) => transaction.type === 'expense' && transaction.categoryId === categoryId)
       .reduce((sum, transaction) => sum + amount(transaction.amount), 0);
-  }, [categories, monthTransactions]);
+  }, [monthTransactions]);
 
   const bucketSpending = useMemo(() => {
     const totals: Record<BudgetBucket, number> = { needs: 0, wants: 0, savings: 0 };
     for (const transaction of monthTransactions) {
       if (transaction.type !== 'expense') continue;
-      const bucket = bucketFor(transaction.categoryId, categories);
+      const bucket = transaction.categoryId ? categories.find((category) => category.id === transaction.categoryId)?.bucket ?? null : null;
       if (bucket) totals[bucket] += amount(transaction.amount);
     }
     return totals;
@@ -123,11 +83,9 @@ export default function BudgetsScreen() {
       Alert.alert('Check this budget', 'Budgets can only be set on expense categories.');
       return;
     }
-    const related = relatedCategories(editor.categoryId, categories);
-    const conflict = budgets.find((budget) => budget.id !== editor.id && related.has(budget.categoryId));
+    const conflict = budgets.find((budget) => budget.id !== editor.id && budget.categoryId === editor.categoryId);
     if (conflict) {
-      const conflictName = categories.find((item) => item.id === conflict.categoryId)?.name ?? 'another category';
-      Alert.alert('Budget conflict', `A budget already exists for ${conflictName} or a related category.`);
+      Alert.alert('Budget conflict', 'A budget already exists for this category.');
       return;
     }
     await db.queueUpsert('budget', {

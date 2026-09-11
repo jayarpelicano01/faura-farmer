@@ -248,6 +248,10 @@ export async function DELETE(request: Request, { params }: { params: Promise<{ i
         where: transactionsWhere,
         select: { id: true, transferGroupId: true, transferRole: true },
       });
+      const recurringRules = await tx.recurringRule.findMany({
+        where: { accountId: account.id, userId: session.user.id },
+        select: { id: true },
+      });
       await tx.transaction.deleteMany({ where: transactionsWhere });
       await tx.recurringRule.deleteMany({ where: { accountId: account.id } });
       await tx.account.delete({ where: { id: account.id } });
@@ -256,6 +260,7 @@ export async function DELETE(request: Request, { params }: { params: Promise<{ i
         deletedTransactionIds: transactions
           .filter((transaction) => !transaction.transferGroupId || transaction.transferRole === 'outgoing')
           .map((transaction) => transaction.id),
+        deletedRecurringRuleIds: recurringRules.map((rule) => rule.id),
       };
     },
   });
@@ -277,6 +282,9 @@ export async function DELETE(request: Request, { params }: { params: Promise<{ i
   }
   for (const transactionId of result.deletedTransactionIds) {
     await recordCanonicalMobileTombstone(session.user.id, 'transaction', transactionId);
+  }
+  for (const recurringRuleId of result.deletedRecurringRuleIds) {
+    await recordCanonicalMobileTombstone(session.user.id, 'recurring_rule', recurringRuleId);
   }
   await recordCanonicalMobileTombstone(session.user.id, 'account', account.id);
   return ok({ id: account.id, deleted: true });

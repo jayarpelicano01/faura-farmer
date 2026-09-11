@@ -14,7 +14,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectItemText, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { apiFetch } from '@/lib/api';
 import { useDisplayCurrency } from '@/components/currency/display-currency-provider';
-import { categoriesByType, BUCKET_BADGE_COLOR, BUCKET_META, resolveCategoryBucket } from '@/lib/meta';
+import { categoriesByType, BUCKET_BADGE_COLOR, BUCKET_META } from '@/lib/meta';
 import type { SelectAccount } from '@/lib/meta';
 
 const formSchema = z
@@ -375,7 +375,7 @@ export function TransactionForm({
                         <SelectContent>
                           <SelectItem value="none">Uncategorized</SelectItem>
                           {categoriesByType(categories, watchType ?? 'expense').map((category) => {
-                            const bucket = resolveCategoryBucket(categories, category);
+                            const bucket = category.bucket;
                             return (
                               <SelectItem key={category.id} value={category.id}>
                                 <SelectItemText>{category.name}</SelectItemText>
@@ -402,7 +402,7 @@ export function TransactionForm({
                 render={({ field }) => {
                   const selectedCategory = categories.find((c) => c.id === watchCategoryId);
                   const autoBucket = selectedCategory
-                    ? resolveCategoryBucket(categories, selectedCategory)
+                    ? selectedCategory.bucket ?? null
                     : null;
                   return (
                     <FormItem>
