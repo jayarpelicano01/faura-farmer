@@ -39,3 +39,5 @@ implementation-plans/
 
 # Agent reports
 .agents/reports/
+
+.opencode

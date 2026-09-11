@@ -38,7 +38,7 @@ Workspace layout: `apps/web` (Next.js 15 App Router), `apps/mobile` (Expo), `pac
 
 ## Never
 
-- Never run `db:push`, `db:migrate`, or any migration against a production database.
+- Never run `db:push`, `db:migrate`, or any migration against a production database, except if permitted by the user.
 - Never deploy without explicit user approval.
 - Never print, commit, or log secrets, tokens, connection strings, or `.env` values.
 - Never commit, reset --hard, or discard files unless the user asks.
