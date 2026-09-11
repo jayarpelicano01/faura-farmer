@@ -6,7 +6,7 @@ This workflow is intentionally vendor-neutral. Do not assume a particular agent,
 
 Follow the phases in order. Do not modify application code during setup.
 
-## Phase 1 — Scan and analyze
+## Phase 1: Scan and analyze
 
 1. Read `AGENTS.md` and any other repository-level instruction files present.
 2. Inspect the manifests, source tree, configuration, documentation, and test setup.
@@ -23,7 +23,7 @@ Follow the phases in order. Do not modify application code during setup.
    - mixed repositories: one flow per layer or one flow across the network boundary.
 5. Treat the project profile as the source of discovered facts for the later phases.
 
-## Phase 2 — Install the planning workflow
+## Phase 2: Install the planning workflow
 
 After Phase 1, present the proposed planning workflow and wait for explicit approval before creating or changing `agent-workflows/pm.md`.
 
@@ -34,17 +34,17 @@ The planning workflow must risk-screen every requested change against `agent-con
 3. High-risk work must stop at an explicit user approval gate. Do not edit files, implement code, or delegate high-risk work until the user explicitly approves the plan.
 4. The workflow must require immutable implementation, QA, reviewer, and DevOps evidence where the risk lane calls for those roles. It must not create a separate task-status file.
 
-## Phase 3 — Propose project-fit extensions
+## Phase 3: Propose project-fit extensions
 
 Using the project profile, propose only extensions that this repository genuinely benefits from:
 
-- reusable skills or checklists in `agent-workflows/skills/`;
+- reusable skills or checklists in `.agents/skills/`;
 - scoped instructions in additional `AGENTS.md` files;
-- isolated agent roles in `agent-workflows/agents/`, when the host agent supports them.
+- isolated agent roles in `.agents/agents/`, when the host agent supports them.
 
 Give each proposal a one-line rationale and wait for explicit approval. Do not create speculative infrastructure.
 
-## Phase 4 — Deduplicate
+## Phase 4: Deduplicate
 
 After approved files are created:
 

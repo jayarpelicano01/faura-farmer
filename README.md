@@ -2,7 +2,7 @@
 
 # Faura-Farmer
 
-> A personal finance tracker — monorepo with a typed Next.js app, Prisma data layer, and OAuth auth.
+> A personal finance tracker: a monorepo with a typed Next.js app, Prisma data layer, and OAuth auth.
 
 [![Live Demo](https://img.shields.io/badge/live-faura--farmer.vercel.app-FFD700)](https://faura-farmer.vercel.app)
 [![Next.js](https://img.shields.io/badge/Next.js-15-black)](https://nextjs.org)
@@ -15,7 +15,7 @@
 
 ## What it is
 
-**Faura-Farmer** is a personal finance tracker built as a pnpm monorepo. It lets a user sign in, record transactions, and see where their money goes through charts and summaries. The codebase is fully typed end-to-end — from the database schema to the form inputs.
+**Faura-Farmer** is a personal finance tracker built as a pnpm monorepo. It lets a user sign in, record transactions, and see where their money goes through charts and summaries. The codebase is fully typed end-to-end, from the database schema to the form inputs.
 
 ## Features
 
@@ -23,8 +23,8 @@
 - **Transaction tracking** with typed forms (React Hook Form + Zod validation)
 - **Spending insights** rendered as interactive charts (Recharts)
 - **Typed data layer** with Prisma 6 (schema → client, no loose SQL strings)
-- **Shared design system** — Radix UI primitives + shadcn-style utilities (CVA, `tailwind-merge`, `clsx`)
-- **Monorepo structure** — `apps/web` for the app, `packages/*` for config, database, and shared types
+- **Shared design system**: Radix UI primitives + shadcn-style utilities (CVA, `tailwind-merge`, `clsx`)
+- **Monorepo structure**: `apps/web` for the app, `packages/*` for config, database, and shared types
 
 ## Screenshot
 
@@ -37,7 +37,7 @@
 | Framework | Next.js 15 (App Router) |
 | Language | TypeScript 5 |
 | Styling | Tailwind CSS v3 · Radix UI |
-| Auth | NextAuth v5 (Auth.js) — Google / Facebook OAuth |
+| Auth | NextAuth v5 (Auth.js) with Google / Facebook OAuth |
 | Database | Prisma 6 (PostgreSQL) |
 | Charts | Recharts |
 | Forms | React Hook Form + Zod |
@@ -131,7 +131,7 @@ production configuration, OAuth acceptance checks, and incident triage.
 
 ## Author
 
-**Agustin Ronato Pelicano Jr. (Jay Ar)** — Junior & Full-Stack Software Developer
+**Agustin Ronato Pelicano Jr. (Jay Ar)**, Junior & Full-Stack Software Developer
 
 - 💻 GitHub: [@jayarpelicano01](https://github.com/jayarpelicano01)
 - 💼 LinkedIn: [agustin-pelicano-jr-77062a3a6](https://www.linkedin.com/in/agustin-pelicano-jr-77062a3a6/)
