@@ -15,12 +15,22 @@ const CurrencyContext = createContext<CurrencyContextValue | null>(null);
 
 export function CurrencyProvider({ children }: { children: React.ReactNode }) {
   const { session } = useSession();
-  const { db } = useWorkspace();
+  const { activeWorkspace, db } = useWorkspace();
   const [preference, setStoredPreference] = useState<CurrencyPreference>(defaultCurrencyPreference);
   const [ready, setReady] = useState(false);
 
   useEffect(() => {
     let active = true;
+
+    if (activeWorkspace === 'local') {
+      void db.getProfileDetails().then((profile) => {
+        if (!active) return;
+        if (profile) setStoredPreference(profile);
+        setReady(true);
+      }).catch(() => { if (active) setReady(true); });
+      return () => { active = false; };
+    }
+
     if (!session) {
       setStoredPreference(defaultCurrencyPreference);
       setReady(true);
@@ -33,7 +43,7 @@ export function CurrencyProvider({ children }: { children: React.ReactNode }) {
       setReady(true);
     }).catch(() => { if (active) setReady(true); });
     return () => { active = false; };
-  }, [session, db]);
+  }, [activeWorkspace, session, db]);
 
   const setPreference = useCallback(async (next: CurrencyPreference) => {
     setStoredPreference(next);

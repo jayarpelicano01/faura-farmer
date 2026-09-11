@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useWorkspace } from '@/data/workspace-provider';
+import { useSession } from '@/auth/session';
 import { BrandLockup } from '@/ui/brand';
 import { BodyText, Button, InlineNotice, Screen } from '@/ui/primitives';
 import { fontFamily, useAppTheme } from '@/ui/theme';
@@ -10,6 +11,7 @@ export default function WelcomeScreen() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const { enterOfflineMode } = useWorkspace();
+  const { setOffline } = useSession();
   const router = useRouter();
   const styles = useWelcomeStyles();
 
@@ -18,6 +20,7 @@ export default function WelcomeScreen() {
     setError(null);
     try {
       await enterOfflineMode();
+      setOffline();
       router.replace('/dashboard');
     } catch {
       setError('Offline mode is not available on this device.');

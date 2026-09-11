@@ -16,7 +16,7 @@ export default function RegisterScreen() {
   const [confirm, setConfirm] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const { establish } = useSession();
+  const { establish, setOffline } = useSession();
   const { enterOfflineMode } = useWorkspace();
   const router = useRouter();
   const styles = useRegisterStyles();
@@ -37,6 +37,7 @@ export default function RegisterScreen() {
   const goOffline = async () => {
     try {
       await enterOfflineMode();
+      setOffline();
       router.replace('/dashboard');
     } catch { /* ignore */ }
   };

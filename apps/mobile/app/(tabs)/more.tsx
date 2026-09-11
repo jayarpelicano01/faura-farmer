@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import type { CurrencyPreference, MobileProfile } from '@faura-farmer/types';
@@ -53,8 +53,8 @@ export default function MoreScreen() {
   const styles = useMoreStyles();
   const ui = useUiStyles();
   const { mode, toggleMode } = useAppTheme();
-  const { session, update, signOutLocal, lockDelay, setLockDelay } = useSession();
-  const { db, activeWorkspace, resetToOnline } = useWorkspace();
+  const { session, update, signOutLocal, clearOffline, lockDelay, setLockDelay } = useSession();
+  const { db, activeWorkspace, resetToOnline, deleteLocalProfile } = useWorkspace();
   const { lastSyncFailed, syncNow } = useSync();
   const { displayCurrency, usdPerPhp, rateDate, rateRefreshedAt, setPreference } = useCurrency();
   const router = useRouter();
@@ -72,13 +72,17 @@ export default function MoreScreen() {
   const [currencyError, setCurrencyError] = useState<string | null>(null);
   const [currencySuccess, setCurrencySuccess] = useState<string | null>(null);
 
+  const sessionRef = useRef(session);
+  sessionRef.current = session;
+
   const activeSession = useCallback(async () => {
-    if (!session) throw new Error('Your session has ended');
-    if (new Date(session.accessTokenExpiresAt).getTime() - Date.now() >= 60_000) return session;
-    const next = await refreshedSession(session);
+    const s = sessionRef.current;
+    if (!s) throw new Error('Your session has ended');
+    if (new Date(s.accessTokenExpiresAt).getTime() - Date.now() >= 60_000) return s;
+    const next = await refreshedSession(s);
     await update(next);
     return next;
-  }, [session, update]);
+  }, [update]);
 
   const saveRemoteProfile = useCallback(async (next: MobileProfile) => {
     await db.saveProfileDetails(next);
@@ -90,49 +94,57 @@ export default function MoreScreen() {
     });
   }, [db, setPreference]);
 
+  const loadProfileRef = useRef(false);
+
   const loadProfile = useCallback(async () => {
-    if (activeWorkspace === 'local') {
+    if (loadProfileRef.current) return;
+    loadProfileRef.current = true;
+    try {
+      if (activeWorkspace === 'local') {
+        setProfileLoading(true);
+        setProfileError(null);
+        try {
+          const cached = await db.getProfileDetails();
+          if (cached) {
+            setProfile(cached);
+            setDraft(draftFor(cached));
+          }
+        } catch {
+          // Offline mode - profile loading failed
+        } finally {
+          setProfileLoading(false);
+        }
+        return;
+      }
+
+      if (!sessionRef.current) return;
       setProfileLoading(true);
       setProfileError(null);
       try {
         const cached = await db.getProfileDetails();
-        if (cached) {
+        if (cached?.id === sessionRef.current?.user.id) {
           setProfile(cached);
           setDraft(draftFor(cached));
         }
       } catch {
-        // Offline mode - profile loading failed
+        // The signed-in session remains a safe read-only fallback when local storage is unavailable.
+      }
+
+      try {
+        const active = await activeSession();
+        const response = await mobileRequest<{ user: MobileProfile }>('/api/mobile/v1/profile', {}, active.accessToken);
+        await saveRemoteProfile(response.user);
+        setProfile(response.user);
+        setDraft(draftFor(response.user));
+      } catch (error) {
+        setProfileError(connectionMessage(error));
       } finally {
         setProfileLoading(false);
       }
-      return;
-    }
-
-    if (!session) return;
-    setProfileLoading(true);
-    setProfileError(null);
-    try {
-      const cached = await db.getProfileDetails();
-      if (cached?.id === session.user.id) {
-        setProfile(cached);
-        setDraft(draftFor(cached));
-      }
-    } catch {
-      // The signed-in session remains a safe read-only fallback when local storage is unavailable.
-    }
-
-    try {
-      const active = await activeSession();
-      const response = await mobileRequest<{ user: MobileProfile }>('/api/mobile/v1/profile', {}, active.accessToken);
-      await saveRemoteProfile(response.user);
-      setProfile(response.user);
-      setDraft(draftFor(response.user));
-    } catch (error) {
-      setProfileError(connectionMessage(error));
     } finally {
-      setProfileLoading(false);
+      loadProfileRef.current = false;
     }
-  }, [activeSession, activeWorkspace, db, saveRemoteProfile, session]);
+  }, [activeSession, activeWorkspace, db, saveRemoteProfile]);
 
   useEffect(() => { void loadProfile(); }, [loadProfile]);
 
@@ -214,6 +226,12 @@ export default function MoreScreen() {
   };
 
   const logout = async () => {
+    if (activeWorkspace === 'local') {
+      await deleteLocalProfile();
+      clearOffline();
+      router.replace('/welcome');
+      return;
+    }
     try {
       if (session) {
         const active = await activeSession();
@@ -299,7 +317,7 @@ export default function MoreScreen() {
             <SectionTitle>Offline mode</SectionTitle>
             <View style={styles.sectionContent}>
               <Text style={ui.listMeta}>Your data stays on this device and never syncs.</Text>
-              <Button size="compact" variant="outline" onPress={async () => { await signOutLocal(); await resetToOnline(); router.replace('/login'); }}>Switch to online</Button>
+              <Button size="compact" variant="outline" onPress={async () => { await resetToOnline(); clearOffline(); router.replace('/login'); }}>Switch to online</Button>
             </View>
           </Card>
         ) : null}
@@ -310,7 +328,7 @@ export default function MoreScreen() {
             <View accessibilityLabel="Your initials" style={styles.avatar}><Text style={styles.avatarText}>{initials}</Text></View>
             <View style={styles.profileCopy}>
               <Text numberOfLines={1} style={ui.listTitle}>{displayedProfile?.name || 'Your profile'}</Text>
-              <Text numberOfLines={1} style={ui.listMeta}>{displayedProfile?.email ?? 'Loading profile...'}</Text>
+              <Text numberOfLines={1} style={ui.listMeta}>{activeWorkspace === 'local' ? 'Local account' : (displayedProfile?.email ?? 'Loading profile...')}</Text>
             </View>
           </View>
 
@@ -318,8 +336,8 @@ export default function MoreScreen() {
           {displayedProfile && !editingProfile ? (
             <View style={styles.details}>
               <ProfileDetail label="Name" value={displayedProfile.name || 'Not set'} />
-              <ProfileDetail label="Email" value={displayedProfile.email} />
-              <ProfileDetail label="Username" value={displayedProfile.username || 'Not set'} />
+              {activeWorkspace === 'online' ? <ProfileDetail label="Email" value={displayedProfile.email} /> : null}
+              {activeWorkspace === 'online' ? <ProfileDetail label="Username" value={displayedProfile.username || 'Not set'} /> : null}
               <View style={styles.actionRow}>
                 <Button disabled={profileLoading} size="compact" variant="outline" onPress={beginProfileEdit}>Edit profile</Button>
                 {profileError ? <Button disabled={profileLoading} size="compact" variant="ghost" onPress={() => void loadProfile()}>Try again</Button> : null}
@@ -330,9 +348,13 @@ export default function MoreScreen() {
           {displayedProfile && editingProfile ? (
             <View style={styles.form}>
               <Field label="Name" autoComplete="name" maxLength={120} onChangeText={(name) => setDraft((current) => ({ ...current, name }))} placeholder="Your name" value={draft.name} />
-              <Field label="Email" editable={false} value={displayedProfile.email} />
-              <Field label="Username" autoCapitalize="none" autoCorrect={false} maxLength={30} onChangeText={(username) => setDraft((current) => ({ ...current, username }))} placeholder="username" value={draft.username} />
-              <Text style={styles.fieldHint}>3–30 letters, numbers, dots, dashes, or underscores.</Text>
+              {activeWorkspace === 'online' ? <Field label="Email" editable={false} value={displayedProfile.email} /> : null}
+              {activeWorkspace === 'online' ? (
+                <>
+                  <Field label="Username" autoCapitalize="none" autoCorrect={false} maxLength={30} onChangeText={(username) => setDraft((current) => ({ ...current, username }))} placeholder="username" value={draft.username} />
+                  <Text style={styles.fieldHint}>3–30 letters, numbers, dots, dashes, or underscores.</Text>
+                </>
+              ) : null}
               <View style={styles.formActions}>
                 <Button loading={savingProfile} size="full" onPress={() => void saveProfile()}>{savingProfile ? 'Saving changes…' : 'Save changes'}</Button>
                 <Button disabled={savingProfile} variant="outline" onPress={cancelProfileEdit}>Cancel</Button>

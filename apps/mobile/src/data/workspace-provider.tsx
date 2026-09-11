@@ -9,7 +9,6 @@ import {
   getActiveWorkspaceId,
   setActiveWorkspaceId,
 } from '@/data/workspace';
-import { useSession } from '@/auth/session';
 
 type WorkspaceContextValue = {
   activeWorkspace: WorkspaceId;
@@ -29,7 +28,6 @@ const onlineDb = createDatabase(ONLINE_WORKSPACE.databaseName);
 const localDb = createDatabase(LOCAL_WORKSPACE.databaseName);
 
 export function WorkspaceProvider({ children }: PropsWithChildren) {
-  const { session, status } = useSession();
   const [activeWorkspace, setActiveWorkspace] = useState<WorkspaceId>('online');
   const [localProfileExists, setLocalProfileExists] = useState(false);
   const [ready, setReady] = useState(false);

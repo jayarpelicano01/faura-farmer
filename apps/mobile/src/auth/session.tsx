@@ -3,6 +3,7 @@ import { AppState } from 'react-native';
 import * as LocalAuthentication from 'expo-local-authentication';
 import * as SecureStore from 'expo-secure-store';
 import { clearLocalData, getProfile, saveProfile } from '@/data/db';
+import { getActiveWorkspaceId } from '@/data/workspace';
 
 const SESSION_KEY = 'mobile-session-v1';
 const INSTALLATION_KEY = 'mobile-installation-id-v1';
@@ -20,8 +21,10 @@ export type StoredSession = {
   user: { id: string; email: string; name: string | null };
 };
 
+export type SessionStatus = 'loading' | 'signedOut' | 'covered' | 'locked' | 'ready' | 'offline';
+
 type SessionContextValue = {
-  status: 'loading' | 'signedOut' | 'covered' | 'locked' | 'ready';
+  status: SessionStatus;
   session: StoredSession | null;
   deviceId: string | null;
   unlock: () => Promise<boolean>;
@@ -30,6 +33,8 @@ type SessionContextValue = {
   authNotice: string | null;
   requireReauthentication: () => Promise<void>;
   signOutLocal: () => Promise<void>;
+  setOffline: () => void;
+  clearOffline: () => void;
   lockDelay: LockDelayMinutes;
   setLockDelay: (minutes: LockDelayMinutes) => Promise<void>;
   unlockNow: () => void;
@@ -81,12 +86,16 @@ export function SessionProvider({ children }: PropsWithChildren) {
   const [lockDelay, setLockDelayState] = useState<LockDelayMinutes>(DEFAULT_LOCK_DELAY);
 
   useEffect(() => {
-    void Promise.all([getStoredSession(), getInstallationId(), getLockDelay()]).then(([stored, installation, delay]) => {
+    void Promise.all([getStoredSession(), getInstallationId(), getLockDelay(), getActiveWorkspaceId()]).then(([stored, installation, delay, workspace]) => {
       setSession(stored);
       setDeviceId(installation);
       setLockDelayState(delay);
       if (!stored) {
-        setStatus('signedOut');
+        if (workspace === 'local') {
+          setStatus('offline');
+        } else {
+          setStatus('signedOut');
+        }
         return;
       }
       // Cold launch: check if delay has elapsed since last background
@@ -199,6 +208,14 @@ export function SessionProvider({ children }: PropsWithChildren) {
     setStatus('signedOut');
   }, []);
 
+  const setOffline = useCallback(() => {
+    setStatus('offline');
+  }, []);
+
+  const clearOffline = useCallback(() => {
+    setStatus('signedOut');
+  }, []);
+
   const setLockDelay = useCallback(async (minutes: LockDelayMinutes) => {
     await SecureStore.setItemAsync(LOCK_DELAY_KEY, String(minutes));
     setLockDelayState(minutes);
@@ -206,8 +223,8 @@ export function SessionProvider({ children }: PropsWithChildren) {
 
   const value = useMemo(() => ({
     status, session, deviceId, unlock, establish, update, authNotice, requireReauthentication, signOutLocal,
-    lockDelay, setLockDelay, unlockNow,
-  }), [status, session, deviceId, unlock, establish, update, authNotice, requireReauthentication, signOutLocal, lockDelay, setLockDelay, unlockNow]);
+    setOffline, clearOffline, lockDelay, setLockDelay, unlockNow,
+  }), [status, session, deviceId, unlock, establish, update, authNotice, requireReauthentication, signOutLocal, setOffline, clearOffline, lockDelay, setLockDelay, unlockNow]);
   return <SessionContext.Provider value={value}>{children}</SessionContext.Provider>;
 }
 
