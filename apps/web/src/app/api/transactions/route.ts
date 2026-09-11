@@ -6,6 +6,7 @@ import { lockAccountsInOrder, toLogicalTransactions } from '@/lib/queries';
 import { createTransactionSchema, transactionListQuerySchema } from '@/lib/validations';
 import { guardMutation, readJsonBody } from '@/lib/security';
 import { recordCanonicalMobileUpsert } from '@/lib/mobile/sync';
+import { fetchTransferGroupRows } from '@/lib/transfer-group-fetch';
 
 const transactionInclude = { account: true, category: true } as const;
 
@@ -58,10 +59,9 @@ export async function GET(request: Request) {
     );
   }
 
-  const logicalWhere: Prisma.TransactionWhereInput = {
+  const logicalBaseWhere: Prisma.TransactionWhereInput = {
     AND: [
       filters,
-      { OR: [{ transferGroupId: null }, { transferRole: 'outgoing' }] },
       ...(accountId
         ? [
             {
@@ -77,33 +77,27 @@ export async function GET(request: Request) {
     ],
   };
 
-  const [total, rows] = await prisma.$transaction([
-    prisma.transaction.count({ where: logicalWhere }),
-    prisma.transaction.findMany({
-      where: logicalWhere,
-      include: transactionInclude,
-      orderBy: [{ date: 'desc' }, { createdAt: 'desc' }, { id: 'desc' }],
-      skip: (page - 1) * perPage,
-      take: perPage,
+  const { metadata: total, outgoing: rows, incoming: incomingRows } = await prisma.$transaction(
+    (tx) => fetchTransferGroupRows({
+      userId,
+      baseWhere: logicalBaseWhere,
+      fetchMetadata: (where) => tx.transaction.count({ where }),
+      fetchOutgoing: (where) => tx.transaction.findMany({
+        where,
+        include: transactionInclude,
+        orderBy: [{ date: 'desc' }, { createdAt: 'desc' }, { id: 'desc' }],
+        skip: (page - 1) * perPage,
+        take: perPage,
+      }),
+      fetchIncoming: (where) => tx.transaction.findMany({
+        where,
+        include: transactionInclude,
+      }),
     }),
-  ]);
-  const transferGroupIds = rows.flatMap((row) =>
-    row.transferGroupId ? [row.transferGroupId] : [],
   );
-  const incomingRows =
-    transferGroupIds.length > 0
-      ? await prisma.transaction.findMany({
-          where: {
-            transferGroupId: { in: transferGroupIds },
-            transferRole: 'incoming',
-            account: { userId },
-          },
-          include: transactionInclude,
-        })
-      : [];
   const items = toLogicalTransactions([...rows, ...incomingRows]);
 
-  return ok({ items, total, page, perPage });
+  return ok({ items, total: total ?? 0, page, perPage });
 }
 
 export async function POST(request: Request) {

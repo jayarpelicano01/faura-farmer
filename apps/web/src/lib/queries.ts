@@ -19,6 +19,8 @@ import type {
   Transaction,
 } from '@faura-farmer/types';
 import { BUDGET_BUCKETS, convertMoney } from '@faura-farmer/types';
+import { accountBalance, computeNetFromGrouped } from '@/lib/balance';
+import { toNumber } from '@/lib/format';
 import {
   calculatePercentageChange,
   calculateSavingsRate,
@@ -29,12 +31,6 @@ import {
   type ReportRange,
 } from '@/lib/reporting';
 import { format, subDays, subMonths } from 'date-fns';
-
-export function toNumber(value: unknown): number {
-  if (value === null || value === undefined || value === '') return 0;
-  const n = typeof value === 'number' ? value : Number(value);
-  return Number.isFinite(n) ? n : 0;
-}
 
 function convertForDisplay(value: unknown, sourceCurrency: string, preference: CurrencyPreference) {
   return toNumber(convertMoney(String(value), sourceCurrency, preference.displayCurrency, preference.usdPerPhp));
@@ -153,21 +149,17 @@ export async function getAccountsWithBalance(userId: string): Promise<AccountWit
     _sum: { amount: true },
   });
 
-  const netByAccount = new Map<string, number>();
+  const rowsByAccount = new Map<string, typeof grouped>();
   for (const row of grouped) {
-    const current = netByAccount.get(row.accountId) ?? 0;
-    const sum = toNumber(row._sum.amount);
-    if (row.type === 'income' || (row.type === 'transfer' && row.transferRole === 'incoming')) {
-      netByAccount.set(row.accountId, current + sum);
-    } else {
-      netByAccount.set(row.accountId, current - sum);
-    }
+    const rows = rowsByAccount.get(row.accountId) ?? [];
+    rows.push(row);
+    rowsByAccount.set(row.accountId, rows);
   }
 
   return accounts.map<AccountWithBalance>((a) => ({
     ...a,
     startingBalance: String(a.startingBalance),
-    balance: String(toNumber(a.startingBalance) + (netByAccount.get(a.id) ?? 0)),
+    balance: String(accountBalance(a.startingBalance, computeNetFromGrouped(rowsByAccount.get(a.id) ?? []))),
     currency: a.currency as AccountCurrency,
   }));
 }

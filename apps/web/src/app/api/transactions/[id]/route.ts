@@ -3,10 +3,10 @@ import { prisma } from '@faura-farmer/database';
 import { auth } from '@/lib/auth';
 import { badRequest, fail, notFound, ok, unauthorized } from '@/lib/http';
 import {
-  lockAccountsInOrder,
   toLogicalTransactions,
   type TransactionWithRelations,
 } from '@/lib/queries';
+import { withAccountLockRetry } from '@/lib/account-locking';
 import { createTransactionSchema, updateTransactionSchema } from '@/lib/validations';
 import { guardMutation, readJsonBody } from '@/lib/security';
 import { recordCanonicalMobileTombstone, recordCanonicalMobileUpsert } from '@/lib/mobile/sync';
@@ -105,17 +105,15 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   const final = finalParsed.data;
 
   if (final.type === 'transfer') {
-    let accountIdsToLock = [
+    const transferResult = await withAccountLockRetry({
+      initialAccountIds: [
         source.accountId,
         ...(incoming ? [incoming.accountId] : []),
         final.accountId,
         final.destinationAccountId,
-      ];
-    let transferUpdated = false;
-
-    for (let attempt = 0; attempt < 4; attempt += 1) {
-      const transferResult = await prisma.$transaction(async (tx) => {
-        const accounts = await lockAccountsInOrder(tx, accountIdsToLock, userId);
+      ],
+      userId,
+      operation: async (tx, accounts) => {
         const currentSource = await tx.transaction.findFirst({
           where: { id: source.id, account: { userId } },
           select: {
@@ -220,39 +218,31 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
         }
 
         return { status: 'updated' as const };
-      });
+      },
+    });
 
-      if (transferResult.status === 'retry') {
-        accountIdsToLock = transferResult.accountIds;
-        continue;
-      }
-      if (transferResult.status === 'not_found') {
-        return fail('Account not found', 404, 'NOT_FOUND');
-      }
-      if (transferResult.status === 'ownership_conflict') {
-        return fail(
-          'Transfer cannot be updated because its accounts have invalid ownership',
-          409,
-          'TRANSACTION_UPDATE_CONFLICT',
-        );
-      }
-      if (transferResult.status === 'currency_mismatch') {
-        return fail(
-          'Transfers require accounts with the same currency',
-          400,
-          'CURRENCY_MISMATCH',
-        );
-      }
-
-      transferUpdated = true;
-      break;
-    }
-
-    if (!transferUpdated) {
+    if (!transferResult) {
       return fail(
         'Transfer relationships changed during the update; try again',
         409,
         'TRANSACTION_UPDATE_CONFLICT',
+      );
+    }
+    if (transferResult.status === 'not_found') {
+      return fail('Account not found', 404, 'NOT_FOUND');
+    }
+    if (transferResult.status === 'ownership_conflict') {
+      return fail(
+        'Transfer cannot be updated because its accounts have invalid ownership',
+        409,
+        'TRANSACTION_UPDATE_CONFLICT',
+      );
+    }
+    if (transferResult.status === 'currency_mismatch') {
+      return fail(
+        'Transfers require accounts with the same currency',
+        400,
+        'CURRENCY_MISMATCH',
       );
     }
   } else {
@@ -270,16 +260,14 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
       if (!category) return fail('Category not found', 404, 'NOT_FOUND');
     }
 
-    let accountIdsToLock = [
-      source.accountId,
-      ...group.map((row) => row.accountId),
-      final.accountId,
-    ];
-    let ordinaryUpdated = false;
-
-    for (let attempt = 0; attempt < 4; attempt += 1) {
-      const ordinaryResult = await prisma.$transaction(async (tx) => {
-        const lockedAccounts = await lockAccountsInOrder(tx, accountIdsToLock, userId);
+    const ordinaryResult = await withAccountLockRetry({
+      initialAccountIds: [
+        source.accountId,
+        ...group.map((row) => row.accountId),
+        final.accountId,
+      ],
+      userId,
+      operation: async (tx, lockedAccounts) => {
         const currentSource = await tx.transaction.findFirst({
           where: { id: source.id, account: { userId } },
           select: {
@@ -344,33 +332,25 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
         }
 
         return { status: 'updated' as const };
-      });
+      },
+    });
 
-      if (ordinaryResult.status === 'retry') {
-        accountIdsToLock = ordinaryResult.accountIds;
-        continue;
-      }
-      if (ordinaryResult.status === 'transaction_not_found') {
-        return notFound('Transaction not found');
-      }
-      if (ordinaryResult.status === 'account_not_found') {
-        return fail('Account not found', 404, 'NOT_FOUND');
-      }
-      if (ordinaryResult.status === 'ownership_conflict') {
-        return fail(
-          'Transaction cannot be updated because its transfer has invalid ownership',
-          409,
-          'TRANSACTION_UPDATE_CONFLICT',
-        );
-      }
-
-      ordinaryUpdated = true;
-      break;
-    }
-
-    if (!ordinaryUpdated) {
+    if (!ordinaryResult) {
       return fail(
         'Transfer relationships changed during the update; try again',
+        409,
+        'TRANSACTION_UPDATE_CONFLICT',
+      );
+    }
+    if (ordinaryResult.status === 'transaction_not_found') {
+      return notFound('Transaction not found');
+    }
+    if (ordinaryResult.status === 'account_not_found') {
+      return fail('Account not found', 404, 'NOT_FOUND');
+    }
+    if (ordinaryResult.status === 'ownership_conflict') {
+      return fail(
+        'Transaction cannot be updated because its transfer has invalid ownership',
         409,
         'TRANSACTION_UPDATE_CONFLICT',
       );
@@ -397,15 +377,10 @@ export async function DELETE(request: Request, { params }: { params: Promise<{ i
   if (!transaction) return notFound('Transaction not found');
 
   const group = await findTransferGroup(transaction, session.user.id);
-  let accountIdsToLock = [...new Set(group.map((row) => row.accountId))].sort();
-
-  for (let attempt = 0; attempt < 4; attempt += 1) {
-    const result = await prisma.$transaction(async (tx) => {
-      const lockedAccounts = await lockAccountsInOrder(
-        tx,
-        accountIdsToLock,
-        session.user.id,
-      );
+  const result = await withAccountLockRetry({
+    initialAccountIds: [...new Set(group.map((row) => row.accountId))].sort(),
+    userId: session.user.id,
+    operation: async (tx, lockedAccounts) => {
       const current = await tx.transaction.findFirst({
         where: { id: transaction.id, account: { userId: session.user.id } },
         select: {
@@ -458,27 +433,24 @@ export async function DELETE(request: Request, { params }: { params: Promise<{ i
         status: 'deleted' as const,
         id: logicalId,
       };
-    });
+    },
+  });
 
-    if (result.status === 'retry') {
-      accountIdsToLock = result.accountIds;
-      continue;
-    }
-    if (result.status === 'not_found') return notFound('Transaction not found');
-    if (result.status === 'ownership_conflict') {
-      return fail(
-        'Transaction cannot be deleted because its transfer has invalid ownership',
-        409,
-        'TRANSACTION_DELETE_CONFLICT',
-      );
-    }
-    await recordCanonicalMobileTombstone(session.user.id, 'transaction', result.id);
-    return ok({ id: result.id, deleted: true });
+  if (!result) {
+    return fail(
+      'Transfer relationships changed during deletion; try again',
+      409,
+      'TRANSACTION_DELETE_CONFLICT',
+    );
   }
-
-  return fail(
-    'Transfer relationships changed during deletion; try again',
-    409,
-    'TRANSACTION_DELETE_CONFLICT',
-  );
+  if (result.status === 'not_found') return notFound('Transaction not found');
+  if (result.status === 'ownership_conflict') {
+    return fail(
+      'Transaction cannot be deleted because its transfer has invalid ownership',
+      409,
+      'TRANSACTION_DELETE_CONFLICT',
+    );
+  }
+  await recordCanonicalMobileTombstone(session.user.id, 'transaction', result.id);
+  return ok({ id: result.id, deleted: true });
 }

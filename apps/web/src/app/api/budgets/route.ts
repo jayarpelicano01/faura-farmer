@@ -5,18 +5,13 @@ import { badRequest, created, ok, unauthorized } from '@/lib/http';
 import { findConflictingBudget, getBudgetsWithProgress } from '@/lib/queries';
 import { guardMutation, readJsonBody } from '@/lib/security';
 import { recordCanonicalMobileUpsert } from '@/lib/mobile/sync';
-import { currencyPreferenceSelect, serializeCurrencyPreference } from '@/lib/currency-preference';
-import { convertMoney } from '@faura-farmer/types';
+import { loadDisplayPreference } from '@/lib/currency-preference';
 
 export async function GET(request: Request) {
   const session = await auth();
   if (!session?.user?.id) return unauthorized();
 
-  const display = new URL(request.url).searchParams.get('display') === '1';
-  const user = display
-    ? await prisma.user.findUnique({ where: { id: session.user.id }, select: currencyPreferenceSelect })
-    : null;
-  const preference = user ? serializeCurrencyPreference(user) : undefined;
+  const { preference } = await loadDisplayPreference(request.url, session.user.id);
   const budgets = await getBudgetsWithProgress(session.user.id, new Date(), preference);
   return ok(budgets);
 }
@@ -49,14 +44,8 @@ export async function POST(request: Request) {
     );
   }
 
-  const display = new URL(request.url).searchParams.get('display') === '1';
-  const user = display
-    ? await prisma.user.findUnique({ where: { id: session.user.id }, select: currencyPreferenceSelect })
-    : null;
-  const preference = user ? serializeCurrencyPreference(user) : null;
-  const monthlyLimit = preference
-    ? Number(convertMoney(parsed.data.monthlyLimit, preference.displayCurrency, 'PHP', preference.usdPerPhp))
-    : parsed.data.monthlyLimit;
+  const { toStorage } = await loadDisplayPreference(request.url, session.user.id);
+  const monthlyLimit = toStorage(parsed.data.monthlyLimit);
 
   const budget = await prisma.budget.create({
     data: {

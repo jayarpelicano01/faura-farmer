@@ -2,8 +2,8 @@ import { Prisma, prisma } from '@faura-farmer/database';
 import { auth } from '@/lib/auth';
 import { updateAccountSchema } from '@/lib/validations';
 import { badRequest, fail, notFound, ok, unauthorized } from '@/lib/http';
-import { toNumber } from '@/lib/format';
-import { lockAccountsInOrder } from '@/lib/queries';
+import { accountBalance, computeNetFromGrouped } from '@/lib/balance';
+import { withAccountLockRetry } from '@/lib/account-locking';
 import { guardMutation, readJsonBody } from '@/lib/security';
 import { recordCanonicalMobileTombstone, recordCanonicalMobileUpsert } from '@/lib/mobile/sync';
 
@@ -19,12 +19,8 @@ async function createBalanceAdjustment(
     where: { accountId, userId },
     _sum: { amount: true },
   });
-  let net = 0;
-  for (const row of grouped) {
-    const total = toNumber(row._sum.amount);
-    net += row.type === 'income' || (row.type === 'transfer' && row.transferRole === 'incoming') ? total : -total;
-  }
-  const difference = Math.round((targetBalance - (toNumber(startingBalance) + net)) * 100) / 100;
+  const net = computeNetFromGrouped(grouped);
+  const difference = Math.round((targetBalance - accountBalance(startingBalance, net)) * 100) / 100;
   if (Math.abs(difference) < 0.005) return null;
   return tx.transaction.create({
     data: {
@@ -51,24 +47,15 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
   });
   if (!account) return notFound('Account not found');
 
-  let net = 0;
   const grouped = await prisma.transaction.groupBy({
     by: ['type', 'transferRole'],
     where: { accountId: account.id },
     _sum: { amount: true },
   });
-  for (const row of grouped) {
-    if (row.type === 'income' || (row.type === 'transfer' && row.transferRole === 'incoming')) {
-      net += toNumber(row._sum.amount);
-    } else {
-      net -= toNumber(row._sum.amount);
-    }
-  }
-
   return ok({
     ...account,
     startingBalance: String(account.startingBalance),
-    balance: String(toNumber(account.startingBalance) + net),
+    balance: String(accountBalance(account.startingBalance, computeNetFromGrouped(grouped))),
   });
 }
 
@@ -96,15 +83,10 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
 
   const requestedCurrency = accountData.currency;
   if (requestedCurrency !== undefined) {
-    let accountIdsToLock = [account.id];
-
-    for (let attempt = 0; attempt < 4; attempt += 1) {
-      const result = await prisma.$transaction(async (tx) => {
-        const lockedAccounts = await lockAccountsInOrder(
-          tx,
-          accountIdsToLock,
-          session.user.id,
-        );
+    const result = await withAccountLockRetry({
+      initialAccountIds: [account.id],
+      userId: session.user.id,
+      operation: async (tx, lockedAccounts) => {
         const lockedAccount = lockedAccounts.find((candidate) => candidate.id === account.id);
         if (!lockedAccount || lockedAccount.userId !== session.user.id) {
           return { status: 'not_found' as const };
@@ -160,34 +142,31 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
           ? null
           : await createBalanceAdjustment(tx, session.user.id, updated.id, updated.startingBalance, currentBalance);
         return { status: 'updated' as const, account: updated, adjustmentId: adjustment?.id ?? null };
-      });
+      },
+    });
 
-      if (result.status === 'retry') {
-        accountIdsToLock = result.accountIds;
-        continue;
-      }
-      if (result.status === 'not_found') return notFound('Account not found');
-      if (result.status === 'currency_conflict') {
-        return fail(
-          'Currency cannot be changed because this account has linked transfers in another currency',
-          409,
-          'TRANSFER_CURRENCY_CONFLICT',
-        );
-      }
-
-      await recordCanonicalMobileUpsert(session.user.id, 'account', result.account.id);
-      if (result.adjustmentId) await recordCanonicalMobileUpsert(session.user.id, 'transaction', result.adjustmentId);
-      return ok({
-        ...result.account,
-        startingBalance: String(result.account.startingBalance),
-      });
+    if (!result) {
+      return fail(
+        'Account transfer relationships changed during the update; try again',
+        409,
+        'ACCOUNT_UPDATE_CONFLICT',
+      );
+    }
+    if (result.status === 'not_found') return notFound('Account not found');
+    if (result.status === 'currency_conflict') {
+      return fail(
+        'Currency cannot be changed because this account has linked transfers in another currency',
+        409,
+        'TRANSFER_CURRENCY_CONFLICT',
+      );
     }
 
-    return fail(
-      'Account transfer relationships changed during the update; try again',
-      409,
-      'ACCOUNT_UPDATE_CONFLICT',
-    );
+    await recordCanonicalMobileUpsert(session.user.id, 'account', result.account.id);
+    if (result.adjustmentId) await recordCanonicalMobileUpsert(session.user.id, 'transaction', result.adjustmentId);
+    return ok({
+      ...result.account,
+      startingBalance: String(result.account.startingBalance),
+    });
   }
 
   const result = await prisma.$transaction(async (tx) => {
@@ -215,14 +194,10 @@ export async function DELETE(request: Request, { params }: { params: Promise<{ i
   });
   if (!account) return notFound('Account not found');
 
-  let accountIdsToLock = [account.id];
-  for (let attempt = 0; attempt < 4; attempt += 1) {
-    const result = await prisma.$transaction(async (tx) => {
-      const lockedAccounts = await lockAccountsInOrder(
-        tx,
-        accountIdsToLock,
-        session.user.id,
-      );
+  const result = await withAccountLockRetry({
+    initialAccountIds: [account.id],
+    userId: session.user.id,
+    operation: async (tx, lockedAccounts) => {
       if (!lockedAccounts.some((candidate) => candidate.id === account.id)) {
         return { status: 'not_found' as const };
       }
@@ -282,30 +257,27 @@ export async function DELETE(request: Request, { params }: { params: Promise<{ i
           .filter((transaction) => !transaction.transferGroupId || transaction.transferRole === 'outgoing')
           .map((transaction) => transaction.id),
       };
-    });
+    },
+  });
 
-    if (result.status === 'retry') {
-      accountIdsToLock = result.accountIds;
-      continue;
-    }
-    if (result.status === 'not_found') return notFound('Account not found');
-    if (result.status === 'ownership_conflict') {
-      return fail(
-        'Account cannot be deleted because a linked transfer has invalid ownership',
-        409,
-        'ACCOUNT_DELETE_CONFLICT',
-      );
-    }
-    for (const transactionId of result.deletedTransactionIds) {
-      await recordCanonicalMobileTombstone(session.user.id, 'transaction', transactionId);
-    }
-    await recordCanonicalMobileTombstone(session.user.id, 'account', account.id);
-    return ok({ id: account.id, deleted: true });
+  if (!result) {
+    return fail(
+      'Account transfer relationships changed during deletion; try again',
+      409,
+      'ACCOUNT_DELETE_CONFLICT',
+    );
   }
-
-  return fail(
-    'Account transfer relationships changed during deletion; try again',
-    409,
-    'ACCOUNT_DELETE_CONFLICT',
-  );
+  if (result.status === 'not_found') return notFound('Account not found');
+  if (result.status === 'ownership_conflict') {
+    return fail(
+      'Account cannot be deleted because a linked transfer has invalid ownership',
+      409,
+      'ACCOUNT_DELETE_CONFLICT',
+    );
+  }
+  for (const transactionId of result.deletedTransactionIds) {
+    await recordCanonicalMobileTombstone(session.user.id, 'transaction', transactionId);
+  }
+  await recordCanonicalMobileTombstone(session.user.id, 'account', account.id);
+  return ok({ id: account.id, deleted: true });
 }

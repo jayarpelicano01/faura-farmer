@@ -4,9 +4,7 @@ import { badRequest, ok, unauthorized } from '@/lib/http';
 import { getBucketAllocation, setMonthlyBudget } from '@/lib/queries';
 import { guardMutation, readJsonBody } from '@/lib/security';
 import { recordCanonicalMobileUpsert } from '@/lib/mobile/sync';
-import { prisma } from '@faura-farmer/database';
-import { currencyPreferenceSelect, serializeCurrencyPreference } from '@/lib/currency-preference';
-import { convertMoney } from '@faura-farmer/types';
+import { loadDisplayPreference } from '@/lib/currency-preference';
 
 function allocationPayload(
   allocation: Awaited<ReturnType<typeof getBucketAllocation>>,
@@ -19,11 +17,7 @@ export async function GET(request: Request) {
   const session = await auth();
   if (!session?.user?.id) return unauthorized();
 
-  const display = new URL(request.url).searchParams.get('display') === '1';
-  const user = display
-    ? await prisma.user.findUnique({ where: { id: session.user.id }, select: currencyPreferenceSelect })
-    : null;
-  const preference = user ? serializeCurrencyPreference(user) : undefined;
+  const { preference } = await loadDisplayPreference(request.url, session.user.id);
   const allocation = await getBucketAllocation(session.user.id, new Date(), preference);
   return ok(allocationPayload(allocation, preference?.displayCurrency ?? 'PHP'));
 }
@@ -42,14 +36,8 @@ export async function PUT(request: Request) {
     return badRequest(parsed.error.issues[0]?.message ?? 'Invalid input');
   }
 
-  const display = new URL(request.url).searchParams.get('display') === '1';
-  const user = display
-    ? await prisma.user.findUnique({ where: { id: session.user.id }, select: currencyPreferenceSelect })
-    : null;
-  const preference = user ? serializeCurrencyPreference(user) : undefined;
-  const amount = preference
-    ? Number(convertMoney(parsed.data.amount, preference.displayCurrency, 'PHP', preference.usdPerPhp))
-    : parsed.data.amount;
+  const { preference, toStorage } = await loadDisplayPreference(request.url, session.user.id);
+  const amount = toStorage(parsed.data.amount);
   const saved = await setMonthlyBudget(session.user.id, amount);
   await recordCanonicalMobileUpsert(session.user.id, 'monthly_budget', saved.id);
   const allocation = await getBucketAllocation(session.user.id, new Date(), preference);
