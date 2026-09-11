@@ -18,7 +18,6 @@ export interface CategoryFormValues {
   id?: string;
   name: string;
   type: CategoryType;
-  parentId?: string | null;
   color?: string | null;
   bucket?: string | null;
 }
@@ -28,24 +27,16 @@ interface CategoryFormProps {
   onOpenChange: (open: boolean) => void;
   onSaved: () => void | Promise<void>;
   initial: CategoryFormValues | null;
-  parents: Array<{ id: string; name: string; type: CategoryType }>;
 }
 
-export function CategoryForm({ open, onOpenChange, onSaved, initial, parents }: CategoryFormProps) {
+export function CategoryForm({ open, onOpenChange, onSaved, initial }: CategoryFormProps) {
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
   const form = useForm<CreateCategoryInput>({
     resolver: zodResolver(createCategorySchema),
-    defaultValues: {
-      name: '',
-      type: 'expense',
-      parentId: null,
-      color: '#adb5bd',
-      bucket: null,
-    },
+    defaultValues: { name: '', type: 'expense', color: '#adb5bd', bucket: null },
   });
-
   const watchType = form.watch('type');
 
   useEffect(() => {
@@ -53,31 +44,21 @@ export function CategoryForm({ open, onOpenChange, onSaved, initial, parents }: 
     form.reset({
       name: initial?.name ?? '',
       type: (initial?.type as CreateCategoryInput['type']) ?? 'expense',
-      parentId: initial?.parentId ?? null,
       color: initial?.color ?? '#adb5bd',
       bucket: (initial?.bucket as CreateCategoryInput['bucket']) ?? null,
     });
     setSubmitError(null);
   }, [open, initial, form]);
 
-  const availableParents = parents.filter((p) => p.id !== initial?.id && p.type === watchType);
-
   async function onSubmit(values: CreateCategoryInput) {
     setSaving(true);
     setSubmitError(null);
     try {
-      const payload = { ...values, parentId: values.parentId ? values.parentId : null };
       if (initial?.id) {
-        await apiFetch(`/api/categories/${initial.id}`, {
-          method: 'PATCH',
-          body: JSON.stringify(payload),
-        });
+        await apiFetch(`/api/categories/${initial.id}`, { method: 'PATCH', body: JSON.stringify(values) });
         toast.success('Category updated');
       } else {
-        await apiFetch('/api/categories', {
-          method: 'POST',
-          body: JSON.stringify(payload),
-        });
+        await apiFetch('/api/categories', { method: 'POST', body: JSON.stringify(values) });
         toast.success('Category created');
       }
       onOpenChange(false);
@@ -93,27 +74,19 @@ export function CategoryForm({ open, onOpenChange, onSaved, initial, parents }: 
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle className="font-display">
-            {initial?.id ? 'Edit category' : 'New category'}
-          </DialogTitle>
+          <DialogTitle className="font-display">{initial?.id ? 'Edit category' : 'New category'}</DialogTitle>
           <DialogDescription>Organize your income and expenses into buckets.</DialogDescription>
         </DialogHeader>
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4" noValidate>
-            {submitError && (
-              <p className="rounded-md bg-expense/15 px-3 py-2 text-sm text-expense">
-                {submitError}
-              </p>
-            )}
+            {submitError && <p className="rounded-md bg-expense/15 px-3 py-2 text-sm text-expense">{submitError}</p>}
             <FormField
               control={form.control}
               name="name"
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>Name</FormLabel>
-                  <FormControl>
-                    <Input placeholder="e.g. Groceries, Salary" {...field} />
-                  </FormControl>
+                  <FormControl><Input placeholder="e.g. Groceries, Salary" {...field} /></FormControl>
                   <FormMessage />
                 </FormItem>
               )}
@@ -127,15 +100,9 @@ export function CategoryForm({ open, onOpenChange, onSaved, initial, parents }: 
                     <FormLabel>Type</FormLabel>
                     <FormControl>
                       <Select value={field.value} onValueChange={field.onChange}>
-                        <SelectTrigger className="bg-background">
-                          <SelectValue />
-                        </SelectTrigger>
+                        <SelectTrigger className="bg-background"><SelectValue /></SelectTrigger>
                         <SelectContent>
-                          {CATEGORY_TYPES.map((type) => (
-                            <SelectItem key={type} value={type}>
-                              {type === 'income' ? 'Income' : 'Expense'}
-                            </SelectItem>
-                          ))}
+                          {CATEGORY_TYPES.map((type) => <SelectItem key={type} value={type}>{type === 'income' ? 'Income' : 'Expense'}</SelectItem>)}
                         </SelectContent>
                       </Select>
                     </FormControl>
@@ -149,42 +116,12 @@ export function CategoryForm({ open, onOpenChange, onSaved, initial, parents }: 
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Color</FormLabel>
-                    <FormControl>
-                      <ColorPicker value={field.value ?? '#adb5bd'} onChange={field.onChange} />
-                    </FormControl>
+                    <FormControl><ColorPicker value={field.value ?? '#adb5bd'} onChange={field.onChange} /></FormControl>
                     <FormMessage />
                   </FormItem>
                 )}
               />
             </div>
-            <FormField
-              control={form.control}
-              name="parentId"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Parent category</FormLabel>
-                  <FormControl>
-                    <Select
-                      value={field.value ?? 'none'}
-                      onValueChange={(value) => field.onChange(value === 'none' ? null : value)}
-                    >
-                      <SelectTrigger className="bg-background">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="none">None — top level</SelectItem>
-                        {availableParents.map((parent) => (
-                          <SelectItem key={parent.id} value={parent.id}>
-                            {parent.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
             {watchType === 'expense' && (
               <FormField
                 control={form.control}
@@ -193,20 +130,11 @@ export function CategoryForm({ open, onOpenChange, onSaved, initial, parents }: 
                   <FormItem>
                     <FormLabel>50 / 30 / 20 bucket</FormLabel>
                     <FormControl>
-                      <Select
-                        value={field.value ?? 'none'}
-                        onValueChange={(value) => field.onChange(value === 'none' ? null : value)}
-                      >
-                        <SelectTrigger className="bg-background">
-                          <SelectValue placeholder="Select a bucket" />
-                        </SelectTrigger>
+                      <Select value={field.value ?? 'none'} onValueChange={(value) => field.onChange(value === 'none' ? null : value)}>
+                        <SelectTrigger className="bg-background"><SelectValue placeholder="Select a bucket" /></SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="none">None — not tracked</SelectItem>
-                          {BUDGET_BUCKETS.map((bucket) => (
-                            <SelectItem key={bucket} value={bucket}>
-                              {bucket === 'needs' ? 'Needs' : bucket === 'wants' ? 'Wants' : 'Savings'}
-                            </SelectItem>
-                          ))}
+                          <SelectItem value="none">None (not tracked)</SelectItem>
+                          {BUDGET_BUCKETS.map((bucket) => <SelectItem key={bucket} value={bucket}>{bucket === 'needs' ? 'Needs' : bucket === 'wants' ? 'Wants' : 'Savings'}</SelectItem>)}
                         </SelectContent>
                       </Select>
                     </FormControl>
@@ -216,12 +144,8 @@ export function CategoryForm({ open, onOpenChange, onSaved, initial, parents }: 
               />
             )}
             <DialogFooter>
-              <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
-                Cancel
-              </Button>
-              <Button type="submit" disabled={saving}>
-                {saving ? 'Saving…' : initial?.id ? 'Save changes' : 'Add category'}
-              </Button>
+              <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
+              <Button type="submit" disabled={saving}>{saving ? 'Saving...' : initial?.id ? 'Save changes' : 'Add category'}</Button>
             </DialogFooter>
           </form>
         </Form>

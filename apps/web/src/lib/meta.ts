@@ -1,4 +1,4 @@
-import type { Account, BudgetBucket, Category, Transaction, TransactionType } from '@faura-farmer/types';
+import type { Account, BudgetBucket, Category, TransactionType } from '@faura-farmer/types';
 import { formatMoney } from '@/lib/format';
 
 export const BUCKET_META: Record<BudgetBucket, { label: string; description: string; color: string }> = {
@@ -24,26 +24,6 @@ export const ACCOUNT_TYPE_META: Record<AccountTypeLabel, { label: string }> = {
 type AccountTypeLabel = 'bank' | 'e_wallet' | 'cash' | 'credit_card' | 'investment';
 
 export type SelectAccount = Pick<Account, 'id' | 'label' | 'currency'>;
-
-export function resolveCategoryBucket(categories: Category[], category: Category): BudgetBucket | null {
-  let current: Category | undefined = category;
-  const seen = new Set<string>();
-  while (current && !seen.has(current.id)) {
-    if (current.bucket) return current.bucket;
-    seen.add(current.id);
-    current = categories.find((c) => c.id === current?.parentId);
-  }
-  return null;
-}
-
-export function resolveTransactionBucket(
-  categories: Category[],
-  tx: Pick<Transaction, 'bucket' | 'categoryId'> & { category?: Category | null },
-): BudgetBucket | null {
-  if (tx.bucket) return tx.bucket;
-  const category = tx.category ?? categories.find((c) => c.id === tx.categoryId) ?? null;
-  return category ? resolveCategoryBucket(categories, category) : null;
-}
 
 export function toAccountOptions(accounts: Account[]): SelectAccount[] {
   return accounts.map((a) => ({

@@ -5,6 +5,7 @@ export type CategorySpendingPeriod = 'week' | 'month';
 
 export type BalanceEvent = {
   id: string;
+  accountId: string;
   date: string;
   description: string;
   change: string;
@@ -168,6 +169,7 @@ function eventFor(
 
   return {
     id: transaction.id,
+    accountId,
     date: transaction.date,
     description: transaction.note?.trim() || fallback,
     change: decimal(change),
@@ -243,14 +245,27 @@ export function buildBalanceTimeline({
   });
 }
 
-function categoryRoot(categoryId: string, categoriesById: Map<string, MobileCategory>) {
-  let current = categoriesById.get(categoryId);
-  const visited = new Set<string>();
-  while (current?.parentId && !visited.has(current.id)) {
-    visited.add(current.id);
-    current = categoriesById.get(current.parentId);
-  }
-  return current;
+/** Combines account timelines for the All accounts reports selection. */
+export function buildCombinedBalanceTimeline({
+  accounts,
+  categories,
+  transactions,
+  period,
+  preference,
+}: {
+  accounts: MobileAccount[];
+  categories: MobileCategory[];
+  transactions: MobileTransaction[];
+  period: BalanceTimelinePeriod;
+  preference: CurrencyPreference;
+}): BalancePoint[] {
+  const timelines = accounts.map((account) => buildBalanceTimeline({ account, accounts, categories, transactions, period, preference }));
+  return timelines[0]?.map((point, index) => ({
+    ...point,
+    balance: decimal(timelines.reduce((total, timeline) => total + number(timeline[index]?.balance ?? '0'), 0)),
+    change: decimal(timelines.reduce((total, timeline) => total + number(timeline[index]?.change ?? '0'), 0)),
+    events: timelines.flatMap((timeline) => timeline[index]?.events ?? []),
+  })) ?? [];
 }
 
 export function categorySpendingRange(period: CategorySpendingPeriod, anchor: string) {
@@ -267,14 +282,16 @@ export function categorySpendingRange(period: CategorySpendingPeriod, anchor: st
 export function buildCategorySpending({
   accountId,
   accountCurrency,
+  accounts,
   preference,
   categories,
   transactions,
   period,
   anchor,
 }: {
-  accountId: string;
-  accountCurrency: string;
+  accountId: string | null;
+  accountCurrency?: string;
+  accounts?: MobileAccount[];
   preference: CurrencyPreference;
   categories: MobileCategory[];
   transactions: MobileTransaction[];
@@ -284,13 +301,14 @@ export function buildCategorySpending({
   const range = categorySpendingRange(period, anchor);
   if (!range) return [];
   const categoriesById = new Map(categories.map((category) => [category.id, category]));
+  const accountsById = new Map((accounts ?? []).map((account) => [account.id, account]));
   const totals = new Map<string, number>();
   for (const transaction of transactions) {
-    if (transaction.accountId !== accountId || transaction.type !== 'expense' || !transaction.categoryId) continue;
+    if ((accountId && transaction.accountId !== accountId) || transaction.type !== 'expense' || !transaction.categoryId) continue;
     if (transaction.date < range.from || transaction.date > range.to) continue;
-    const root = categoryRoot(transaction.categoryId, categoriesById);
-    const id = root?.id ?? 'uncategorized';
-    totals.set(id, (totals.get(id) ?? 0) + converted(transaction.amount, accountCurrency, preference));
+    const id = transaction.categoryId;
+    const currency = accountId ? accountCurrency ?? accountsById.get(transaction.accountId)?.currency ?? 'PHP' : accountsById.get(transaction.accountId)?.currency ?? 'PHP';
+    totals.set(id, (totals.get(id) ?? 0) + converted(transaction.amount, currency, preference));
   }
   return [...totals.entries()]
     .map(([id, amount]) => {
@@ -302,21 +320,6 @@ export function buildCategorySpending({
 
 export function defaultCategoryAnchor(period: CategorySpendingPeriod) {
   return period === 'week' ? dateKey(localDate()) : monthKey(localDate());
-}
-
-function descendantsOf(categoryId: string, categories: MobileCategory[]) {
-  const ids = new Set<string>([categoryId]);
-  const pending = [categoryId];
-  while (pending.length) {
-    const parentId = pending.pop()!;
-    for (const category of categories) {
-      if (category.parentId === parentId && !ids.has(category.id)) {
-        ids.add(category.id);
-        pending.push(category.id);
-      }
-    }
-  }
-  return ids;
 }
 
 function parsedAnchor(period: CategorySpendingPeriod, anchor: string) {
@@ -368,12 +371,8 @@ export function buildBudgetVariance({
   const rows = budgets.flatMap<LocalBudgetVariance>((budget) => {
     const category = categoriesById.get(budget.categoryId);
     if (!category) return [];
-    const categoryIds = descendantsOf(budget.categoryId, categories);
-    let spent = 0;
-    for (const categoryId of categoryIds) {
-      budgetedCategoryIds.add(categoryId);
-      spent += spentByCategory.get(categoryId) ?? 0;
-    }
+    budgetedCategoryIds.add(budget.categoryId);
+    const spent = spentByCategory.get(budget.categoryId) ?? 0;
     const limit = converted(budget.monthlyLimit, 'PHP', preference);
     const remaining = limit - spent;
     return [{ id: budget.id, categoryName: category.name, color: category.color, limit: decimal(limit), spent: decimal(spent), remaining: decimal(remaining), over: spent > limit }];
@@ -399,14 +398,12 @@ function previousRange(period: CategorySpendingPeriod, anchor: string) {
   return { from: dateKey(previousMonth), to: dateKey(endOfMonth(previousMonth)) };
 }
 
-function rootSpendingForRange({ accounts, preference, categories, transactions, from, to }: { accounts: MobileAccount[]; preference: CurrencyPreference; categories: MobileCategory[]; transactions: MobileTransaction[]; from: string; to: string }) {
-  const categoriesById = new Map(categories.map((category) => [category.id, category]));
+function categorySpendingForRange({ accounts, preference, transactions, from, to }: { accounts: MobileAccount[]; preference: CurrencyPreference; transactions: MobileTransaction[]; from: string; to: string }) {
   const accountsById = new Map(accounts.map((account) => [account.id, account]));
   const totals = new Map<string, number>();
   for (const transaction of transactions) {
     if (transaction.type !== 'expense' || transaction.date < from || transaction.date > to) continue;
-    const root = transaction.categoryId ? categoryRoot(transaction.categoryId, categoriesById) : undefined;
-    const id = root?.id ?? 'uncategorized';
+    const id = transaction.categoryId ?? 'uncategorized';
     totals.set(id, (totals.get(id) ?? 0) + converted(transaction.amount, accountsById.get(transaction.accountId)?.currency ?? 'PHP', preference));
   }
   return totals;
@@ -430,8 +427,8 @@ export function buildCategoryComparison({
   const currentRange = categorySpendingRange(period, anchor);
   const priorRange = previousRange(period, anchor);
   if (!currentRange || !priorRange) return [];
-  const current = rootSpendingForRange({ accounts, preference, categories, transactions, ...currentRange });
-  const previous = rootSpendingForRange({ accounts, preference, categories, transactions, ...priorRange });
+  const current = categorySpendingForRange({ accounts, preference, transactions, ...currentRange });
+  const previous = categorySpendingForRange({ accounts, preference, transactions, ...priorRange });
   const categoriesById = new Map(categories.map((category) => [category.id, category]));
   return [...new Set([...current.keys(), ...previous.keys()])]
     .map((id) => {

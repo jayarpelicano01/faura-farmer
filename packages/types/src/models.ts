@@ -61,11 +61,9 @@ export interface Category {
   userId: string;
   name: string;
   type: CategoryType;
-  parentId?: string | null;
   icon?: string | null;
   color?: string | null;
   bucket?: BudgetBucket | null;
-  children?: Category[];
 }
 
 export interface Transaction {
@@ -186,21 +184,6 @@ export interface MonthlyTrendPoint {
 export const REPORT_PERIODS = ['week', 'month'] as const;
 export type ReportPeriod = (typeof REPORT_PERIODS)[number];
 
-export interface CashFlowPoint {
-  label: string;
-  income: string;
-  expense: string;
-  net: string;
-  savingsRate: number | null;
-}
-
-export interface CashFlowSummary {
-  income: string;
-  expense: string;
-  net: string;
-  savingsRate: number | null;
-}
-
 export interface BudgetVarianceRow {
   id: string;
   categoryName: string;
@@ -220,14 +203,4 @@ export interface CategoryComparisonRow {
   previous: string;
   change: string;
   percentageChange: number | null;
-}
-
-export interface AccountSpendingRow {
-  accountId: string;
-  accountName: string;
-  accountType: AccountType;
-  color?: string | null;
-  isArchived: boolean;
-  amount: string;
-  share: number;
 }

@@ -1,14 +1,11 @@
 import { prisma, Prisma } from '@faura-farmer/database';
 import type {
   AccountCurrency,
-  AccountSpendingRow,
   AccountWithBalance,
   BudgetVarianceRow,
   BucketAllocation,
   BudgetBucket,
   BudgetWithCategory,
-  CashFlowPoint,
-  CashFlowSummary,
   Category,
   CategoryComparisonRow,
   CurrencyPreference,
@@ -23,7 +20,6 @@ import { accountBalance, computeNetFromGrouped } from '@/lib/balance';
 import { toNumber } from '@/lib/format';
 import {
   calculatePercentageChange,
-  calculateSavingsRate,
   utcEndOfMonth,
   utcEndOfYear,
   utcStartOfMonth,
@@ -253,29 +249,27 @@ export async function getSpendingByCategory(
     }),
     prisma.category.findMany({
       where: { userId },
-      select: { id: true, name: true, color: true, parentId: true },
+      select: { id: true, name: true, color: true },
     }),
   ]);
 
   if (grouped.length === 0) return [];
 
-  const { rootOf } = buildCategoryMaps(categories);
   const byId = new Map(categories.map((c) => [c.id, c]));
 
-  const buckets = new Map<string, number>();
+  const totals = new Map<string, number>();
   for (const g of grouped) {
     if (!g.categoryId) continue;
-    const rootId = rootOf(g.categoryId);
-    buckets.set(rootId, (buckets.get(rootId) ?? 0) + toNumber(g._sum.amount));
+    totals.set(g.categoryId, (totals.get(g.categoryId) ?? 0) + toNumber(g._sum.amount));
   }
 
-  return [...buckets.entries()]
-    .map(([rootId, amount]) => {
-      const root = byId.get(rootId);
+  return [...totals.entries()]
+    .map(([categoryId, amount]) => {
+      const category = byId.get(categoryId);
       return {
-        categoryName: root?.name ?? 'Uncategorized',
+        categoryName: category?.name ?? 'Uncategorized',
         amount: String(amount),
-        color: root?.color ?? null,
+        color: category?.color ?? null,
       };
     })
     .sort((a, b) => toNumber(b.amount) - toNumber(a.amount));
@@ -299,25 +293,11 @@ export async function getBudgetsWithProgress(
 
   if (budgets.length === 0) return [];
 
-  const categories = await prisma.category.findMany({
-    where: { userId },
-    select: { id: true, parentId: true },
-  });
-  const { descendantsOf } = buildCategoryMaps(categories);
-
-  const related = new Set<string>();
-  const membersByBudget = new Map<string, string[]>();
-  for (const budget of budgets) {
-    const members = [...descendantsOf(budget.categoryId)];
-    membersByBudget.set(budget.categoryId, members);
-    for (const id of members) related.add(id);
-  }
-
   const transactions = await prisma.transaction.findMany({
     where: {
       account: { userId },
       type: 'expense',
-      categoryId: { in: [...related] },
+      categoryId: { in: budgets.map((budget) => budget.categoryId) },
       date: { gte: from, lte: to },
     },
     select: { categoryId: true, amount: true, account: { select: { currency: true } } },
@@ -333,11 +313,7 @@ export async function getBudgetsWithProgress(
   }
 
   return budgets.map<BudgetWithCategory>((budget) => {
-    const spent =
-      (membersByBudget.get(budget.categoryId) ?? []).reduce(
-        (sum, id) => sum + (spentByCategory.get(id) ?? 0),
-        0,
-      );
+    const spent = spentByCategory.get(budget.categoryId) ?? 0;
     const limit = preference
       ? convertForDisplay(budget.monthlyLimit, 'PHP', preference)
       : toNumber(budget.monthlyLimit);
@@ -416,71 +392,73 @@ function reportAccountWhere(userId: string, currency: string) {
   };
 }
 
-function inRange(date: Date, range: Pick<ReportRange, 'from' | 'to'>) {
-  return date >= range.from && date <= range.to;
+export type BalanceTimelinePeriod = '7d' | '30d' | '365d';
+export type BalanceTimelinePoint = {
+  id: string; label: string; from: string; to: string; balance: string; change: string;
+  events: Array<{ id: string; date: string; description: string; amount: string; type: string }>;
+};
+export type CategorySpendingReportRow = { categoryName: string; color: string | null; amount: string };
+type TimelineBucket = { id: string; label: string; from: Date; to: Date };
+
+/** Mirrors the mobile report buckets: 7 daily, 6 five-day, or 12 monthly points. */
+export function buildBalanceTimelineBuckets(period: BalanceTimelinePeriod, anchor = new Date()): TimelineBucket[] {
+  const current = new Date(anchor.getFullYear(), anchor.getMonth(), anchor.getDate(), 12);
+  if (period === '365d') return Array.from({ length: 12 }, (_, index) => {
+    const month = new Date(current.getFullYear(), current.getMonth() + index - 11, 1, 12);
+    return { id: format(month, 'yyyy-MM'), label: format(month, 'MMM'), from: month, to: index === 11 ? current : new Date(month.getFullYear(), month.getMonth() + 1, 0, 12) };
+  });
+  const days = period === '7d' ? 7 : 30;
+  const bucketSize = period === '7d' ? 1 : 5;
+  const from = subDays(current, days - 1);
+  return Array.from({ length: days / bucketSize }, (_, index) => {
+    const bucketFrom = subDays(from, -(index * bucketSize));
+    const bucketTo = subDays(bucketFrom, -(bucketSize - 1));
+    return { id: format(bucketTo, 'yyyy-MM-dd'), label: format(bucketTo, 'MMM d'), from: bucketFrom, to: bucketTo };
+  });
 }
 
-export async function getCashFlowReport(
-  userId: string,
-  preference: CurrencyPreference,
-  range: ReportRange,
-): Promise<{ summary: CashFlowSummary; points: CashFlowPoint[] }> {
-  const chartFrom =
-    range.period === 'week' ? range.from : utcStartOfMonth(subMonths(range.to, 5));
-
+/** Builds display-currency closing balances using the mobile bucket boundaries. */
+export async function getBalanceTimeline(userId: string, preference: CurrencyPreference, period: BalanceTimelinePeriod, accountId?: string): Promise<BalanceTimelinePoint[]> {
+  const buckets = buildBalanceTimelineBuckets(period);
+  const accounts = await prisma.account.findMany({ where: { userId, ...(accountId ? { id: accountId } : {}) }, select: { id: true, currency: true, startingBalance: true } });
+  if (!accounts.length) return [];
   const rows = await prisma.transaction.findMany({
-    where: {
-      account: { userId },
-      type: { in: ['income', 'expense'] },
-      date: { gte: chartFrom, lte: range.to },
-    },
-    select: { date: true, type: true, amount: true, account: { select: { currency: true } } },
+    where: { userId, accountId: { in: accounts.map((account) => account.id) }, date: { lte: buckets.at(-1)!.to } },
+    select: { id: true, date: true, type: true, transferRole: true, amount: true, note: true, category: { select: { name: true } }, account: { select: { currency: true } } },
+    orderBy: [{ date: 'asc' }, { createdAt: 'asc' }, { id: 'asc' }],
   });
-
-  const amountsByKey = new Map<string, { income: number; expense: number }>();
-  let summaryIncome = 0;
-  let summaryExpense = 0;
-
-  for (const row of rows) {
-    const key = range.period === 'week' ? format(row.date, 'yyyy-MM-dd') : format(row.date, 'yyyy-MM');
+  let balance = accounts.reduce((total, account) => total + convertForDisplay(account.startingBalance, account.currency, preference), 0);
+  const effect = (row: typeof rows[number]) => {
     const amount = convertForDisplay(row.amount, row.account.currency, preference);
-    const bucket = amountsByKey.get(key) ?? { income: 0, expense: 0 };
-    if (row.type === 'income') {
-      bucket.income += amount;
-      if (inRange(row.date, range)) summaryIncome += amount;
-    } else {
-      bucket.expense += amount;
-      if (inRange(row.date, range)) summaryExpense += amount;
-    }
-    amountsByKey.set(key, bucket);
-  }
-
-  const points: CashFlowPoint[] = [];
-  const pointCount = range.period === 'week' ? 7 : 6;
-  for (let index = pointCount - 1; index >= 0; index -= 1) {
-    const pointDate = range.period === 'week' ? subDays(range.to, index) : subMonths(range.to, index);
-    const key = range.period === 'week' ? format(pointDate, 'yyyy-MM-dd') : format(pointDate, 'yyyy-MM');
-    const bucket = amountsByKey.get(key) ?? { income: 0, expense: 0 };
-    const net = bucket.income - bucket.expense;
-    points.push({
-      label: range.period === 'week' ? format(pointDate, 'EEE') : format(pointDate, 'MMM'),
-      income: String(bucket.income),
-      expense: String(bucket.expense),
-      net: String(net),
-      savingsRate: calculateSavingsRate(bucket.income, bucket.expense),
-    });
-  }
-
-  const net = summaryIncome - summaryExpense;
-  return {
-    summary: {
-      income: String(summaryIncome),
-      expense: String(summaryExpense),
-      net: String(net),
-      savingsRate: calculateSavingsRate(summaryIncome, summaryExpense),
-    },
-    points,
+    return row.type === 'income' || (row.type === 'transfer' && row.transferRole === 'incoming') ? amount : -amount;
   };
+  let index = 0;
+  while (index < rows.length && rows[index]!.date < buckets[0]!.from) balance += effect(rows[index++]!);
+  return buckets.map((bucket) => {
+    const opening = balance;
+    const events: BalanceTimelinePoint['events'] = [];
+    while (index < rows.length && rows[index]!.date <= bucket.to) {
+      const row = rows[index++]!;
+      if (row.date < bucket.from) continue;
+      const amount = effect(row);
+      balance += amount;
+      const fallback = row.type === 'income' ? row.category?.name ?? 'Income' : row.type === 'expense' ? row.category?.name ?? 'Expense' : row.transferRole === 'incoming' ? 'Transfer received' : 'Transfer sent';
+      events.push({ id: row.id, date: format(row.date, 'MMM d, yyyy'), description: row.note?.trim() || fallback, amount: String(amount), type: row.type === 'transfer' ? `transfer_${row.transferRole ?? 'outgoing'}` : row.type });
+    }
+    return { id: bucket.id, label: bucket.label, from: format(bucket.from, 'yyyy-MM-dd'), to: format(bucket.to, 'yyyy-MM-dd'), balance: String(balance), change: String(balance - opening), events };
+  });
+}
+
+export async function getCategorySpendingReport(userId: string, preference: CurrencyPreference, range: Pick<ReportRange, 'from' | 'to'>, accountId?: string): Promise<CategorySpendingReportRow[]> {
+  const rows = await prisma.transaction.findMany({ where: { userId, type: 'expense', date: { gte: range.from, lte: range.to }, ...(accountId ? { accountId } : {}) }, select: { categoryId: true, amount: true, account: { select: { currency: true } }, category: { select: { name: true, color: true } } } });
+  const totals = new Map<string, { categoryName: string; color: string | null; amount: number }>();
+  for (const row of rows) {
+    const id = row.categoryId ?? 'uncategorized';
+    const current = totals.get(id) ?? { categoryName: row.category?.name ?? 'Uncategorized', color: row.category?.color ?? null, amount: 0 };
+    current.amount += convertForDisplay(row.amount, row.account.currency, preference);
+    totals.set(id, current);
+  }
+  return [...totals.values()].map((row) => ({ ...row, amount: String(row.amount) })).sort((left, right) => toNumber(right.amount) - toNumber(left.amount));
 }
 
 export async function getBudgetVarianceReport(
@@ -489,17 +467,13 @@ export async function getBudgetVarianceReport(
   range: ReportRange,
 ): Promise<BudgetVarianceRow[]> {
   const budgetFrom = utcStartOfMonth(range.to);
-  const [budgets, categories, grouped] = await Promise.all([
+  const [budgets, grouped] = await Promise.all([
     prisma.budget.findMany({
       where: { userId },
       include: {
         category: { select: { id: true, name: true, color: true, type: true } },
       },
       orderBy: { createdAt: 'asc' },
-    }),
-    prisma.category.findMany({
-      where: { userId },
-      select: { id: true, name: true, color: true, parentId: true },
     }),
     prisma.transaction.findMany({
       where: {
@@ -511,7 +485,6 @@ export async function getBudgetVarianceReport(
     }),
   ]);
 
-  const { descendantsOf } = buildCategoryMaps(categories);
   const spentByCategory = new Map<string, number>();
   let uncategorized = 0;
   for (const row of grouped) {
@@ -522,12 +495,8 @@ export async function getBudgetVarianceReport(
 
   const budgetedCategoryIds = new Set<string>();
   const rows = budgets.map<BudgetVarianceRow>((budget) => {
-    const categoryIds = descendantsOf(budget.categoryId);
-    let spent = 0;
-    for (const categoryId of categoryIds) {
-      budgetedCategoryIds.add(categoryId);
-      spent += spentByCategory.get(categoryId) ?? 0;
-    }
+    budgetedCategoryIds.add(budget.categoryId);
+    const spent = spentByCategory.get(budget.categoryId) ?? 0;
     const limit = convertForDisplay(budget.monthlyLimit, 'PHP', preference);
     const remaining = limit - spent;
     return {
@@ -585,7 +554,7 @@ export async function getCategoryComparisonReport(
   const [categories, current, previous] = await Promise.all([
     prisma.category.findMany({
       where: { userId },
-      select: { id: true, name: true, color: true, parentId: true },
+      select: { id: true, name: true, color: true },
     }),
     prisma.transaction.findMany({
       where: {
@@ -605,24 +574,23 @@ export async function getCategoryComparisonReport(
     }),
   ]);
 
-  const { rootOf } = buildCategoryMaps(categories);
   const categoriesById = new Map(categories.map((category) => [category.id, category]));
-  const currentByRoot = new Map<string, number>();
-  const previousByRoot = new Map<string, number>();
-  const addToRoot = (target: Map<string, number>, categoryId: string | null, amount: number) => {
-    const rootId = categoryId ? rootOf(categoryId) : 'uncategorized';
-    target.set(rootId, (target.get(rootId) ?? 0) + amount);
+  const currentByCategory = new Map<string, number>();
+  const previousByCategory = new Map<string, number>();
+  const addToCategory = (target: Map<string, number>, categoryId: string | null, amount: number) => {
+    const id = categoryId ?? 'uncategorized';
+    target.set(id, (target.get(id) ?? 0) + amount);
   };
 
-  for (const row of current) addToRoot(currentByRoot, row.categoryId, convertForDisplay(row.amount, row.account.currency, preference));
-  for (const row of previous) addToRoot(previousByRoot, row.categoryId, convertForDisplay(row.amount, row.account.currency, preference));
+  for (const row of current) addToCategory(currentByCategory, row.categoryId, convertForDisplay(row.amount, row.account.currency, preference));
+  for (const row of previous) addToCategory(previousByCategory, row.categoryId, convertForDisplay(row.amount, row.account.currency, preference));
 
-  const rootIds = new Set([...currentByRoot.keys(), ...previousByRoot.keys()]);
-  return [...rootIds]
-    .map<CategoryComparisonRow>((rootId) => {
-      const currentAmount = currentByRoot.get(rootId) ?? 0;
-      const previousAmount = previousByRoot.get(rootId) ?? 0;
-      const category = categoriesById.get(rootId);
+  const categoryIds = new Set([...currentByCategory.keys(), ...previousByCategory.keys()]);
+  return [...categoryIds]
+    .map<CategoryComparisonRow>((categoryId) => {
+      const currentAmount = currentByCategory.get(categoryId) ?? 0;
+      const previousAmount = previousByCategory.get(categoryId) ?? 0;
+      const category = categoriesById.get(categoryId);
       return {
         categoryName: category?.name ?? 'Uncategorized',
         color: category?.color ?? null,
@@ -635,55 +603,6 @@ export async function getCategoryComparisonReport(
     .sort((a, b) => toNumber(b.current) - toNumber(a.current));
 }
 
-export async function getAccountSpendingReport(
-  userId: string,
-  preference: CurrencyPreference,
-  range: ReportRange,
-): Promise<AccountSpendingRow[]> {
-  const [accounts, grouped] = await Promise.all([
-    prisma.account.findMany({
-      where: { userId },
-      select: { id: true, label: true, type: true, color: true, isArchived: true },
-    }),
-    prisma.transaction.findMany({
-      where: {
-        account: { userId },
-        type: 'expense',
-        date: { gte: range.from, lte: range.to },
-      },
-      select: { accountId: true, amount: true, account: { select: { currency: true } } },
-    }),
-  ]);
-
-  const accountsById = new Map(accounts.map((account) => [account.id, account]));
-  const total = grouped.reduce((sum, row) => sum + convertForDisplay(row.amount, row.account.currency, preference), 0);
-
-  const spendingByAccount = new Map<string, { account: typeof accounts[number]; amount: number }>();
-  for (const row of grouped) {
-    const account = accountsById.get(row.accountId);
-    if (!account) continue;
-    const converted = convertForDisplay(row.amount, row.account.currency, preference);
-    const existing = spendingByAccount.get(row.accountId);
-    if (existing) {
-      existing.amount += converted;
-    } else {
-      spendingByAccount.set(row.accountId, { account, amount: converted });
-    }
-  }
-
-  return [...spendingByAccount.values()]
-    .map<AccountSpendingRow>(({ account, amount }) => ({
-      accountId: account.id,
-      accountName: account.label,
-      accountType: account.type,
-      color: account.color,
-      isArchived: account.isArchived,
-      amount: String(amount),
-      share: total > 0 ? (amount / total) * 100 : 0,
-    }))
-    .sort((a, b) => toNumber(b.amount) - toNumber(a.amount));
-}
-
 export async function getCategoryTree(userId: string): Promise<{
   income: Category[];
   expense: Category[];
@@ -692,31 +611,9 @@ export async function getCategoryTree(userId: string): Promise<{
     where: { userId },
   });
 
-  const roots: Category[] = [];
-  const childrenMap = new Map<string, Category[]>();
-
-  for (const c of categories) {
-    childrenMap.set(c.id, []);
-  }
-  for (const c of categories) {
-    const node: Category = { ...c, children: [] };
-    if (c.parentId && childrenMap.has(c.parentId)) {
-      childrenMap.get(c.parentId)!.push(node);
-    } else {
-      roots.push(node);
-    }
-  }
-
-  const attach = (node: Category): Category => ({
-    ...node,
-    children: childrenMap.get(node.id) ?? [],
-  });
-
-  const build = (list: Category[]): Category[] => list.map(attach);
-
   return {
-    income: build(roots.filter((c) => c.type === 'income')),
-    expense: build(roots.filter((c) => c.type === 'expense')),
+    income: categories.filter((category) => category.type === 'income'),
+    expense: categories.filter((category) => category.type === 'expense'),
   };
 }
 
@@ -724,86 +621,19 @@ export function currentYearRange() {
   return { from: utcStartOfYear(new Date()), to: utcEndOfYear(new Date()) };
 }
 
-interface CategoryLink {
-  id: string;
-  parentId: string | null;
-}
-
-function buildCategoryMaps(categories: CategoryLink[]) {
-  const byId = new Map(categories.map((c) => [c.id, c]));
-
-  function childrenOf(id: string): string[] {
-    return categories.filter((c) => c.parentId === id).map((c) => c.id);
-  }
-
-  function rootOf(id: string): string {
-    let current = id;
-    let parent = byId.get(current)?.parentId;
-    let guard = 0;
-    while (parent && byId.has(parent) && guard < categories.length) {
-      current = parent;
-      parent = byId.get(current)?.parentId;
-      guard += 1;
-    }
-    return current;
-  }
-
-  function descendantsOf(id: string): Set<string> {
-    const result = new Set<string>([id]);
-    const stack = [id];
-    while (stack.length > 0) {
-      const current = stack.pop()!;
-      for (const child of childrenOf(current)) {
-        if (!result.has(child)) {
-          result.add(child);
-          stack.push(child);
-        }
-      }
-    }
-    return result;
-  }
-
-  function ancestorsOf(id: string): string[] {
-    const result: string[] = [];
-    let current = byId.get(id)?.parentId;
-    let guard = 0;
-    while (current && byId.has(current) && guard < categories.length) {
-      result.push(current);
-      current = byId.get(current)?.parentId;
-      guard += 1;
-    }
-    return result;
-  }
-
-  return { childrenOf, rootOf, descendantsOf, ancestorsOf };
-}
-
 export async function findConflictingBudget(
   userId: string,
   categoryId: string,
   excludeBudgetId?: string,
 ): Promise<{ id: string; categoryName: string } | null> {
-  const [categories, budgets] = await Promise.all([
-    prisma.category.findMany({
-      where: { userId },
-      select: { id: true, name: true, parentId: true },
-    }),
-    prisma.budget.findMany({
-      where: excludeBudgetId ? { userId, NOT: { id: excludeBudgetId } } : { userId },
-      select: { id: true, categoryId: true, category: { select: { name: true } } },
-    }),
-  ]);
-
-  if (budgets.length === 0) return null;
-
-  const { descendantsOf, ancestorsOf } = buildCategoryMaps(categories);
-  const related = new Set<string>([
-    categoryId,
-    ...descendantsOf(categoryId),
-    ...ancestorsOf(categoryId),
-  ]);
-
-  const existing = budgets.find((b) => related.has(b.categoryId));
+  const existing = await prisma.budget.findFirst({
+    where: {
+      userId,
+      categoryId,
+      ...(excludeBudgetId ? { NOT: { id: excludeBudgetId } } : {}),
+    },
+    select: { id: true, category: { select: { name: true } } },
+  });
   if (!existing) return null;
 
   return { id: existing.id, categoryName: existing.category.name };
@@ -857,7 +687,7 @@ export async function getBucketAllocation(
     getMonthlyBudgetWithDefault(userId, month, preference),
     prisma.category.findMany({
       where: { userId },
-      select: { id: true, parentId: true, bucket: true },
+      select: { id: true, bucket: true },
     }),
     prisma.transaction.findMany({
       where: {
@@ -877,19 +707,6 @@ export async function getBucketAllocation(
 
   const byId = new Map(categories.map((c) => [c.id, c]));
 
-  function bucketOf(id: string): BudgetBucket | null {
-    let current = id;
-    let guard = 0;
-    while (current && byId.has(current) && guard <= categories.length) {
-      const cat = byId.get(current)!;
-      if (cat.bucket) return cat.bucket;
-      if (!cat.parentId) return null;
-      current = cat.parentId;
-      guard += 1;
-    }
-    return null;
-  }
-
   const spent = new Map<BudgetBucket, number>();
   let unallocated = 0;
   for (const row of grouped) {
@@ -897,7 +714,7 @@ export async function getBucketAllocation(
     const amount = preference
       ? convertForDisplay(row.amount, row.account.currency, preference)
       : toNumber(row.amount);
-    const bucket = row.bucket ?? bucketOf(row.categoryId);
+    const bucket = row.bucket ?? byId.get(row.categoryId)?.bucket ?? null;
     if (bucket && BUDGET_BUCKETS.includes(bucket)) {
       spent.set(bucket, (spent.get(bucket) ?? 0) + amount);
     } else {

@@ -99,11 +99,10 @@ export const updateAccountSchema = accountSchema.partial().extend({
 export const categorySchema = z.object({
   name: z.string().trim().min(1, 'Name is required').max(120),
   type: z.enum(CATEGORY_TYPES),
-  parentId: z.string().uuid().optional().nullable(),
   icon: z.string().trim().max(40).optional().nullable(),
   color: z.string().trim().max(40).optional().nullable(),
   bucket: z.enum(BUDGET_BUCKETS).optional().nullable(),
-});
+}).strict();
 
 export const createCategorySchema = categorySchema;
 export const updateCategorySchema = categorySchema.partial();
