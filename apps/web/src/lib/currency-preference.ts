@@ -1,5 +1,6 @@
 import { Prisma, prisma } from '@faura-farmer/database';
 import type { CurrencyPreference, DisplayCurrency } from '@faura-farmer/types';
+import { convertMoney } from '@faura-farmer/types';
 
 export const currencyPreferenceSelect = {
   displayCurrency: true,
@@ -21,6 +22,40 @@ export function serializeCurrencyPreference(value: StoredPreference): CurrencyPr
     usdPerPhp: value.usdPerPhp?.toString() ?? null,
     rateDate: value.rateDate?.toISOString().slice(0, 10) ?? null,
     rateRefreshedAt: value.rateRefreshedAt?.toISOString() ?? null,
+  };
+}
+
+export type DisplayPreferenceResult = {
+  preference: CurrencyPreference | undefined;
+  toStorage: (amount: number) => number;
+};
+
+const noDisplayPreference: DisplayPreferenceResult = {
+  preference: undefined,
+  toStorage: (amount) => amount,
+};
+
+/** Load the optional display preference and convert submitted display amounts to PHP. */
+export async function loadDisplayPreference(
+  requestUrl: string,
+  userId: string,
+): Promise<DisplayPreferenceResult> {
+  if (new URL(requestUrl).searchParams.get('display') !== '1') {
+    return noDisplayPreference;
+  }
+
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: currencyPreferenceSelect,
+  });
+  const preference = user ? serializeCurrencyPreference(user) : undefined;
+  if (!preference) return noDisplayPreference;
+
+  return {
+    preference,
+    toStorage: (amount) => Number(
+      convertMoney(amount, preference.displayCurrency, 'PHP', preference.usdPerPhp),
+    ),
   };
 }
 
