@@ -3,6 +3,7 @@ import { ActivityIndicator, Alert, FlatList, Modal, Pressable, StyleSheet, Text,
 import * as Crypto from 'expo-crypto';
 import type { MobileAccount, MobileCategory, MobileTransaction } from '@faura-farmer/types';
 import { useWorkspace } from '@/data/workspace-provider';
+import { useWorkspaceData } from '@/data/hooks/use-workspace-data';
 import type { TransactionPageCursor } from '@/data/db';
 import { localDateKey, transactionDateKey } from '@/data/date';
 import { Button, ChoiceChip, Empty, Field, Screen, Title, useUiStyles } from '@/ui/primitives';
@@ -24,15 +25,6 @@ function requestedTransactionType(value: string | string[] | undefined): NewTran
   return type === 'income' || type === 'expense' || type === 'transfer' ? type : null;
 }
 
-function formatMoney(amount: string, currency: string) {
-  const value = Number(amount);
-  try {
-    return new Intl.NumberFormat(undefined, { style: 'currency', currency }).format(value);
-  } catch {
-    return `${currency} ${value.toFixed(2)}`;
-  }
-}
-
 function accountName(accounts: MobileAccount[], id: string | null) {
   return accounts.find((account) => account.id === id)?.label ?? 'Unknown account';
 }
@@ -49,8 +41,7 @@ export default function TransactionsScreen() {
   const ui = useUiStyles();
   const { db } = useWorkspace();
   const [transactions, setTransactions] = useState<MobileTransaction[]>([]);
-  const [accounts, setAccounts] = useState<MobileAccount[]>([]);
-  const [categories, setCategories] = useState<MobileCategory[]>([]);
+  const { accounts, categories, reload } = useWorkspaceData();
   const [editing, setEditing] = useState<MobileTransaction | null>(null);
   const [loaded, setLoaded] = useState(false);
   const [nextCursor, setNextCursor] = useState<TransactionPageCursor | null>(null);
@@ -64,16 +55,10 @@ export default function TransactionsScreen() {
     const requestVersion = ++pageRequestVersion.current;
     loadingMore.current = false;
     setIsLoadingMore(false);
-    const [page, nextAccounts, nextCategories] = await Promise.all([
-      db.listTransactionPage({ limit: TRANSACTION_PAGE_SIZE }),
-      db.listRecords('account'),
-      db.listRecords('category'),
-    ]);
+    const page = await db.listTransactionPage({ limit: TRANSACTION_PAGE_SIZE });
     if (requestVersion !== pageRequestVersion.current) return;
     setTransactions(page.items);
     setNextCursor(page.nextCursor);
-    setAccounts(nextAccounts);
-    setCategories(nextCategories);
     setLoaded(true);
   }, [db]);
   useEffect(() => { void load(); }, [load]);
@@ -132,12 +117,12 @@ export default function TransactionsScreen() {
     const record = { ...editing, amount: convert(editing.amount, displayCurrency, sourceCurrency), date: transactionDateKey(editing.date)!, categoryId: editing.type === 'transfer' ? null : editing.categoryId, bucket: editing.type === 'transfer' ? null : editing.bucket, destinationAccountId: editing.type === 'transfer' ? editing.destinationAccountId : null, updatedAt: new Date().toISOString() };
     await db.queueUpsert('transaction', record);
     setEditing(null);
-    await load();
+    await Promise.all([load(), reload()]);
     void syncNow();
   };
   const remove = (id: string) => Alert.alert('Delete transaction?', 'This will synchronize as a deletion when online.', [
     { text: 'Cancel', style: 'cancel' },
-    { text: 'Delete', style: 'destructive', onPress: () => { void db.queueDelete('transaction', id).then(load).then(() => syncNow()); } },
+    { text: 'Delete', style: 'destructive', onPress: () => { void db.queueDelete('transaction', id).then(() => Promise.all([load(), reload()])).then(() => syncNow()); } },
   ]);
 
   return (

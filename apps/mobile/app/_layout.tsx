@@ -11,6 +11,7 @@ import { AppShell } from '@/ui/app-shell';
 import { Button } from '@/ui/primitives';
 import { fontFamily, ThemeProvider, useAppTheme } from '@/ui/theme';
 import { CurrencyProvider } from '@/ui/currency';
+import { WorkspaceDataProvider } from '@/data/hooks/use-workspace-data';
 import '../global.css';
 
 function PrivacyCover() {
@@ -65,7 +66,7 @@ function RootContent({ fontsLoaded, fontError }: { fontsLoaded: boolean; fontErr
   return (
     <SafeAreaProvider>
       <StatusBar barStyle={mode === 'dark' ? 'light-content' : 'dark-content'} backgroundColor={theme.background} />
-      <SessionProvider><WorkspaceProvider><CurrencyProvider><SyncProvider><Gate /></SyncProvider></CurrencyProvider></WorkspaceProvider></SessionProvider>
+      <SessionProvider><WorkspaceProvider><CurrencyProvider><SyncProvider><WorkspaceDataProvider><Gate /></WorkspaceDataProvider></SyncProvider></CurrencyProvider></WorkspaceProvider></SessionProvider>
     </SafeAreaProvider>
   );
 }

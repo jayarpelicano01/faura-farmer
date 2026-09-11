@@ -2,8 +2,9 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 import * as Crypto from 'expo-crypto';
 import { useLocalSearchParams } from 'expo-router';
-import type { BudgetBucket, MobileAccount, MobileBudget, MobileCategory, MobileMonthlyBudget, MobileTransaction } from '@faura-farmer/types';
+import type { BudgetBucket, MobileBudget, MobileCategory } from '@faura-farmer/types';
 import { useWorkspace } from '@/data/workspace-provider';
+import { useWorkspaceData } from '@/data/hooks/use-workspace-data';
 import { Button, Card, ChoiceChip, Empty, Field, Screen, Title, useUiStyles } from '@/ui/primitives';
 import { useSync } from '@/sync/use-sync';
 import { fontFamily, useAppTheme } from '@/ui/theme';
@@ -16,14 +17,6 @@ const BUCKETS: Array<{ key: BudgetBucket; label: string; share: number; descript
   { key: 'wants', label: 'Wants', share: 0.3, description: 'Lifestyle and extras' },
   { key: 'savings', label: 'Savings', share: 0.2, description: 'Goals and future plans' },
 ];
-
-function formatMoney(amount: number, currency: string) {
-  try {
-    return new Intl.NumberFormat(undefined, { style: 'currency', currency }).format(amount);
-  } catch {
-    return `${currency} ${amount.toFixed(2)}`;
-  }
-}
 
 function amount(value: string) {
   const parsed = Number(value);
@@ -77,34 +70,12 @@ export default function BudgetsScreen() {
   const { db } = useWorkspace();
   const { syncNow } = useSync();
   const { convert, displayCurrency, formatMoney: formatDisplayMoney } = useCurrency();
-  const [budgets, setBudgets] = useState<MobileBudget[]>([]);
-  const [monthlyBudgets, setMonthlyBudgets] = useState<MobileMonthlyBudget[]>([]);
-  const [categories, setCategories] = useState<MobileCategory[]>([]);
-  const [transactions, setTransactions] = useState<MobileTransaction[]>([]);
-  const [accounts, setAccounts] = useState<MobileAccount[]>([]);
+  const { accounts, budgets, categories, loading, monthlyBudgets, reload, transactions } = useWorkspaceData();
   const [editor, setEditor] = useState<BudgetEditor | null>(null);
   const [monthlyEditor, setMonthlyEditor] = useState(false);
   const [monthlyAmount, setMonthlyAmount] = useState('');
-  const [loaded, setLoaded] = useState(false);
   const handledNewParam = useRef(false);
-
-  const load = useCallback(async () => {
-    const [nextBudgets, nextMonthlyBudgets, nextCategories, nextTransactions, nextAccounts] = await Promise.all([
-      db.listRecords('budget'),
-      db.listRecords('monthly_budget'),
-      db.listRecords('category'),
-      db.listRecords('transaction'),
-      db.listRecords('account'),
-    ]);
-    setBudgets(nextBudgets);
-    setMonthlyBudgets(nextMonthlyBudgets);
-    setCategories(nextCategories);
-    setTransactions(nextTransactions);
-    setAccounts(nextAccounts);
-    setLoaded(true);
-  }, [db]);
-
-  useEffect(() => { void load(); }, [load]);
+  const loaded = !loading;
 
   useEffect(() => {
     if (newParam !== '1' || !loaded || handledNewParam.current) return;
@@ -166,7 +137,7 @@ export default function BudgetsScreen() {
       updatedAt: new Date().toISOString(),
     });
     setEditor(null);
-    await load();
+    await reload();
     void syncNow();
   };
 
@@ -181,13 +152,13 @@ export default function BudgetsScreen() {
       updatedAt: new Date().toISOString(),
     });
     setMonthlyEditor(false);
-    await load();
+    await reload();
     void syncNow();
   };
 
   const remove = (budget: MobileBudget) => Alert.alert('Delete budget?', 'This will synchronize as a deletion when online.', [
     { text: 'Cancel', style: 'cancel' },
-    { text: 'Delete', style: 'destructive', onPress: () => { void db.queueDelete('budget', budget.id).then(load).then(() => syncNow()); } },
+    { text: 'Delete', style: 'destructive', onPress: () => { void db.queueDelete('budget', budget.id).then(reload).then(() => syncNow()); } },
   ]);
 
   return (

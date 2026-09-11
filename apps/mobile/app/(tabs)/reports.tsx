@@ -2,34 +2,13 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { BarChart, LineChart } from 'react-native-gifted-charts';
 import { useFocusEffect } from 'expo-router';
-import type { MobileAccount, MobileBudget, MobileCategory, MobileTransaction } from '@faura-farmer/types';
 import { buildBalanceTimeline, buildBudgetVariance, buildCategoryComparison, buildCategorySpending, categorySpendingRange, defaultCategoryAnchor, type BalancePoint, type BalanceTimelinePeriod, type CategorySpendingPeriod } from '@/data/reports';
 import { useWorkspace } from '@/data/workspace-provider';
+import { useWorkspaceData } from '@/data/hooks/use-workspace-data';
 import { Button, Card, ChoiceChip, Empty, Field, Screen, SectionTitle, Spinner, Title, useUiStyles } from '@/ui/primitives';
 import { useSync } from '@/sync/use-sync';
 import { fontFamily, useAppTheme } from '@/ui/theme';
 import { useCurrency } from '@/ui/currency';
-
-function formatMoney(value: string | number, currency: string) {
-  const amount = Number(value);
-  try {
-    return new Intl.NumberFormat(undefined, { style: 'currency', currency, maximumFractionDigits: 2 }).format(Number.isFinite(amount) ? amount : 0);
-  } catch {
-    return `${currency} ${(Number.isFinite(amount) ? amount : 0).toFixed(2)}`;
-  }
-}
-
-function signedMoney(value: string, currency: string) {
-  return `${Number(value) > 0 ? '+' : ''}${formatMoney(value, currency)}`;
-}
-
-function compactMoney(value: string, currency: string) {
-  const amount = Number(value);
-  const prefix = currency === 'PHP' ? '₱' : `${currency} `;
-  if (Math.abs(amount) >= 1_000_000) return `${prefix}${(amount / 1_000_000).toFixed(1)}M`;
-  if (Math.abs(amount) >= 1_000) return `${prefix}${(amount / 1_000).toFixed(1)}K`;
-  return `${prefix}${Math.round(amount)}`;
-}
 
 function lastSyncedCopy(value: string | null) {
   if (!value) return 'Not synced yet. This report uses data saved on this device.';
@@ -46,21 +25,18 @@ export default function ReportsScreen() {
   const { theme } = useAppTheme();
   const styles = useReportStyles();
   const ui = useUiStyles();
-  const { db, activeWorkspace } = useWorkspace();
-  const { syncNow, syncStatus } = useSync();
+  const { activeWorkspace } = useWorkspace();
+  const { syncNow } = useSync();
   const {
     displayCurrency,
     usdPerPhp,
     rateDate,
     rateRefreshedAt,
     formatMoney: formatDisplayMoney,
+    compactMoney,
+    signedMoney,
   } = useCurrency();
-  const [accounts, setAccounts] = useState<MobileAccount[]>([]);
-  const [categories, setCategories] = useState<MobileCategory[]>([]);
-  const [budgets, setBudgets] = useState<MobileBudget[]>([]);
-  const [transactions, setTransactions] = useState<MobileTransaction[]>([]);
-  const [lastSyncedAt, setLastSyncedAt] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
+  const { accounts, budgets, categories, lastSyncedAt, loading, reload, transactions } = useWorkspaceData();
   const [selectedAccountId, setSelectedAccountId] = useState<string | null>(null);
   const [timelinePeriod, setTimelinePeriod] = useState<BalanceTimelinePeriod>('7d');
   const [selectedPoint, setSelectedPoint] = useState<BalancePoint | null>(null);
@@ -69,28 +45,7 @@ export default function ReportsScreen() {
   const [categoryAnchorInput, setCategoryAnchorInput] = useState(() => defaultCategoryAnchor('month'));
   const [categoryError, setCategoryError] = useState<string | null>(null);
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    try {
-      const [nextAccounts, nextCategories, nextBudgets, nextTransactions, nextLastSyncedAt] = await Promise.all([
-        db.listRecords('account'),
-        db.listRecords('category'),
-        db.listRecords('budget'),
-        db.listRecords('transaction'),
-        db.getLastSyncedAt(),
-      ]);
-      setAccounts(nextAccounts);
-      setCategories(nextCategories);
-      setBudgets(nextBudgets);
-      setTransactions(nextTransactions);
-      setLastSyncedAt(nextLastSyncedAt);
-    } finally {
-      setLoading(false);
-    }
-  }, [db]);
-
-  useFocusEffect(useCallback(() => { void load(); }, [load]));
-  useEffect(() => { if (syncStatus === 'success') void load(); }, [load, syncStatus]);
+  useFocusEffect(useCallback(() => { void reload(); }, [reload]));
 
   const selectedAccount = accounts.find((account) => account.id === selectedAccountId) ?? accounts.find((account) => !account.isArchived) ?? accounts[0] ?? null;
   useEffect(() => {
@@ -163,20 +118,20 @@ export default function ReportsScreen() {
             yAxisTextStyle={{ color: theme.mutedForeground, fontFamily: fontFamily.body, fontSize: 10 }} dataPointsColor='white'
             formatYLabel={(label) => compactMoney(label, displayCurrency)}
           />
-          <View style={styles.pointList}>{timeline.map((point) => <Pressable key={point.id} accessibilityLabel={`Show activity for ${point.label}`} accessibilityRole="button" onPress={() => setSelectedPoint(point)}>{({ pressed }) => <View style={[styles.pointRow, selectedPoint?.id === point.id ? styles.pointRowSelected : undefined, pressed ? styles.pressed : undefined]}><Text style={styles.pointLabel}>{point.label}</Text><View style={styles.pointValues}><Text style={styles.pointBalance}>{formatMoney(point.balance, displayCurrency)}</Text><Text style={[ui.listMeta, Number(point.change) < 0 ? styles.expense : Number(point.change) > 0 ? styles.income : undefined]}>{signedMoney(point.change, displayCurrency)}</Text></View></View>}</Pressable>)}</View>
+          <View style={styles.pointList}>{timeline.map((point) => <Pressable key={point.id} accessibilityLabel={`Show activity for ${point.label}`} accessibilityRole="button" onPress={() => setSelectedPoint(point)}>{({ pressed }) => <View style={[styles.pointRow, selectedPoint?.id === point.id ? styles.pointRowSelected : undefined, pressed ? styles.pressed : undefined]}><Text style={styles.pointLabel}>{point.label}</Text><View style={styles.pointValues}><Text style={styles.pointBalance}>{formatDisplayMoney(point.balance, displayCurrency)}</Text><Text style={[ui.listMeta, Number(point.change) < 0 ? styles.expense : Number(point.change) > 0 ? styles.income : undefined]}>{signedMoney(point.change, displayCurrency)}</Text></View></View>}</Pressable>)}</View>
         </Card>
 
         <Card>
           <SectionTitle>{selectedPoint ? `What changed on ${selectedPoint.label}` : 'What changed'}</SectionTitle>
-          {selectedPoint ? <Text style={ui.listMeta}>{selectedPoint.from === selectedPoint.to ? selectedPoint.from : `${selectedPoint.from} to ${selectedPoint.to}`} · Closing balance {formatMoney(selectedPoint.balance, displayCurrency)}</Text> : null}
-          <View style={styles.eventList}>{!selectedPoint?.events.length ? <Text style={ui.listMeta}>No transactions changed this balance point.</Text> : selectedPoint.events.map((event, index) => <View key={event.id} style={[styles.eventRow, index > 0 ? styles.rowDivider : undefined]}><View style={[styles.eventDot, { backgroundColor: event.kind === 'income' || event.kind === 'transfer_in' ? theme.income : theme.expense }]} /><View style={styles.eventCopy}><Text numberOfLines={1} style={ui.listTitle}>{event.description}</Text><Text style={ui.listMeta}>{event.date} · Balance {formatMoney(event.balanceAfter, displayCurrency)}</Text></View><Text style={[styles.eventAmount, Number(event.change) >= 0 ? styles.income : styles.expense]}>{signedMoney(event.change, displayCurrency)}</Text></View>)}</View>
+          {selectedPoint ? <Text style={ui.listMeta}>{selectedPoint.from === selectedPoint.to ? selectedPoint.from : `${selectedPoint.from} to ${selectedPoint.to}`} · Closing balance {formatDisplayMoney(selectedPoint.balance, displayCurrency)}</Text> : null}
+          <View style={styles.eventList}>{!selectedPoint?.events.length ? <Text style={ui.listMeta}>No transactions changed this balance point.</Text> : selectedPoint.events.map((event, index) => <View key={event.id} style={[styles.eventRow, index > 0 ? styles.rowDivider : undefined]}><View style={[styles.eventDot, { backgroundColor: event.kind === 'income' || event.kind === 'transfer_in' ? theme.income : theme.expense }]} /><View style={styles.eventCopy}><Text numberOfLines={1} style={ui.listTitle}>{event.description}</Text><Text style={ui.listMeta}>{event.date} · Balance {formatDisplayMoney(event.balanceAfter, displayCurrency)}</Text></View><Text style={[styles.eventAmount, Number(event.change) >= 0 ? styles.income : styles.expense]}>{signedMoney(event.change, displayCurrency)}</Text></View>)}</View>
         </Card>
 
         <Card>
           <SectionTitle>Spending by category</SectionTitle><Text style={ui.listMeta}>Expense categories for {selectedAccount.label}.</Text>
           {categorySpending.length === 0 ? <View style={styles.emptyChart}><Text style={ui.listMeta}>No categorized expenses were saved for this period.</Text></View> : <>
             <BarChart adjustToWidth barWidth={26} data={categorySpending.slice(0, 6).map((item) => ({ label: item.categoryName.slice(0, 8), value: Number(item.amount), frontColor: item.color ?? theme.primary }))} disableScroll height={190} initialSpacing={12} noOfSections={4} rulesColor={theme.border} xAxisColor={theme.border} yAxisColor={theme.border} yAxisTextStyle={{ color: theme.mutedForeground, fontFamily: fontFamily.body, fontSize: 10 }} formatYLabel={(label) => compactMoney(label, displayCurrency)} />
-            <View style={styles.categoryList}>{categorySpending.map((item) => <View key={item.categoryName} style={styles.categoryRow}><View style={[styles.eventDot, { backgroundColor: item.color ?? theme.primary }]} /><Text style={ui.listTitle}>{item.categoryName}</Text><Text style={styles.categoryAmount}>{formatMoney(item.amount, displayCurrency)}</Text></View>)}</View>
+            <View style={styles.categoryList}>{categorySpending.map((item) => <View key={item.categoryName} style={styles.categoryRow}><View style={[styles.eventDot, { backgroundColor: item.color ?? theme.primary }]} /><Text style={ui.listTitle}>{item.categoryName}</Text><Text style={styles.categoryAmount}>{formatDisplayMoney(item.amount, displayCurrency)}</Text></View>)}</View>
           </>}
         </Card>
         <View style={styles.scopeDivider}><View style={styles.dividerLine} /><Text style={styles.dividerLabel}>All accounts</Text><View style={styles.dividerLine} /></View>

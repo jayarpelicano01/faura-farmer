@@ -7,7 +7,9 @@ import { useSession } from '@/auth/session';
 type CurrencyContextValue = CurrencyPreference & {
   ready: boolean;
   setPreference: (next: CurrencyPreference) => Promise<void>;
-  formatMoney: (value: string | number, sourceCurrency?: string) => string;
+  formatMoney: (value: string | number, sourceCurrency?: string, options?: { maximumFractionDigits?: number }) => string;
+  compactMoney: (value: string | number, sourceCurrency?: string) => string;
+  signedMoney: (value: string | number, sourceCurrency?: string) => string;
   convert: (value: string | number, sourceCurrency: string, targetCurrency?: string) => string;
 };
 
@@ -55,7 +57,34 @@ export function CurrencyProvider({ children }: { children: React.ReactNode }) {
     ...preference,
     ready,
     setPreference,
-    formatMoney: (amount, sourceCurrency = preference.displayCurrency) => formatDisplayMoney(amount, sourceCurrency, preference),
+    formatMoney: (amount, sourceCurrency = preference.displayCurrency, options) => {
+      if (options?.maximumFractionDigits === undefined) {
+        return formatDisplayMoney(amount, sourceCurrency, preference);
+      }
+      const converted = Number(convertMoney(amount, sourceCurrency, preference.displayCurrency, preference.usdPerPhp));
+      const safeAmount = Number.isFinite(converted) ? converted : 0;
+      try {
+        return new Intl.NumberFormat(undefined, {
+          style: 'currency',
+          currency: preference.displayCurrency,
+          maximumFractionDigits: options.maximumFractionDigits,
+        }).format(safeAmount);
+      } catch {
+        return `${preference.displayCurrency} ${safeAmount.toFixed(options.maximumFractionDigits)}`;
+      }
+    },
+    compactMoney: (amount, sourceCurrency = preference.displayCurrency) => {
+      const converted = Number(convertMoney(amount, sourceCurrency, preference.displayCurrency, preference.usdPerPhp));
+      const safeAmount = Number.isFinite(converted) ? converted : 0;
+      const prefix = preference.displayCurrency === 'PHP' ? '₱' : `${preference.displayCurrency} `;
+      if (Math.abs(safeAmount) >= 1_000_000) return `${prefix}${(safeAmount / 1_000_000).toFixed(1)}M`;
+      if (Math.abs(safeAmount) >= 1_000) return `${prefix}${(safeAmount / 1_000).toFixed(1)}K`;
+      return `${prefix}${Math.round(safeAmount)}`;
+    },
+    signedMoney: (amount, sourceCurrency = preference.displayCurrency) => {
+      const converted = Number(convertMoney(amount, sourceCurrency, preference.displayCurrency, preference.usdPerPhp));
+      return `${converted > 0 ? '+' : ''}${formatDisplayMoney(amount, sourceCurrency, preference)}`;
+    },
     convert: (amount, sourceCurrency, targetCurrency = preference.displayCurrency) => convertMoney(amount, sourceCurrency, targetCurrency, preference.usdPerPhp),
   }), [preference, ready, setPreference]);
   return <CurrencyContext.Provider value={value}>{children}</CurrencyContext.Provider>;

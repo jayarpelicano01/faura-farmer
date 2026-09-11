@@ -1,8 +1,10 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import * as Crypto from 'expo-crypto';
-import type { MobileAccount, MobileTransaction } from '@faura-farmer/types';
+import type { MobileAccount } from '@faura-farmer/types';
 import { useWorkspace } from '@/data/workspace-provider';
+import { useWorkspaceData } from '@/data/hooks/use-workspace-data';
+import { currentBalance } from '@/data/current-balance';
 import { Badge, Button, Card, ChoiceChip, Empty, Field, Screen, Title, useUiStyles } from '@/ui/primitives';
 import { fontFamily, useAppTheme } from '@/ui/theme';
 import { useCurrency } from '@/ui/currency';
@@ -22,28 +24,6 @@ function blankAccount(): MobileAccount {
   return { id: Crypto.randomUUID(), label: '', type: 'bank', institution: null, currency: 'PHP', startingBalance: '0', color: null, icon: null, isArchived: false, updatedAt: new Date().toISOString() };
 }
 
-function formatMoney(amount: string, currency: string) {
-  const value = Number(amount);
-  try {
-    return new Intl.NumberFormat(undefined, { style: 'currency', currency }).format(value);
-  } catch {
-    return `${currency} ${value.toFixed(2)}`;
-  }
-}
-
-function currentBalance(account: MobileAccount, transactions: MobileTransaction[]) {
-  return transactions.reduce((balance, transaction) => {
-    const amount = Number(transaction.amount);
-    if (transaction.type === 'income' && transaction.accountId === account.id) return balance + amount;
-    if (transaction.type === 'expense' && transaction.accountId === account.id) return balance - amount;
-    if (transaction.type === 'transfer') {
-      if (transaction.accountId === account.id) return balance - amount;
-      if (transaction.destinationAccountId === account.id) return balance + amount;
-    }
-    return balance;
-  }, Number(account.startingBalance));
-}
-
 export default function AccountsScreen() {
   const router = useRouter();
   const { new: createNew } = useLocalSearchParams<{ new?: string | string[] }>();
@@ -52,20 +32,12 @@ export default function AccountsScreen() {
   const ui = useUiStyles();
   const { db } = useWorkspace();
   const { convert, displayCurrency, formatMoney: formatDisplayMoney } = useCurrency();
-  const [accounts, setAccounts] = useState<MobileAccount[]>([]);
-  const [transactions, setTransactions] = useState<MobileTransaction[]>([]);
+  const { accounts, loading, reload, transactions } = useWorkspaceData();
   const [editing, setEditing] = useState<MobileAccount | null>(null);
   const [editingCurrentBalance, setEditingCurrentBalance] = useState('');
-  const [loaded, setLoaded] = useState(false);
   const handledCreateParam = useRef(false);
   const { syncNow } = useSync();
-  const load = useCallback(async () => {
-    const [nextAccounts, nextTransactions] = await Promise.all([db.listRecords('account'), db.listRecords('transaction')]);
-    setAccounts(nextAccounts);
-    setTransactions(nextTransactions);
-    setLoaded(true);
-  }, [db]);
-  useEffect(() => { void load(); }, [load, editing]);
+  const loaded = !loading;
 
   useEffect(() => {
     const shouldCreate = (Array.isArray(createNew) ? createNew[0] : createNew) === '1';
@@ -111,13 +83,13 @@ export default function AccountsScreen() {
       }
     }
     setEditing(null);
-    await load();
+    await reload();
     void syncNow();
   };
 
   const remove = (id: string) => Alert.alert('Delete account?', 'Transactions in this account will also be removed when synchronized.', [
     { text: 'Cancel', style: 'cancel' },
-    { text: 'Delete', style: 'destructive', onPress: () => { void db.queueDelete('account', id).then(load).then(() => syncNow()); } },
+    { text: 'Delete', style: 'destructive', onPress: () => { void db.queueDelete('account', id).then(reload).then(() => syncNow()); } },
   ]);
 
   return (

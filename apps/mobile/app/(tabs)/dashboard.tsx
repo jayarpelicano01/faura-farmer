@@ -1,16 +1,14 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useMemo } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Link, useFocusEffect } from 'expo-router';
 import type { MobileAccount, MobileTransaction } from '@faura-farmer/types';
 import { useWorkspace } from '@/data/workspace-provider';
+import { useWorkspaceData } from '@/data/hooks/use-workspace-data';
 import { localMonthKey, transactionDateKey } from '@/data/date';
 import { Button, Card, Empty, Screen, SectionTitle, Title, useUiStyles } from '@/ui/primitives';
 import { fontFamily, useAppTheme } from '@/ui/theme';
 import { useSync } from '@/sync/use-sync';
 import { useCurrency } from '@/ui/currency';
-
-const phpCurrency = new Intl.NumberFormat(undefined, { style: 'currency', currency: 'PHP' });
-const currency = (amount: number) => phpCurrency.format(amount);
 
 function accountLabel(accounts: MobileAccount[], accountId: string | null) {
   return accounts.find((account) => account.id === accountId)?.label ?? 'Unknown account';
@@ -20,27 +18,11 @@ export default function DashboardScreen() {
   const { theme } = useAppTheme();
   const styles = useDashboardStyles();
   const ui = useUiStyles();
-  const { db, activeWorkspace } = useWorkspace();
-  const [accounts, setAccounts] = useState<MobileAccount[]>([]);
-  const [transactions, setTransactions] = useState<MobileTransaction[]>([]);
-  const loadVersion = useRef(0);
-  const { lastSyncFailed, syncStatus, syncNow } = useSync();
+  const { activeWorkspace } = useWorkspace();
+  const { accounts, reload, transactions } = useWorkspaceData();
+  const { lastSyncFailed, syncNow } = useSync();
   const { convert, formatMoney } = useCurrency();
-  const load = useCallback(async () => {
-    const requestVersion = ++loadVersion.current;
-    const [nextAccounts, nextTransactions] = await Promise.all([
-      db.listRecords('account'),
-      db.listRecords('transaction'),
-    ]);
-    if (requestVersion !== loadVersion.current) return;
-    setAccounts(nextAccounts);
-    setTransactions(nextTransactions);
-  }, [db]);
-
-  useFocusEffect(useCallback(() => { void load(); }, [load]));
-  useEffect(() => {
-    if (syncStatus === 'success') void load();
-  }, [load, syncStatus]);
+  useFocusEffect(useCallback(() => { void reload(); }, [reload]));
 
   const balances = new Map(accounts.map((account) => [account.id, Number(account.startingBalance)]));
   const currentMonth = localMonthKey();
