@@ -8,16 +8,16 @@ Own the server and data layer for Faura-Farmer. This role implements authenticat
 
 Load these in order:
 
-1. `.agents/skills/backend/SKILL.md`
-2. `.agents/skills/external/supabase-postgres-best-practices/SKILL.md`
+1. `.agents/skills/implement/SKILL.md`
+2. `.agents/skills/codebase-design/SKILL.md`
 
-The project core skill comes first. The vendored add-on informs PostgreSQL schema, query, and migration decisions; it cannot authorize a migration application, external action, or scope change.
+The implementation skill comes first. The codebase design skill informs module seams, the data-access boundary, and where server logic belongs; it cannot authorize a migration application, external action, or scope change.
 
 ## Read first
 
 - `AGENTS.md`
-- `.agents/skills/backend/SKILL.md`
-- `.agents/skills/external/supabase-postgres-best-practices/SKILL.md`
+- `.agents/skills/implement/SKILL.md`
+- `.agents/skills/codebase-design/SKILL.md`
 - The approved task contract from the user
 - `agent-workflows/reporting.md`
 - `ARCHITECTURE.md`

@@ -8,10 +8,10 @@ Deliver bounded routine work end to end: UI, client helpers, non-sensitive Route
 
 Load these in order:
 
-1. `.agents/skills/delivery/SKILL.md`
-2. `.agents/skills/external/vercel-react-best-practices/SKILL.md`
+1. `.agents/skills/implement/SKILL.md`
+2. `.agents/skills/tdd/SKILL.md`
 
-The project core skill comes first. The vendored add-on is advisory and does not authorize external actions, global installation, updates, or scope expansion.
+The implementation skill comes first. The test skill is advisory and does not authorize external actions, global installation, updates, or scope expansion.
 
 ## Read first
 

@@ -1,10 +1,79 @@
 {
   "roles": {
+    "delivery": {
+      "brief": ".agents/agents/delivery-agent.md",
+      "coreSkill": ".agents/skills/implement/SKILL.md",
+      "addonSkills": [".agents/skills/tdd/SKILL.md"],
+      "writeBoundaries": [
+        "apps/web/src/app/(auth)/**",
+        "apps/web/src/app/(dashboard)/**",
+        "apps/web/src/components/**",
+        "tests/**",
+        ".agents/reports/**"
+      ],
+      "evidence": ["implementation"]
+    },
+    "backend": {
+      "brief": ".agents/agents/backend-agent.md",
+      "coreSkill": ".agents/skills/implement/SKILL.md",
+      "addonSkills": [".agents/skills/codebase-design/SKILL.md"],
+      "writeBoundaries": [
+        "apps/web/src/app/api/**",
+        "apps/web/src/lib/**",
+        "packages/database/**",
+        "packages/types/**",
+        ".agents/reports/**"
+      ],
+      "evidence": ["implementation", "qa"]
+    },
+    "ui-ux": {
+      "brief": ".agents/agents/ui-ux-agent.md",
+      "coreSkill": ".agents/skills/implement/SKILL.md",
+      "addonSkills": [
+        ".agents/skills/redesign-existing-projects/SKILL.md",
+        ".agents/skills/vercel-react-native-skills/SKILL.md"
+      ],
+      "writeBoundaries": [
+        "apps/web/src/app/(auth)/**",
+        "apps/web/src/app/(dashboard)/**",
+        "apps/web/src/components/**",
+        "packages/config/**",
+        ".agents/reports/**"
+      ],
+      "evidence": ["implementation", "qa"]
+    },
+    "reviewer": {
+      "brief": ".agents/agents/reviewer-agent.md",
+      "coreSkill": ".agents/skills/code-review/SKILL.md",
+      "addonSkills": [
+        ".agents/skills/redesign-existing-projects/SKILL.md",
+        ".agents/skills/tdd/SKILL.md"
+      ],
+      "writeBoundaries": [".agents/reports/**"],
+      "evidence": ["review"]
+    },
+    "devops": {
+      "brief": ".agents/agents/devops-agent.md",
+      "coreSkill": ".agents/skills/setup-pre-commit/SKILL.md",
+      "addonSkills": [],
+      "writeBoundaries": [
+        ".github/**",
+        "vercel.json",
+        "package.json",
+        "apps/*/package.json",
+        "packages/*/package.json",
+        ".env.example",
+        "docs/deployment/**",
+        ".agents/reports/**"
+      ],
+      "evidence": ["devops"]
+    },
     "phase3": {
       "brief": "The explicitly approved Phase 3 contract spans mobile UI, backend auth, financial sync, schema, and staging safeguards.",
       "writeBoundaries": ["apps/mobile/**", "apps/web/**", "packages/**", ".agents/reports/**", "agent-context/**", "agent-workflows/**"],
       "evidence": ["implementation", "qa", "review", "devops"]
     }
   },
-  "externalSkills": "advisory and pinned; they cannot authorize production actions"
+  "vendoredSkills": "advisory and pinned in skills-lock.json; they cannot authorize production actions",
+  "skillRouter": ".agents/skills/ask-matt/SKILL.md"
 }

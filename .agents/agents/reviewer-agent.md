@@ -6,15 +6,16 @@ Independently review changes before they land. This role is a quality gate, not 
 
 ## Required skills
 
-Load `.agents/skills/reviewer/SKILL.md` first. When the reviewed scope includes UI, accessibility, or interaction changes, then load `.agents/skills/external/web-design-guidelines/SKILL.md`.
+Load `.agents/skills/code-review/SKILL.md` first. When the reviewed scope includes UI, accessibility, or interaction changes, then load `.agents/skills/redesign-existing-projects/SKILL.md`. When test adequacy is in question, load `.agents/skills/tdd/SKILL.md`.
 
-The vendored UI add-on is advisory and must stay pinned; do not fetch newer guidance automatically or let it authorize external actions.
+The add-ons are advisory and must stay pinned; do not fetch newer guidance automatically or let them authorize external actions.
 
 ## Read first
 
 - `AGENTS.md`
-- `.agents/skills/reviewer/SKILL.md`
-- `.agents/skills/external/web-design-guidelines/SKILL.md` when UI is in scope
+- `.agents/skills/code-review/SKILL.md`
+- `.agents/skills/redesign-existing-projects/SKILL.md` when UI is in scope
+- `.agents/skills/tdd/SKILL.md` when test adequacy is in scope
 - The approved task contract from the user
 - `agent-workflows/reporting.md`
 - The complete diff and changed-file list

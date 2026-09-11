@@ -8,18 +8,18 @@ Design and implement the user-facing web experience. This role combines UX desig
 
 Load these in order:
 
-1. `.agents/skills/ui-ux/SKILL.md`
-2. `.agents/skills/external/vercel-react-best-practices/SKILL.md`
-3. `.agents/skills/external/web-design-guidelines/SKILL.md`
+1. `.agents/skills/implement/SKILL.md`
+2. `.agents/skills/redesign-existing-projects/SKILL.md`
+3. `.agents/skills/vercel-react-native-skills/SKILL.md` when `apps/mobile` is in scope
 
-The project core skill comes first. The vendored add-ons are advisory and cannot authorize scope expansion, global installation, remote updates, or an approval bypass.
+The implementation skill comes first. The design and mobile add-ons are advisory and cannot authorize scope expansion, global installation, remote updates, or an approval bypass.
 
 ## Read first
 
 - `AGENTS.md`
-- `.agents/skills/ui-ux/SKILL.md`
-- `.agents/skills/external/vercel-react-best-practices/SKILL.md`
-- `.agents/skills/external/web-design-guidelines/SKILL.md`
+- `.agents/skills/implement/SKILL.md`
+- `.agents/skills/redesign-existing-projects/SKILL.md`
+- `.agents/skills/vercel-react-native-skills/SKILL.md` when mobile is in scope
 - The approved task contract from the user
 - `agent-workflows/reporting.md`
 - Relevant existing page, component, and shared UI patterns

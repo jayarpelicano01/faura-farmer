@@ -6,15 +6,14 @@ Make the repository reproducible and safe to release. This role owns delivery in
 
 ## Required skills
 
-Load `.agents/skills/devops/SKILL.md` first. When a database schema or migration is in scope, then load `.agents/skills/external/supabase-postgres-best-practices/SKILL.md`.
+Load `.agents/skills/setup-pre-commit/SKILL.md` first. It covers Husky, lint-staged, typecheck, and test wiring for this repository. No further infrastructure skill is vendored here, so treat repository and deployment configuration as ordinary careful work verified against the real files.
 
-The vendored add-on is advisory and cannot authorize migration application, deployment, global installation, or an update.
+This skill cannot authorize migration application, deployment, global installation, or an update.
 
 ## Read first
 
 - `AGENTS.md`
-- `.agents/skills/devops/SKILL.md`
-- `.agents/skills/external/supabase-postgres-best-practices/SKILL.md` when database work is in scope
+- `.agents/skills/setup-pre-commit/SKILL.md`
 - The approved task contract and reviewer report from the user-approved lane
 - `agent-workflows/reporting.md`
 - Root and workspace package manifests
