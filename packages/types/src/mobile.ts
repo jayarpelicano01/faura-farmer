@@ -1,10 +1,11 @@
 import { z } from 'zod';
-import { ACCOUNT_TYPES, BUDGET_BUCKETS, CATEGORY_TYPES, FREQUENCIES, TRANSACTION_TYPES } from './models';
+import { ACCOUNT_TYPES, BUDGET_BUCKETS, CATEGORY_TYPES, DEBT_CASH_DIRECTIONS, DEBT_DIRECTIONS, DEBT_STATUSES, FREQUENCIES, TRANSACTION_TYPES } from './models';
 import { ACCOUNT_CURRENCIES, DISPLAY_CURRENCIES, type DisplayCurrency } from './currency';
 
 const uuid = z.string().uuid();
 const decimalString = z.string().regex(/^\d+(?:\.\d{1,2})?$/, 'Amount must be a decimal string');
 const positiveDecimalString = decimalString.refine((value) => Number(value) > 0, 'Amount must be positive');
+const signedDecimalString = z.string().regex(/^-?\d+(?:\.\d{1,2})?$/, 'Amount must be a decimal string').refine((value) => Number(value) !== 0, 'Amount must not be zero');
 const dateString = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Date must be YYYY-MM-DD');
 const cursor = z.string().regex(/^\d+$/, 'Cursor must be an unsigned integer');
 
@@ -86,6 +87,56 @@ export const mobileRecurringRuleSchema = z.object({
   updatedAt: z.string().datetime(),
 });
 
+export const mobilePersonSchema = z.object({
+  id: uuid,
+  displayName: z.string().trim().min(1).max(120),
+  contact: z.string().trim().max(160).nullable(),
+  note: z.string().trim().max(500).nullable(),
+  updatedAt: z.string().datetime(),
+});
+
+export const mobileDebtSchema = z.object({
+  id: uuid,
+  personId: uuid,
+  direction: z.enum(DEBT_DIRECTIONS),
+  originalPrincipal: positiveDecimalString,
+  currency: z.enum(ACCOUNT_CURRENCIES),
+  status: z.enum(DEBT_STATUSES),
+  openedAt: dateString,
+  dueDate: dateString.nullable(),
+  note: z.string().trim().max(500).nullable(),
+  updatedAt: z.string().datetime(),
+});
+
+export const mobileDebtAdjustmentSchema = z.object({
+  id: uuid,
+  debtId: uuid,
+  amount: signedDecimalString,
+  reason: z.string().trim().min(1).max(240),
+  date: dateString,
+  updatedAt: z.string().datetime(),
+});
+
+export const mobileDebtPaymentSchema = z.object({
+  id: uuid,
+  debtId: uuid,
+  amount: positiveDecimalString,
+  date: dateString,
+  note: z.string().trim().max(500).nullable(),
+  updatedAt: z.string().datetime(),
+});
+
+export const mobileDebtCashEventSchema = z.object({
+  id: uuid,
+  debtId: uuid,
+  paymentId: uuid.nullable(),
+  accountId: uuid,
+  amount: positiveDecimalString,
+  direction: z.enum(DEBT_CASH_DIRECTIONS),
+  date: dateString,
+  updatedAt: z.string().datetime(),
+});
+
 export const mobileEntitySchema = z.discriminatedUnion('entity', [
   z.object({ entity: z.literal('account'), record: mobileAccountSchema }),
   z.object({ entity: z.literal('category'), record: mobileCategorySchema }),
@@ -93,20 +144,25 @@ export const mobileEntitySchema = z.discriminatedUnion('entity', [
   z.object({ entity: z.literal('budget'), record: mobileBudgetSchema }),
   z.object({ entity: z.literal('monthly_budget'), record: mobileMonthlyBudgetSchema }),
   z.object({ entity: z.literal('recurring_rule'), record: mobileRecurringRuleSchema }),
+  z.object({ entity: z.literal('person'), record: mobilePersonSchema }),
+  z.object({ entity: z.literal('debt'), record: mobileDebtSchema }),
+  z.object({ entity: z.literal('debt_adjustment'), record: mobileDebtAdjustmentSchema }),
+  z.object({ entity: z.literal('debt_payment'), record: mobileDebtPaymentSchema }),
+  z.object({ entity: z.literal('debt_cash_event'), record: mobileDebtCashEventSchema }),
 ]);
 
 export const mobileSyncMutationSchema = z.discriminatedUnion('operation', [
   z.object({
     mutationId: uuid,
-    entity: z.enum(['account', 'category', 'transaction', 'budget', 'monthly_budget', 'recurring_rule']),
+    entity: z.enum(['account', 'category', 'transaction', 'budget', 'monthly_budget', 'recurring_rule', 'person', 'debt', 'debt_adjustment', 'debt_payment', 'debt_cash_event']),
     recordId: uuid,
     operation: z.literal('upsert'),
     baseCursor: cursor.nullable(),
-    record: z.union([mobileAccountSchema, mobileCategorySchema, mobileTransactionSchema, mobileBudgetSchema, mobileMonthlyBudgetSchema, mobileRecurringRuleSchema]),
+    record: z.union([mobileAccountSchema, mobileCategorySchema, mobileTransactionSchema, mobileBudgetSchema, mobileMonthlyBudgetSchema, mobileRecurringRuleSchema, mobilePersonSchema, mobileDebtSchema, mobileDebtAdjustmentSchema, mobileDebtPaymentSchema, mobileDebtCashEventSchema]),
   }),
   z.object({
     mutationId: uuid,
-    entity: z.enum(['account', 'category', 'transaction', 'budget', 'monthly_budget', 'recurring_rule']),
+    entity: z.enum(['account', 'category', 'transaction', 'budget', 'monthly_budget', 'recurring_rule', 'person', 'debt', 'debt_adjustment', 'debt_payment', 'debt_cash_event']),
     recordId: uuid,
     operation: z.literal('delete'),
     baseCursor: cursor.nullable(),
@@ -143,6 +199,11 @@ export type MobileTransaction = z.infer<typeof mobileTransactionSchema>;
 export type MobileBudget = z.infer<typeof mobileBudgetSchema>;
 export type MobileMonthlyBudget = z.infer<typeof mobileMonthlyBudgetSchema>;
 export type MobileRecurringRule = z.infer<typeof mobileRecurringRuleSchema>;
+export type MobilePerson = z.infer<typeof mobilePersonSchema>;
+export type MobileDebt = z.infer<typeof mobileDebtSchema>;
+export type MobileDebtAdjustment = z.infer<typeof mobileDebtAdjustmentSchema>;
+export type MobileDebtPayment = z.infer<typeof mobileDebtPaymentSchema>;
+export type MobileDebtCashEvent = z.infer<typeof mobileDebtCashEventSchema>;
 export type MobileSyncMutation = z.infer<typeof mobileSyncMutationSchema>;
 export type MobileSyncPush = z.infer<typeof mobileSyncPushSchema>;
 
@@ -167,10 +228,10 @@ export type MobileProfile = {
 
 export type MobileSyncChange = {
   cursor: string;
-  entity: 'account' | 'category' | 'transaction' | 'budget' | 'monthly_budget' | 'recurring_rule';
+  entity: 'account' | 'category' | 'transaction' | 'budget' | 'monthly_budget' | 'recurring_rule' | 'person' | 'debt' | 'debt_adjustment' | 'debt_payment' | 'debt_cash_event';
   recordId: string;
   operation: 'upsert' | 'delete';
-  record: MobileAccount | MobileCategory | MobileTransaction | MobileBudget | MobileMonthlyBudget | MobileRecurringRule | null;
+  record: MobileAccount | MobileCategory | MobileTransaction | MobileBudget | MobileMonthlyBudget | MobileRecurringRule | MobilePerson | MobileDebt | MobileDebtAdjustment | MobileDebtPayment | MobileDebtCashEvent | null;
 };
 
 export type MobileApiError = { error: string; code: string };

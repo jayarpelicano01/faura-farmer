@@ -5,6 +5,8 @@ import {
   CATEGORY_TYPES,
   TRANSACTION_TYPES,
   FREQUENCIES,
+  DEBT_ADJUSTMENT_REASONS,
+  DEBT_DIRECTIONS,
 } from './models';
 import { DISPLAY_CURRENCIES, ACCOUNT_CURRENCIES } from './currency';
 
@@ -212,6 +214,54 @@ export const recurringOccurrenceSchema = z
   .object({ expectedDueDate: z.coerce.date() })
   .strict();
 
+const debtAmount = z.coerce.number().positive('Amount must be positive').max(999999999999);
+const debtDate = z.coerce.date();
+
+export const personSchema = z.object({
+  displayName: z.string().trim().min(1, 'Display name is required').max(120),
+  contact: z.string().trim().max(160).optional().nullable(),
+  note: z.string().trim().max(500).optional().nullable(),
+}).strict();
+
+export const createPersonSchema = personSchema;
+export const updatePersonSchema = personSchema.partial().refine((data) => Object.keys(data).length > 0, 'At least one field is required');
+
+export const createDebtSchema = z.object({
+  personId: z.string().uuid('Person is required'),
+  direction: z.enum(DEBT_DIRECTIONS),
+  originalPrincipal: debtAmount,
+  currency: z.enum(ACCOUNT_CURRENCIES),
+  openedAt: debtDate,
+  dueDate: debtDate.optional().nullable(),
+  note: z.string().trim().max(500).optional().nullable(),
+  openingAccountId: z.string().uuid().optional().nullable(),
+}).strict();
+
+export const updateDebtSchema = z.object({
+  dueDate: debtDate.optional().nullable(),
+  note: z.string().trim().max(500).optional().nullable(),
+}).strict().refine((data) => Object.keys(data).length > 0, 'At least one field is required');
+
+export const createDebtPaymentSchema = z.object({
+  amount: debtAmount,
+  date: debtDate,
+  note: z.string().trim().max(500).optional().nullable(),
+  accountId: z.string().uuid().optional().nullable(),
+}).strict();
+
+export const createDebtAdjustmentSchema = z.object({
+  amount: z.coerce.number().min(-999999999999).max(999999999999).refine((value) => value !== 0, 'Adjustment cannot be zero'),
+  reason: z.enum(DEBT_ADJUSTMENT_REASONS),
+  otherReason: z.string().trim().min(1).max(240).optional(),
+  date: debtDate,
+}).strict().superRefine((value, context) => {
+  if (value.reason === 'other' && !value.otherReason) {
+    context.addIssue({ code: z.ZodIssueCode.custom, message: 'Describe the adjustment reason', path: ['otherReason'] });
+  }
+});
+
+export const debtStatusActionSchema = z.object({ action: z.enum(['reopen', 'write_off']) }).strict();
+
 export const accountType = z.enum(ACCOUNT_TYPES);
 export const categoryType = z.enum(CATEGORY_TYPES);
 export const transactionType = z.enum(TRANSACTION_TYPES);
@@ -237,3 +287,9 @@ export type TransactionListQuery = z.infer<typeof transactionListQuerySchema>;
 export type CreateRecurringRuleInput = z.infer<typeof createRecurringRuleSchema>;
 export type UpdateRecurringRuleInput = z.infer<typeof updateRecurringRuleSchema>;
 export type RecurringOccurrenceInput = z.infer<typeof recurringOccurrenceSchema>;
+export type CreatePersonInput = z.infer<typeof createPersonSchema>;
+export type UpdatePersonInput = z.infer<typeof updatePersonSchema>;
+export type CreateDebtInput = z.infer<typeof createDebtSchema>;
+export type UpdateDebtInput = z.infer<typeof updateDebtSchema>;
+export type CreateDebtPaymentInput = z.infer<typeof createDebtPaymentSchema>;
+export type CreateDebtAdjustmentInput = z.infer<typeof createDebtAdjustmentSchema>;

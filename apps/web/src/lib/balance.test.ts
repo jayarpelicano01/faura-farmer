@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { accountBalance, computeNetFromGrouped } from './balance';
+import { accountBalance, computeDebtCashNet, computeNetFromGrouped } from './balance';
 
 describe('computeNetFromGrouped', () => {
   it('adds income and incoming transfers while subtracting expenses and outgoing transfers', () => {
@@ -14,5 +14,14 @@ describe('computeNetFromGrouped', () => {
   it('returns zero for no grouped transactions and adds the opening balance', () => {
     expect(computeNetFromGrouped([])).toBe(0);
     expect(accountBalance('42.5', -2.5)).toBe(40);
+  });
+});
+
+describe('computeDebtCashNet', () => {
+  it('adds incoming debt cash and subtracts outgoing debt cash', () => {
+    expect(computeDebtCashNet([
+      { direction: 'in', _sum: { amount: '50' } },
+      { direction: 'out', _sum: { amount: '30' } },
+    ])).toBe(20);
   });
 });

@@ -51,6 +51,18 @@ enum Frequency {
   yearly
 }
 
+enum DebtDirection {
+  receivable
+  payable
+}
+
+enum DebtStatus {
+  open
+  partially_paid
+  paid
+  written_off
+}
+
 model User {
   id             String       @id @default(uuid()) @db.Uuid
   email          String       @unique
@@ -79,6 +91,8 @@ model User {
   mobileSessions      MobileSession[]
   mobileSyncChanges   MobileSyncChange[]
   mobileMutations     MobileMutation[]
+  persons             Person[]
+  debts               Debt[]
 
   @@unique([authProvider, providerId])
   @@map("users")
@@ -130,6 +144,7 @@ model Account {
   user           User            @relation(fields: [userId], references: [id], onDelete: Cascade)
   transactions   Transaction[]
   recurringRules RecurringRule[]
+  debtCashEvents DebtCashEvent[]
 
   @@index([userId])
   @@unique([id, userId])
@@ -210,6 +225,101 @@ model RecurringRule {
   @@index([userId, isActive, nextDueDate])
   @@unique([id, userId])
   @@map("recurring_rules")
+}
+
+model Person {
+  id          String   @id @default(uuid()) @db.Uuid
+  userId      String   @map("user_id") @db.Uuid
+  displayName String   @map("display_name")
+  contact     String?
+  note        String?
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  user  User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  debts Debt[]
+
+  @@index([userId])
+  @@unique([id, userId])
+  @@map("persons")
+}
+
+model Debt {
+  id                String        @id @default(uuid()) @db.Uuid
+  userId            String        @map("user_id") @db.Uuid
+  personId          String        @map("person_id") @db.Uuid
+  direction         DebtDirection
+  originalPrincipal Decimal       @map("original_principal") @db.Decimal(14, 2)
+  currency          String
+  status            DebtStatus    @default(open)
+  openedAt          DateTime      @default(now()) @map("opened_at") @db.Date
+  dueDate           DateTime?     @map("due_date") @db.Date
+  note              String?
+  createdAt         DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt         DateTime      @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  user       User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  person     Person             @relation(fields: [personId], references: [id], onDelete: Restrict)
+  adjustments DebtAdjustment[]
+  payments    DebtPayment[]
+  cashEvents  DebtCashEvent[]
+
+  @@index([userId])
+  @@index([personId])
+  @@index([userId, status])
+  @@unique([id, userId])
+  @@map("debts")
+}
+
+model DebtAdjustment {
+  id        String   @id @default(uuid()) @db.Uuid
+  debtId    String   @map("debt_id") @db.Uuid
+  amount    Decimal  @db.Decimal(14, 2)
+  reason    String
+  date      DateTime @db.Date
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  debt Debt @relation(fields: [debtId], references: [id], onDelete: Cascade)
+
+  @@index([debtId])
+  @@map("debt_adjustments")
+}
+
+model DebtPayment {
+  id        String   @id @default(uuid()) @db.Uuid
+  debtId    String   @map("debt_id") @db.Uuid
+  amount    Decimal  @db.Decimal(14, 2)
+  date      DateTime @db.Date
+  note      String?
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  debt      Debt           @relation(fields: [debtId], references: [id], onDelete: Cascade)
+  cashEvent DebtCashEvent?
+
+  @@index([debtId])
+  @@map("debt_payments")
+}
+
+model DebtCashEvent {
+  id        String   @id @default(uuid()) @db.Uuid
+  debtId    String   @map("debt_id") @db.Uuid
+  paymentId String?  @unique @map("payment_id") @db.Uuid
+  accountId String   @map("account_id") @db.Uuid
+  amount    Decimal  @db.Decimal(14, 2)
+  direction String
+  date      DateTime @db.Date
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  debt    Debt         @relation(fields: [debtId], references: [id], onDelete: Cascade)
+  payment DebtPayment? @relation(fields: [paymentId], references: [id], onDelete: Cascade)
+  account Account      @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  @@index([debtId])
+  @@index([accountId])
+  @@map("debt_cash_events")
 }
 
 model Budget {

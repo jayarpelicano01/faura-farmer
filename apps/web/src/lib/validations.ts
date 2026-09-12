@@ -18,6 +18,13 @@ export {
   createRecurringRuleSchema,
   updateRecurringRuleSchema,
   recurringOccurrenceSchema,
+  createPersonSchema,
+  updatePersonSchema,
+  createDebtSchema,
+  updateDebtSchema,
+  createDebtPaymentSchema,
+  createDebtAdjustmentSchema,
+  debtStatusActionSchema,
 } from '@faura-farmer/types';
 
 export type {
@@ -40,4 +47,10 @@ export type {
   CreateRecurringRuleInput,
   UpdateRecurringRuleInput,
   RecurringOccurrenceInput,
+  CreatePersonInput,
+  UpdatePersonInput,
+  CreateDebtInput,
+  UpdateDebtInput,
+  CreateDebtPaymentInput,
+  CreateDebtAdjustmentInput,
 } from '@faura-farmer/types';
