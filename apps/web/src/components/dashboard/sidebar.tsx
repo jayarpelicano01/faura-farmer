@@ -10,6 +10,7 @@ import {
   Tags,
   ChartColumn,
   Repeat2,
+  HandCoins,
   Wallet,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -26,6 +27,7 @@ const navItems = [
   { href: '/categories', label: 'Categories', icon: Tags },
   { href: '/budgets', label: 'Budgets', icon: Wallet },
   { href: '/reports', label: 'Reports', icon: ChartColumn },
+  { href: '/debts', label: 'Debts', icon: HandCoins },
 ];
 
 interface SidebarProps {

@@ -9,6 +9,7 @@ import type {
   Category,
   CategoryComparisonRow,
   CurrencyPreference,
+  DebtSummary,
   MonthTotals,
   MonthlyBudget,
   MonthlyTrendPoint,
@@ -16,7 +17,8 @@ import type {
   Transaction,
 } from '@faura-farmer/types';
 import { BUDGET_BUCKETS, convertMoney } from '@faura-farmer/types';
-import { accountBalance, computeNetFromGrouped } from '@/lib/balance';
+import { accountBalance, computeDebtCashNet, computeNetFromGrouped } from '@/lib/balance';
+import { calculateDebtState, summarizeDebtBalances } from '@/lib/debt-ledger';
 import { toNumber } from '@/lib/format';
 import {
   calculatePercentageChange,
@@ -136,14 +138,21 @@ export async function getAccountsWithBalance(userId: string): Promise<AccountWit
 
   if (accounts.length === 0) return [];
 
-  const grouped = await prisma.transaction.groupBy({
-    by: ['accountId', 'type', 'transferRole'],
-    where: {
-      account: { userId },
-      type: { in: ['income', 'expense', 'transfer'] },
-    },
-    _sum: { amount: true },
-  });
+  const [grouped, debtCashGrouped] = await Promise.all([
+    prisma.transaction.groupBy({
+      by: ['accountId', 'type', 'transferRole'],
+      where: {
+        account: { userId },
+        type: { in: ['income', 'expense', 'transfer'] },
+      },
+      _sum: { amount: true },
+    }),
+    prisma.debtCashEvent.groupBy({
+      by: ['accountId', 'direction'],
+      where: { debt: { userId } },
+      _sum: { amount: true },
+    }),
+  ]);
 
   const rowsByAccount = new Map<string, typeof grouped>();
   for (const row of grouped) {
@@ -151,11 +160,20 @@ export async function getAccountsWithBalance(userId: string): Promise<AccountWit
     rows.push(row);
     rowsByAccount.set(row.accountId, rows);
   }
+  const debtRowsByAccount = new Map<string, typeof debtCashGrouped>();
+  for (const row of debtCashGrouped) {
+    const rows = debtRowsByAccount.get(row.accountId) ?? [];
+    rows.push(row);
+    debtRowsByAccount.set(row.accountId, rows);
+  }
 
   return accounts.map<AccountWithBalance>((a) => ({
     ...a,
     startingBalance: String(a.startingBalance),
-    balance: String(accountBalance(a.startingBalance, computeNetFromGrouped(rowsByAccount.get(a.id) ?? []))),
+    balance: String(accountBalance(
+      a.startingBalance,
+      computeNetFromGrouped(rowsByAccount.get(a.id) ?? []) + computeDebtCashNet(debtRowsByAccount.get(a.id) ?? []),
+    )),
     currency: a.currency as AccountCurrency,
   }));
 }
@@ -200,6 +218,23 @@ export async function getRecentTransactions(
   });
 
   return toLogicalTransactions(transactions).slice(0, limit);
+}
+
+export async function getDebtSummary(userId: string, preference: CurrencyPreference): Promise<DebtSummary> {
+  const debts = await prisma.debt.findMany({
+    where: { userId },
+    include: { adjustments: { select: { amount: true } }, payments: { select: { amount: true } } },
+  });
+  return summarizeDebtBalances(debts.map((debt) => ({
+    direction: debt.direction,
+    currency: debt.currency,
+    outstandingBalance: calculateDebtState({
+      originalPrincipal: String(debt.originalPrincipal),
+      adjustments: debt.adjustments.map((adjustment) => ({ amount: String(adjustment.amount) })),
+      payments: debt.payments.map((payment) => ({ amount: String(payment.amount) })),
+      status: debt.status,
+    }).outstandingBalance,
+  })), preference);
 }
 
 export async function getDisplayMonthTotals(
@@ -422,28 +457,45 @@ export async function getBalanceTimeline(userId: string, preference: CurrencyPre
   const buckets = buildBalanceTimelineBuckets(period);
   const accounts = await prisma.account.findMany({ where: { userId, ...(accountId ? { id: accountId } : {}) }, select: { id: true, currency: true, startingBalance: true } });
   if (!accounts.length) return [];
-  const rows = await prisma.transaction.findMany({
-    where: { userId, accountId: { in: accounts.map((account) => account.id) }, date: { lte: buckets.at(-1)!.to } },
-    select: { id: true, date: true, type: true, transferRole: true, amount: true, note: true, category: { select: { name: true } }, account: { select: { currency: true } } },
-    orderBy: [{ date: 'asc' }, { createdAt: 'asc' }, { id: 'asc' }],
-  });
+  const [transactionRows, debtCashRows] = await Promise.all([
+    prisma.transaction.findMany({
+      where: { userId, accountId: { in: accounts.map((account) => account.id) }, date: { lte: buckets.at(-1)!.to } },
+      select: { id: true, date: true, type: true, transferRole: true, amount: true, note: true, createdAt: true, category: { select: { name: true } }, account: { select: { currency: true } } },
+    }),
+    prisma.debtCashEvent.findMany({
+      where: { debt: { userId }, accountId: { in: accounts.map((account) => account.id) }, date: { lte: buckets.at(-1)!.to } },
+      select: { id: true, date: true, direction: true, amount: true, createdAt: true, debt: { select: { person: { select: { displayName: true } }, direction: true } }, account: { select: { currency: true } } },
+    }),
+  ]);
+  const rows = [
+    ...transactionRows.map((row) => ({ kind: 'transaction' as const, row })),
+    ...debtCashRows.map((row) => ({ kind: 'debt_cash' as const, row })),
+  ].sort((left, right) => left.row.date.getTime() - right.row.date.getTime()
+    || left.row.createdAt.getTime() - right.row.createdAt.getTime()
+    || left.row.id.localeCompare(right.row.id));
   let balance = accounts.reduce((total, account) => total + convertForDisplay(account.startingBalance, account.currency, preference), 0);
   const effect = (row: typeof rows[number]) => {
-    const amount = convertForDisplay(row.amount, row.account.currency, preference);
-    return row.type === 'income' || (row.type === 'transfer' && row.transferRole === 'incoming') ? amount : -amount;
+    const amount = convertForDisplay(row.row.amount, row.row.account.currency, preference);
+    if (row.kind === 'debt_cash') return row.row.direction === 'in' ? amount : -amount;
+    return row.row.type === 'income' || (row.row.type === 'transfer' && row.row.transferRole === 'incoming') ? amount : -amount;
   };
   let index = 0;
-  while (index < rows.length && rows[index]!.date < buckets[0]!.from) balance += effect(rows[index++]!);
+  while (index < rows.length && rows[index]!.row.date < buckets[0]!.from) balance += effect(rows[index++]!);
   return buckets.map((bucket) => {
     const opening = balance;
     const events: BalanceTimelinePoint['events'] = [];
-    while (index < rows.length && rows[index]!.date <= bucket.to) {
+    while (index < rows.length && rows[index]!.row.date <= bucket.to) {
       const row = rows[index++]!;
-      if (row.date < bucket.from) continue;
+      if (row.row.date < bucket.from) continue;
       const amount = effect(row);
       balance += amount;
-      const fallback = row.type === 'income' ? row.category?.name ?? 'Income' : row.type === 'expense' ? row.category?.name ?? 'Expense' : row.transferRole === 'incoming' ? 'Transfer received' : 'Transfer sent';
-      events.push({ id: row.id, date: format(row.date, 'MMM d, yyyy'), description: row.note?.trim() || fallback, amount: String(amount), type: row.type === 'transfer' ? `transfer_${row.transferRole ?? 'outgoing'}` : row.type });
+      if (row.kind === 'debt_cash') {
+        const fallback = row.row.direction === 'in' ? `Debt cash received from ${row.row.debt.person.displayName}` : `Debt cash paid to ${row.row.debt.person.displayName}`;
+        events.push({ id: row.row.id, date: format(row.row.date, 'MMM d, yyyy'), description: fallback, amount: String(amount), type: `debt_${row.row.direction}` });
+      } else {
+        const fallback = row.row.type === 'income' ? row.row.category?.name ?? 'Income' : row.row.type === 'expense' ? row.row.category?.name ?? 'Expense' : row.row.transferRole === 'incoming' ? 'Transfer received' : 'Transfer sent';
+        events.push({ id: row.row.id, date: format(row.row.date, 'MMM d, yyyy'), description: row.row.note?.trim() || fallback, amount: String(amount), type: row.row.type === 'transfer' ? `transfer_${row.row.transferRole ?? 'outgoing'}` : row.row.type });
+      }
     }
     return { id: bucket.id, label: bucket.label, from: format(bucket.from, 'yyyy-MM-dd'), to: format(bucket.to, 'yyyy-MM-dd'), balance: String(balance), change: String(balance - opening), events };
   });

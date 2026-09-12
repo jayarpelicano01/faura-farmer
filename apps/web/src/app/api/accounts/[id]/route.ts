@@ -2,7 +2,7 @@ import { Prisma, prisma } from '@faura-farmer/database';
 import { auth } from '@/lib/auth';
 import { updateAccountSchema } from '@/lib/validations';
 import { badRequest, fail, notFound, ok, unauthorized } from '@/lib/http';
-import { accountBalance, computeNetFromGrouped } from '@/lib/balance';
+import { accountBalance, computeDebtCashNet, computeNetFromGrouped } from '@/lib/balance';
 import { withAccountLockRetry } from '@/lib/account-locking';
 import { guardMutation, readJsonBody } from '@/lib/security';
 import { recordCanonicalMobileTombstone, recordCanonicalMobileUpsert } from '@/lib/mobile/sync';
@@ -14,12 +14,19 @@ async function createBalanceAdjustment(
   startingBalance: Prisma.Decimal,
   targetBalance: number,
 ) {
-  const grouped = await tx.transaction.groupBy({
-    by: ['type', 'transferRole'],
-    where: { accountId, userId },
-    _sum: { amount: true },
-  });
-  const net = computeNetFromGrouped(grouped);
+  const [grouped, debtCashGrouped] = await Promise.all([
+    tx.transaction.groupBy({
+      by: ['type', 'transferRole'],
+      where: { accountId, userId },
+      _sum: { amount: true },
+    }),
+    tx.debtCashEvent.groupBy({
+      by: ['direction'],
+      where: { accountId, debt: { userId } },
+      _sum: { amount: true },
+    }),
+  ]);
+  const net = computeNetFromGrouped(grouped) + computeDebtCashNet(debtCashGrouped);
   const difference = Math.round((targetBalance - accountBalance(startingBalance, net)) * 100) / 100;
   if (Math.abs(difference) < 0.005) return null;
   return tx.transaction.create({
@@ -47,15 +54,22 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
   });
   if (!account) return notFound('Account not found');
 
-  const grouped = await prisma.transaction.groupBy({
-    by: ['type', 'transferRole'],
-    where: { accountId: account.id },
-    _sum: { amount: true },
-  });
+  const [grouped, debtCashGrouped] = await Promise.all([
+    prisma.transaction.groupBy({
+      by: ['type', 'transferRole'],
+      where: { accountId: account.id },
+      _sum: { amount: true },
+    }),
+    prisma.debtCashEvent.groupBy({
+      by: ['direction'],
+      where: { accountId: account.id, debt: { userId: session.user.id } },
+      _sum: { amount: true },
+    }),
+  ]);
   return ok({
     ...account,
     startingBalance: String(account.startingBalance),
-    balance: String(accountBalance(account.startingBalance, computeNetFromGrouped(grouped))),
+    balance: String(accountBalance(account.startingBalance, computeNetFromGrouped(grouped) + computeDebtCashNet(debtCashGrouped))),
   });
 }
 

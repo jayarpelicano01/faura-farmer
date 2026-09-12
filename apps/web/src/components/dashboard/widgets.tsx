@@ -1,7 +1,7 @@
 import Link from 'next/link';
-import { PiggyBank, TriangleAlert, Wallet } from 'lucide-react';
+import { HandCoins, PiggyBank, TriangleAlert, Wallet } from 'lucide-react';
 import { formatMoney, toNumber } from '@/lib/format';
-import { formatDisplayMoney, type CurrencyPreference } from '@faura-farmer/types';
+import { formatDisplayMoney, type CurrencyPreference, type DebtSummary } from '@faura-farmer/types';
 import { cn } from '@/lib/utils';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { TransactionList } from '@/components/transactions/transaction-list';
@@ -212,6 +212,32 @@ export function BudgetOverview({ budgets, preference }: { budgets: BudgetWithCat
                 </div>
               );
             })}
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+export function DebtSummaryCard({ summary, preference }: { summary: DebtSummary; preference: CurrencyPreference }) {
+  const empty = summary.owedToYou === '0.00' && summary.youOwe === '0.00';
+  return (
+    <Card>
+      <CardHeader className="flex flex-row items-center justify-between">
+        <CardTitle className="flex items-center gap-2 font-display text-lg">
+          <HandCoins className="h-4 w-4 text-muted-foreground" />
+          Debt position
+        </CardTitle>
+        <Link href="/debts" className="text-sm font-medium text-primary hover:underline">View debts</Link>
+      </CardHeader>
+      <CardContent>
+        {empty ? (
+          <p className="text-sm text-muted-foreground">No debts yet. Track what people owe you and what you owe them.</p>
+        ) : (
+          <div className="grid gap-4 sm:grid-cols-3">
+            <div><p className="text-xs text-muted-foreground">Owed to you</p><p className="mt-1 font-display text-xl font-semibold text-income">{formatMoney(summary.owedToYou, preference.displayCurrency)}</p></div>
+            <div><p className="text-xs text-muted-foreground">You owe</p><p className="mt-1 font-display text-xl font-semibold text-expense">{formatMoney(summary.youOwe, preference.displayCurrency)}</p></div>
+            <div><p className="text-xs text-muted-foreground">Net position</p><p className="mt-1 font-display text-xl font-semibold text-foreground">{formatMoney(summary.netPosition, preference.displayCurrency)}</p></div>
           </div>
         )}
       </CardContent>

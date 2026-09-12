@@ -5,6 +5,7 @@ import {
   ArrowDownFromLine,
   ArrowLeftRight,
   ArrowUpFromLine,
+  HandCoins,
   PieChart,
   PiggyBank,
   Plus,
@@ -28,6 +29,7 @@ const quickActions: QuickAction[] = [
   { label: 'Add account', icon: PiggyBank, href: '/accounts?new=1' },
   { label: 'New budget', icon: Wallet, href: '/budgets?new=1' },
   { label: 'Add category', icon: PieChart, href: '/categories' },
+  { label: 'New debt', icon: HandCoins, href: '/debts?new=1' as Href },
 ];
 
 function normalizedPathname(pathname: string) {

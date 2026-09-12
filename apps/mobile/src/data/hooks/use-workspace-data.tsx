@@ -3,7 +3,12 @@ import type {
   MobileAccount,
   MobileBudget,
   MobileCategory,
+  MobileDebt,
+  MobileDebtAdjustment,
+  MobileDebtCashEvent,
+  MobileDebtPayment,
   MobileMonthlyBudget,
+  MobilePerson,
   MobileRecurringRule,
   MobileTransaction,
 } from '@faura-farmer/types';
@@ -15,10 +20,15 @@ type WorkspaceData = {
   accounts: MobileAccount[];
   budgets: MobileBudget[];
   categories: MobileCategory[];
+  debts: MobileDebt[];
+  debtAdjustments: MobileDebtAdjustment[];
+  debtCashEvents: MobileDebtCashEvent[];
+  debtPayments: MobileDebtPayment[];
   error: string | null;
   lastSyncedAt: string | null;
   loading: boolean;
   monthlyBudgets: MobileMonthlyBudget[];
+  people: MobilePerson[];
   recurringRules: MobileRecurringRule[];
   reload: () => Promise<void>;
   transactions: MobileTransaction[];
@@ -30,10 +40,15 @@ const emptySnapshot: WorkspaceSnapshot = {
   accounts: [],
   budgets: [],
   categories: [],
+  debts: [],
+  debtAdjustments: [],
+  debtCashEvents: [],
+  debtPayments: [],
   error: null,
   lastSyncedAt: null,
   loading: true,
   monthlyBudgets: [],
+  people: [],
   recurringRules: [],
   transactions: [],
 };
@@ -57,20 +72,30 @@ export function WorkspaceDataProvider({ children }: PropsWithChildren) {
       db.listRecords('account'),
       db.listRecords('budget'),
       db.listRecords('category'),
+      db.listRecords('debt'),
+      db.listRecords('debt_adjustment'),
+      db.listRecords('debt_cash_event'),
+      db.listRecords('debt_payment'),
       db.getLastSyncedAt(),
       db.listRecords('monthly_budget'),
+      db.listRecords('person'),
       db.listRecords('recurring_rule'),
       db.listRecords('transaction'),
-    ]).then(([accounts, budgets, categories, lastSyncedAt, monthlyBudgets, recurringRules, transactions]) => {
+    ]).then(([accounts, budgets, categories, debts, debtAdjustments, debtCashEvents, debtPayments, lastSyncedAt, monthlyBudgets, people, recurringRules, transactions]) => {
       if (version !== requestVersion.current) return;
       setSnapshot({
         accounts,
         budgets,
         categories,
+        debts,
+        debtAdjustments,
+        debtCashEvents,
+        debtPayments,
         error: null,
         lastSyncedAt,
         loading: false,
         monthlyBudgets,
+        people,
         recurringRules,
         transactions,
       });

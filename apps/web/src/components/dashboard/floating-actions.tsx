@@ -11,6 +11,7 @@ import {
   PiggyBank,
   Plus,
   Wallet,
+  HandCoins,
   X,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -22,6 +23,7 @@ const actions = [
   { href: '/accounts?new=1', label: 'Add account', icon: PiggyBank },
   { href: '/categories?new=1', label: 'Add category', icon: PieChart },
   { href: '/budgets?new=1', label: 'New budget', icon: Wallet },
+  { href: '/debts?new=1', label: 'New debt', icon: HandCoins },
 ];
 
 export function FloatingActions() {

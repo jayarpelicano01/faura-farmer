@@ -36,7 +36,7 @@ export default function ReportsScreen() {
     compactMoney,
     signedMoney,
   } = useCurrency();
-  const { accounts, budgets, categories, lastSyncedAt, loading, reload, transactions } = useWorkspaceData();
+  const { accounts, budgets, categories, debtCashEvents, lastSyncedAt, loading, reload, transactions } = useWorkspaceData();
   const [selectedAccountId, setSelectedAccountId] = useState<string | null>(null);
   const [timelinePeriod, setTimelinePeriod] = useState<BalanceTimelinePeriod>('7d');
   const [selectedPoint, setSelectedPoint] = useState<BalancePoint | null>(null);
@@ -54,8 +54,8 @@ export default function ReportsScreen() {
     [displayCurrency, rateDate, rateRefreshedAt, usdPerPhp],
   );
   const timeline = useMemo(() => selectedAccount
-    ? buildBalanceTimeline({ account: selectedAccount, accounts, categories, transactions, period: timelinePeriod, preference })
-    : buildCombinedBalanceTimeline({ accounts, categories, transactions, period: timelinePeriod, preference }), [accounts, categories, preference, selectedAccount, timelinePeriod, transactions]);
+    ? buildBalanceTimeline({ account: selectedAccount, accounts, categories, debtCashEvents, transactions, period: timelinePeriod, preference })
+    : buildCombinedBalanceTimeline({ accounts, categories, debtCashEvents, transactions, period: timelinePeriod, preference }), [accounts, categories, debtCashEvents, preference, selectedAccount, timelinePeriod, transactions]);
   const categorySpending = useMemo(() => buildCategorySpending({ accountId: selectedAccountId, accountCurrency: selectedAccount?.currency, accounts, preference, categories, transactions, period: categoryPeriod, anchor: categoryAnchor }), [accounts, categoryAnchor, categoryPeriod, categories, preference, selectedAccount?.currency, selectedAccountId, transactions]);
   const budgetVariance = useMemo(() => buildBudgetVariance({ accounts, preference, budgets, categories, transactions, period: categoryPeriod, anchor: categoryAnchor }), [accounts, budgets, categoryAnchor, categoryPeriod, categories, preference, transactions]);
   const categoryComparison = useMemo(() => buildCategoryComparison({ accounts, preference, categories, transactions, period: categoryPeriod, anchor: categoryAnchor }), [accounts, categoryAnchor, categoryPeriod, categories, preference, transactions]);

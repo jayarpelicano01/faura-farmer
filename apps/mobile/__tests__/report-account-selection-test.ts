@@ -1,4 +1,4 @@
-import type { CurrencyPreference, MobileAccount, MobileCategory, MobileTransaction } from '@faura-farmer/types';
+import type { CurrencyPreference, MobileAccount, MobileCategory, MobileDebtCashEvent, MobileTransaction } from '@faura-farmer/types';
 import { buildCategorySpending, buildCombinedBalanceTimeline } from '@/data/reports';
 
 const preference: CurrencyPreference = { displayCurrency: 'PHP', usdPerPhp: null, rateDate: null, rateRefreshedAt: null };
@@ -36,5 +36,15 @@ describe('mobile report account selection', () => {
       expect.objectContaining({ id: transfer.id, accountId: accounts[1]!.id, change: '40' }),
     ]));
     expect(new Set(events.map((event) => `${event.accountId}:${event.id}`)).size).toBe(events.length);
+  });
+
+  it('includes debt cash in balance movement without adding category spending', () => {
+    const cashEvent: MobileDebtCashEvent = {
+      id: '10000000-0000-4000-8000-000000000006', debtId: '10000000-0000-4000-8000-000000000007', paymentId: null,
+      accountId: accounts[0]!.id, amount: '30', direction: 'in', date: '2026-09-11', updatedAt: '2026-09-11T00:00:00.000Z',
+    };
+    const timeline = buildCombinedBalanceTimeline({ accounts, categories, debtCashEvents: [cashEvent], transactions: [], period: '7d', preference });
+    expect(timeline.at(-1)).toEqual(expect.objectContaining({ balance: '330', change: '30' }));
+    expect(timeline.at(-1)!.events).toEqual(expect.arrayContaining([expect.objectContaining({ id: cashEvent.id, kind: 'debt_in' })]));
   });
 });

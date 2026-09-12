@@ -1,7 +1,7 @@
 import { useMemo, useRef, useState, type PropsWithChildren } from 'react';
 import { ActivityIndicator, Animated, Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 import { usePathname, useRouter, type Href } from 'expo-router';
-import { ArrowLeftRight, BarChart3, Check, CircleAlert, CloudOff, LayoutDashboard, Menu, Moon, PiggyBank, Repeat, Sun, Tags, Wallet, X, type LucideIcon } from 'lucide-react-native';
+import { ArrowLeftRight, BarChart3, Check, CircleAlert, CloudOff, HandCoins, LayoutDashboard, Menu, Moon, PiggyBank, Repeat, Sun, Tags, Wallet, X, type LucideIcon } from 'lucide-react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useSession } from '@/auth/session';
 import { useSync } from '@/sync/use-sync';
@@ -10,7 +10,7 @@ import { BrandMark } from './brand';
 import { FloatingActions } from './floating-actions';
 import { fontFamily, radius, type AppTheme, useAppTheme } from './theme';
 
-type NavigationHref = '/dashboard' | '/accounts' | '/transactions' | '/categories' | '/budgets' | '/reports' | '/recurring';
+type NavigationHref = '/dashboard' | '/accounts' | '/transactions' | '/categories' | '/budgets' | '/reports' | '/debts' | '/recurring';
 type NavigationItem = { href: NavigationHref; label: string; icon: LucideIcon };
 
 const navigationItems: NavigationItem[] = [
@@ -19,6 +19,7 @@ const navigationItems: NavigationItem[] = [
   { href: '/transactions', label: 'Transactions', icon: ArrowLeftRight },
   { href: '/budgets', label: 'Budgets', icon: Wallet },
   { href: '/reports', label: 'Reports', icon: BarChart3 },
+  { href: '/debts', label: 'Debts', icon: HandCoins },
   { href: '/categories', label: 'Categories', icon: Tags },
   { href: '/recurring', label: 'Recurring', icon: Repeat },
 ];

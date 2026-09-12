@@ -7,6 +7,7 @@ import {
   getBucketAllocation,
   getBudgetsWithProgress,
   getDisplayMonthTotals,
+  getDebtSummary,
   getRecentTransactions,
 } from '@/lib/queries';
 import { toNumber } from '@/lib/format';
@@ -14,6 +15,7 @@ import { currencyPreferenceSelect, serializeCurrencyPreference } from '@/lib/cur
 import {
   AccountSummary,
   BalanceCards,
+  DebtSummaryCard,
   BudgetOverview,
   MonthlyBudgetOverview,
   RecentTransactions,
@@ -30,10 +32,11 @@ export default async function DashboardPage() {
   ]);
   if (!user) redirect('/login');
   const preference = serializeCurrencyPreference(user);
-  const [monthTotals, budgets, allocation] = await Promise.all([
+  const [monthTotals, budgets, allocation, debtSummary] = await Promise.all([
     getDisplayMonthTotals(session.user.id, new Date(), preference),
     getBudgetsWithProgress(session.user.id, new Date(), preference),
     getBucketAllocation(session.user.id, new Date(), preference),
+    getDebtSummary(session.user.id, preference),
   ]);
 
   const totalBalance = accounts.reduce(
@@ -50,6 +53,7 @@ export default async function DashboardPage() {
         <p className="mt-1 text-sm text-muted-foreground">Here&apos;s your money at a glance.</p>
       </div>
       <BalanceCards preference={preference} totalBalance={totalBalance} monthTotals={monthTotals} />
+      <DebtSummaryCard summary={debtSummary} preference={preference} />
       <div className="grid gap-6 lg:grid-cols-3">
         <div className="min-w-0 lg:col-span-2">
           <RecentTransactions transactions={recent} />

@@ -1,7 +1,7 @@
 import { useCallback, useMemo } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { Link, useFocusEffect } from 'expo-router';
-import type { MobileAccount, MobileTransaction } from '@faura-farmer/types';
+import { Link, useFocusEffect, type Href } from 'expo-router';
+import { calculateDebtState, summarizeDebtBalances, type MobileAccount, type MobileTransaction } from '@faura-farmer/types';
 import { useWorkspace } from '@/data/workspace-provider';
 import { useWorkspaceData } from '@/data/hooks/use-workspace-data';
 import { localMonthKey, transactionDateKey } from '@/data/date';
@@ -19,9 +19,9 @@ export default function DashboardScreen() {
   const styles = useDashboardStyles();
   const ui = useUiStyles();
   const { activeWorkspace } = useWorkspace();
-  const { accounts, reload, transactions } = useWorkspaceData();
+  const { accounts, debtAdjustments, debtCashEvents, debtPayments, debts, reload, transactions } = useWorkspaceData();
   const { lastSyncFailed, syncNow } = useSync();
-  const { convert, formatMoney } = useCurrency();
+  const { convert, displayCurrency, formatMoney, rateDate, rateRefreshedAt, usdPerPhp } = useCurrency();
   useFocusEffect(useCallback(() => { void reload(); }, [reload]));
 
   const balances = new Map(accounts.map((account) => [account.id, Number(account.startingBalance)]));
@@ -47,9 +47,23 @@ export default function DashboardScreen() {
       if (transaction.destinationAccountId) balances.set(transaction.destinationAccountId, (balances.get(transaction.destinationAccountId) ?? 0) + amount);
     }
   }
+  for (const event of debtCashEvents) {
+    const amount = Number(event.amount);
+    balances.set(event.accountId, (balances.get(event.accountId) ?? 0) + (event.direction === 'in' ? amount : -amount));
+  }
   const total = Math.round(accounts.reduce((sum, account) => sum + Number(convert(balances.get(account.id) ?? 0, account.currency)), 0) * 100) / 100;
   const safeIncome = Math.round(income * 100) / 100;
   const safeExpense = Math.round(expense * 100) / 100;
+  const debtSummary = summarizeDebtBalances(debts.map((debt) => ({
+    direction: debt.direction,
+    currency: debt.currency,
+    outstandingBalance: calculateDebtState({
+      originalPrincipal: debt.originalPrincipal,
+      adjustments: debtAdjustments.filter((item) => item.debtId === debt.id).map((item) => ({ amount: item.amount })),
+      payments: debtPayments.filter((item) => item.debtId === debt.id).map((item) => ({ amount: item.amount })),
+      status: debt.status,
+    }).outstandingBalance,
+  })), { displayCurrency, usdPerPhp, rateDate, rateRefreshedAt });
 
   return (
     <Screen scrollable>
@@ -70,6 +84,17 @@ export default function DashboardScreen() {
         </View>
         ) : null}
       </View>
+
+      <Link href={'/debts' as Href} asChild>
+        <Pressable accessibilityLabel="Open debts" accessibilityRole="link">
+          {({ pressed }) => <View style={pressed ? styles.sectionHeaderPressed : undefined}>
+            <Card>
+              <Text style={styles.metricLabel}>Debt position</Text>
+              {debts.length === 0 ? <Text style={styles.debtEmpty}>No debts yet. Track what people owe you and what you owe them.</Text> : <View style={styles.debtTotals}><View><Text style={styles.debtLabel}>Owed to you</Text><Text style={[styles.debtValue, styles.income]}>{formatMoney(debtSummary.owedToYou)}</Text></View><View><Text style={styles.debtLabel}>You owe</Text><Text style={[styles.debtValue, styles.expense]}>{formatMoney(debtSummary.youOwe)}</Text></View><View><Text style={styles.debtLabel}>Net position</Text><Text style={styles.debtValue}>{formatMoney(debtSummary.netPosition)}</Text></View></View>}
+            </Card>
+          </View>}
+        </Pressable>
+      </Link>
 
       <View style={styles.metrics}>
         <Card>
@@ -174,6 +199,10 @@ function useDashboardStyles() {
   metricHalf: { flex: 1, minWidth: 0 },
   metricLabel: { color: theme.mutedForeground, fontFamily: fontFamily.display, fontSize: 11, fontWeight: '600', lineHeight: 16 },
   metricValue: { marginTop: 9, color: theme.foreground, fontFamily: fontFamily.display, fontSize: 18, fontWeight: '600', letterSpacing: -0.8, lineHeight: 28 },
+  debtEmpty: { marginTop: 10, color: theme.mutedForeground, fontFamily: fontFamily.body, fontSize: 13, lineHeight: 19 },
+  debtTotals: { flexDirection: 'row', justifyContent: 'space-between', gap: 8, marginTop: 12 },
+  debtLabel: { color: theme.mutedForeground, fontFamily: fontFamily.body, fontSize: 11, lineHeight: 16 },
+  debtValue: { marginTop: 3, color: theme.foreground, fontFamily: fontFamily.display, fontSize: 13, fontWeight: '600', fontVariant: ['tabular-nums'] },
   income: { color: theme.income },
   expense: { color: theme.expense },
   sectionHeader: { minHeight: 44, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 },

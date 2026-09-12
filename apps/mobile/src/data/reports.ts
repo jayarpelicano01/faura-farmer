@@ -1,4 +1,4 @@
-import { convertMoney, type CurrencyPreference, type MobileAccount, type MobileBudget, type MobileCategory, type MobileTransaction } from '@faura-farmer/types';
+import { convertMoney, type CurrencyPreference, type MobileAccount, type MobileBudget, type MobileCategory, type MobileDebtCashEvent, type MobileTransaction } from '@faura-farmer/types';
 
 export type BalanceTimelinePeriod = '7d' | '30d' | '365d';
 export type CategorySpendingPeriod = 'week' | 'month';
@@ -10,7 +10,7 @@ export type BalanceEvent = {
   description: string;
   change: string;
   balanceAfter: string;
-  kind: 'income' | 'expense' | 'transfer_in' | 'transfer_out';
+  kind: 'income' | 'expense' | 'transfer_in' | 'transfer_out' | 'debt_in' | 'debt_out';
 };
 
 export type BalancePoint = {
@@ -178,6 +178,11 @@ function eventFor(
   };
 }
 
+function debtCashEventFor(event: MobileDebtCashEvent, accountId: string, balanceAfter: number, accountCurrency: string, preference: CurrencyPreference): BalanceEvent {
+  const change = (event.direction === 'in' ? 1 : -1) * converted(event.amount, accountCurrency, preference);
+  return { id: event.id, accountId, date: event.date, description: event.direction === 'in' ? 'Debt cash received' : 'Debt cash paid', change: decimal(change), balanceAfter: decimal(balanceAfter), kind: event.direction === 'in' ? 'debt_in' : 'debt_out' };
+}
+
 function relevantTransactions(transactions: MobileTransaction[], accountId: string) {
   return transactions
     .filter((transaction) => transaction.accountId === accountId || transaction.destinationAccountId === accountId)
@@ -192,6 +197,7 @@ export function buildBalanceTimeline({
   account,
   accounts,
   categories,
+  debtCashEvents = [],
   transactions,
   period,
   preference,
@@ -199,20 +205,27 @@ export function buildBalanceTimeline({
   account: MobileAccount;
   accounts: MobileAccount[];
   categories: MobileCategory[];
+  debtCashEvents?: MobileDebtCashEvent[];
   transactions: MobileTransaction[];
   period: BalanceTimelinePeriod;
   preference: CurrencyPreference;
 }): BalancePoint[] {
   const buckets = timelineBuckets(period);
   const ledger = relevantTransactions(transactions, account.id);
+  const debtLedger = debtCashEvents.filter((event) => event.accountId === account.id).sort((left, right) => left.date.localeCompare(right.date) || left.updatedAt.localeCompare(right.updatedAt) || left.id.localeCompare(right.id));
   const accountsById = new Map(accounts.map((item) => [item.id, item]));
   const categoriesById = new Map(categories.map((item) => [item.id, item]));
   let balance = converted(account.startingBalance, account.currency, preference);
   let transactionIndex = 0;
+  let debtIndex = 0;
 
   while (transactionIndex < ledger.length && ledger[transactionIndex]!.date < buckets[0]!.from) {
     balance += transactionEffect(ledger[transactionIndex]!, account.id, account.currency, preference);
     transactionIndex += 1;
+  }
+  while (debtIndex < debtLedger.length && debtLedger[debtIndex]!.date < buckets[0]!.from) {
+    const event = debtLedger[debtIndex++]!;
+    balance += (event.direction === 'in' ? 1 : -1) * converted(event.amount, account.currency, preference);
   }
 
   return buckets.map((bucket) => {
@@ -236,6 +249,12 @@ export function buildBalanceTimeline({
       }
       transactionIndex += 1;
     }
+    while (debtIndex < debtLedger.length && debtLedger[debtIndex]!.date <= bucket.to) {
+      const event = debtLedger[debtIndex++]!;
+      if (event.date < bucket.from) continue;
+      balance += (event.direction === 'in' ? 1 : -1) * converted(event.amount, account.currency, preference);
+      events.push(debtCashEventFor(event, account.id, balance, account.currency, preference));
+    }
     return {
       ...bucket,
       balance: decimal(balance),
@@ -249,17 +268,19 @@ export function buildBalanceTimeline({
 export function buildCombinedBalanceTimeline({
   accounts,
   categories,
+  debtCashEvents = [],
   transactions,
   period,
   preference,
 }: {
   accounts: MobileAccount[];
   categories: MobileCategory[];
+  debtCashEvents?: MobileDebtCashEvent[];
   transactions: MobileTransaction[];
   period: BalanceTimelinePeriod;
   preference: CurrencyPreference;
 }): BalancePoint[] {
-  const timelines = accounts.map((account) => buildBalanceTimeline({ account, accounts, categories, transactions, period, preference }));
+  const timelines = accounts.map((account) => buildBalanceTimeline({ account, accounts, categories, debtCashEvents, transactions, period, preference }));
   return timelines[0]?.map((point, index) => ({
     ...point,
     balance: decimal(timelines.reduce((total, timeline) => total + number(timeline[index]?.balance ?? '0'), 0)),

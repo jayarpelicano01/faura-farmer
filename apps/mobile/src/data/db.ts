@@ -1,10 +1,10 @@
 import * as Crypto from 'expo-crypto';
 import * as SQLite from 'expo-sqlite';
-import type { MobileAccount, MobileBudget, MobileCategory, MobileMonthlyBudget, MobileProfile, MobileRecurringRule, MobileSyncChange, MobileSyncMutation, MobileTransaction } from '@faura-farmer/types';
+import type { MobileAccount, MobileBudget, MobileCategory, MobileDebt, MobileDebtAdjustment, MobileDebtCashEvent, MobileDebtPayment, MobileMonthlyBudget, MobilePerson, MobileProfile, MobileRecurringRule, MobileSyncChange, MobileSyncMutation, MobileTransaction } from '@faura-farmer/types';
 
-export type Entity = 'account' | 'category' | 'transaction' | 'budget' | 'monthly_budget' | 'recurring_rule';
-type RecordFor<E extends Entity> = E extends 'account' ? MobileAccount : E extends 'category' ? MobileCategory : E extends 'transaction' ? MobileTransaction : E extends 'budget' ? MobileBudget : E extends 'monthly_budget' ? MobileMonthlyBudget : MobileRecurringRule;
-type LocalRecord = MobileAccount | MobileCategory | MobileTransaction | MobileBudget | MobileMonthlyBudget | MobileRecurringRule;
+export type Entity = 'account' | 'category' | 'transaction' | 'budget' | 'monthly_budget' | 'recurring_rule' | 'person' | 'debt' | 'debt_adjustment' | 'debt_payment' | 'debt_cash_event';
+type RecordFor<E extends Entity> = E extends 'account' ? MobileAccount : E extends 'category' ? MobileCategory : E extends 'transaction' ? MobileTransaction : E extends 'budget' ? MobileBudget : E extends 'monthly_budget' ? MobileMonthlyBudget : E extends 'recurring_rule' ? MobileRecurringRule : E extends 'person' ? MobilePerson : E extends 'debt' ? MobileDebt : E extends 'debt_adjustment' ? MobileDebtAdjustment : E extends 'debt_payment' ? MobileDebtPayment : MobileDebtCashEvent;
+type LocalRecord = MobileAccount | MobileCategory | MobileTransaction | MobileBudget | MobileMonthlyBudget | MobileRecurringRule | MobilePerson | MobileDebt | MobileDebtAdjustment | MobileDebtPayment | MobileDebtCashEvent;
 
 export type TransactionPageCursor = {
   updatedAt: string;
@@ -16,7 +16,7 @@ export type TransactionPage = {
   nextCursor: TransactionPageCursor | null;
 };
 
-const tableByEntity: Record<Entity, string> = { account: 'accounts', category: 'categories', transaction: 'transactions', budget: 'budgets', monthly_budget: 'monthly_budgets', recurring_rule: 'recurring_rules' };
+const tableByEntity: Record<Entity, string> = { account: 'accounts', category: 'categories', transaction: 'transactions', budget: 'budgets', monthly_budget: 'monthly_budgets', recurring_rule: 'recurring_rules', person: 'persons', debt: 'debts', debt_adjustment: 'debt_adjustments', debt_payment: 'debt_payments', debt_cash_event: 'debt_cash_events' };
 
 export type DatabaseHandle = {
   initializeDatabase: () => Promise<void>;
@@ -26,6 +26,7 @@ export type DatabaseHandle = {
   saveProfileDetails: (profile: MobileProfile) => Promise<void>;
   getProfileDetails: () => Promise<MobileProfile | null>;
   getLastSyncedAt: () => Promise<string | null>;
+  getPendingSyncCount: () => Promise<number>;
   listRecords: <E extends Entity>(entity: E) => Promise<RecordFor<E>[]>;
   listTransactionPage: (args?: { cursor?: TransactionPageCursor | null; limit?: number }) => Promise<TransactionPage>;
   queueUpsert: <E extends Entity>(entity: E, record: RecordFor<E>) => Promise<void>;
@@ -62,6 +63,11 @@ export function createDatabase(name: string): DatabaseHandle {
       CREATE TABLE IF NOT EXISTS budgets (id TEXT PRIMARY KEY NOT NULL, data TEXT NOT NULL, updated_at TEXT NOT NULL, deleted_at TEXT);
       CREATE TABLE IF NOT EXISTS monthly_budgets (id TEXT PRIMARY KEY NOT NULL, data TEXT NOT NULL, updated_at TEXT NOT NULL, deleted_at TEXT);
       CREATE TABLE IF NOT EXISTS recurring_rules (id TEXT PRIMARY KEY NOT NULL, data TEXT NOT NULL, updated_at TEXT NOT NULL, deleted_at TEXT);
+      CREATE TABLE IF NOT EXISTS persons (id TEXT PRIMARY KEY NOT NULL, data TEXT NOT NULL, updated_at TEXT NOT NULL, deleted_at TEXT);
+      CREATE TABLE IF NOT EXISTS debts (id TEXT PRIMARY KEY NOT NULL, data TEXT NOT NULL, updated_at TEXT NOT NULL, deleted_at TEXT);
+      CREATE TABLE IF NOT EXISTS debt_adjustments (id TEXT PRIMARY KEY NOT NULL, data TEXT NOT NULL, updated_at TEXT NOT NULL, deleted_at TEXT);
+      CREATE TABLE IF NOT EXISTS debt_payments (id TEXT PRIMARY KEY NOT NULL, data TEXT NOT NULL, updated_at TEXT NOT NULL, deleted_at TEXT);
+      CREATE TABLE IF NOT EXISTS debt_cash_events (id TEXT PRIMARY KEY NOT NULL, data TEXT NOT NULL, updated_at TEXT NOT NULL, deleted_at TEXT);
       CREATE TABLE IF NOT EXISTS outbox (
         mutation_id TEXT PRIMARY KEY NOT NULL, entity TEXT NOT NULL, record_id TEXT NOT NULL,
         operation TEXT NOT NULL, base_cursor TEXT, payload TEXT, created_at TEXT NOT NULL, last_error TEXT
@@ -192,6 +198,12 @@ export function createDatabase(name: string): DatabaseHandle {
     const db = await database();
     const rows = await db.getAllAsync<{ data: string }>(`SELECT data FROM ${table(entity)} WHERE deleted_at IS NULL ORDER BY updated_at DESC`);
     return rows.map((row) => JSON.parse(row.data) as RecordFor<E>);
+  }
+
+  async function getPendingSyncCount() {
+    const db = await database();
+    const row = await db.getFirstAsync<{ count: number }>('SELECT COUNT(*) AS count FROM outbox');
+    return Number(row?.count ?? 0);
   }
 
   async function listTransactionPage({
@@ -338,7 +350,7 @@ export function createDatabase(name: string): DatabaseHandle {
 
   async function clearLocalData() {
     const db = await database();
-    await db.execAsync('DELETE FROM profile; DELETE FROM metadata; DELETE FROM accounts; DELETE FROM categories; DELETE FROM transactions; DELETE FROM budgets; DELETE FROM monthly_budgets; DELETE FROM recurring_rules; DELETE FROM outbox;');
+    await db.execAsync('DELETE FROM profile; DELETE FROM metadata; DELETE FROM accounts; DELETE FROM categories; DELETE FROM transactions; DELETE FROM budgets; DELETE FROM monthly_budgets; DELETE FROM recurring_rules; DELETE FROM persons; DELETE FROM debts; DELETE FROM debt_adjustments; DELETE FROM debt_payments; DELETE FROM debt_cash_events; DELETE FROM outbox;');
   }
 
   return {
@@ -349,6 +361,7 @@ export function createDatabase(name: string): DatabaseHandle {
     saveProfileDetails,
     getProfileDetails,
     getLastSyncedAt,
+    getPendingSyncCount,
     listRecords,
     listTransactionPage,
     queueUpsert,
@@ -376,6 +389,7 @@ export const getProfile = defaultDb.getProfile;
 export const saveProfileDetails = defaultDb.saveProfileDetails;
 export const getProfileDetails = defaultDb.getProfileDetails;
 export const getLastSyncedAt = defaultDb.getLastSyncedAt;
+export const getPendingSyncCount = defaultDb.getPendingSyncCount;
 export const listRecords = defaultDb.listRecords;
 export const listTransactionPage = defaultDb.listTransactionPage;
 export const queueUpsert = defaultDb.queueUpsert;

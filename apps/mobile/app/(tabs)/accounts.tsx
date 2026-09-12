@@ -32,7 +32,7 @@ export default function AccountsScreen() {
   const ui = useUiStyles();
   const { db } = useWorkspace();
   const { convert, displayCurrency, formatMoney: formatDisplayMoney } = useCurrency();
-  const { accounts, loading, reload, transactions } = useWorkspaceData();
+  const { accounts, debtCashEvents, loading, reload, transactions } = useWorkspaceData();
   const [editing, setEditing] = useState<MobileAccount | null>(null);
   const [editingCurrentBalance, setEditingCurrentBalance] = useState('');
   const handledCreateParam = useRef(false);
@@ -66,7 +66,7 @@ export default function AccountsScreen() {
     }
     await db.queueUpsert('account', updatedAccount);
     if (accounts.some((account) => account.id === editing.id)) {
-      const difference = Math.round((targetBalance - currentBalance(updatedAccount, transactions)) * 100) / 100;
+      const difference = Math.round((targetBalance - currentBalance(updatedAccount, transactions, debtCashEvents)) * 100) / 100;
       if (Math.abs(difference) >= 0.005) {
         await db.queueUpsert('transaction', {
           id: Crypto.randomUUID(),
@@ -110,10 +110,10 @@ export default function AccountsScreen() {
           <Pressable
             key={account.id}
             accessibilityHint="Double tap to edit. Press and hold to delete."
-            accessibilityLabel={`${account.label}, ${typeLabels[account.type]}, ${formatDisplayMoney(String(currentBalance(account, transactions)), account.currency)}`}
+            accessibilityLabel={`${account.label}, ${typeLabels[account.type]}, ${formatDisplayMoney(String(currentBalance(account, transactions, debtCashEvents)), account.currency)}`}
             accessibilityRole="button"
             onLongPress={() => remove(account.id)}
-            onPress={() => { setEditing({ ...account, startingBalance: convert(account.startingBalance, account.currency) }); setEditingCurrentBalance(convert(String(currentBalance(account, transactions)), account.currency)); }}
+            onPress={() => { setEditing({ ...account, startingBalance: convert(account.startingBalance, account.currency) }); setEditingCurrentBalance(convert(String(currentBalance(account, transactions, debtCashEvents)), account.currency)); }}
           >
             {({ pressed }) => (
               <View style={pressed ? styles.pressed : undefined}>
@@ -130,7 +130,7 @@ export default function AccountsScreen() {
                     </View>
                     {account.isArchived ? <Badge variant="muted">Archived</Badge> : null}
                   </View>
-                  <Text style={styles.balance}>{formatDisplayMoney(String(currentBalance(account, transactions)), account.currency)}</Text>
+                  <Text style={styles.balance}>{formatDisplayMoney(String(currentBalance(account, transactions, debtCashEvents)), account.currency)}</Text>
                   <Text style={styles.balanceMeta}>Starting {formatDisplayMoney(account.startingBalance, account.currency)}</Text>
                   <View style={styles.cardFooter}>
                     <Text style={styles.editHint}>Tap to edit</Text>

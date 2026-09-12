@@ -5,24 +5,35 @@ import {
   mobileBudgetSchema,
   mobileCategorySchema,
   mobileMonthlyBudgetSchema,
+  mobilePersonSchema,
   mobileRecurringRuleSchema,
+  mobileDebtSchema,
+  mobileDebtAdjustmentSchema,
+  mobileDebtPaymentSchema,
+  mobileDebtCashEventSchema,
   mobileTransactionSchema,
   type MobileAccount,
   type MobileBudget,
   type MobileCategory,
   type MobileMonthlyBudget,
+  type MobilePerson,
   type MobileRecurringRule,
+  type MobileDebt,
+  type MobileDebtAdjustment,
+  type MobileDebtPayment,
+  type MobileDebtCashEvent,
   type MobileSyncChange,
   type MobileSyncMutation,
   type MobileTransaction,
 } from '@faura-farmer/types';
+import { calculateDebtState, debtCashDirection } from '@faura-farmer/types';
 import { lockAccountsInOrder } from '@/lib/queries';
 import { advanceRecurringDate, dateKey } from '@/lib/services/recurring-transactions';
 
 type Tx = Prisma.TransactionClient;
-type Entity = 'account' | 'category' | 'transaction' | 'budget' | 'monthly_budget' | 'recurring_rule';
+type Entity = 'account' | 'category' | 'transaction' | 'budget' | 'monthly_budget' | 'recurring_rule' | 'person' | 'debt' | 'debt_adjustment' | 'debt_payment' | 'debt_cash_event';
 type MutationResult =
-  | { mutationId: string; status: 'accepted'; entity: Entity; recordId: string; operation: 'upsert' | 'delete' | 'approve' | 'skip'; record?: MobileAccount | MobileCategory | MobileTransaction | MobileBudget | MobileMonthlyBudget | MobileRecurringRule }
+  | { mutationId: string; status: 'accepted'; entity: Entity; recordId: string; operation: 'upsert' | 'delete' | 'approve' | 'skip'; record?: MobileAccount | MobileCategory | MobileTransaction | MobileBudget | MobileMonthlyBudget | MobileRecurringRule | MobilePerson | MobileDebt | MobileDebtAdjustment | MobileDebtPayment | MobileDebtCashEvent }
   | { mutationId: string; status: 'rejected'; code: string; message: string };
 
 class SyncRejection extends Error {
@@ -110,13 +121,33 @@ function serializeRecurringRule(record: {
   };
 }
 
+function serializePerson(record: { id: string; displayName: string; contact: string | null; note: string | null; updatedAt: Date }): MobilePerson {
+  return { id: record.id, displayName: record.displayName, contact: record.contact, note: record.note, updatedAt: record.updatedAt.toISOString() };
+}
+
+function serializeDebt(record: { id: string; personId: string; direction: string; originalPrincipal: Prisma.Decimal; currency: string; status: string; openedAt: Date; dueDate: Date | null; note: string | null; updatedAt: Date }): MobileDebt {
+  return { id: record.id, personId: record.personId, direction: record.direction as MobileDebt['direction'], originalPrincipal: String(record.originalPrincipal), currency: record.currency as MobileDebt['currency'], status: record.status as MobileDebt['status'], openedAt: record.openedAt.toISOString().slice(0, 10), dueDate: record.dueDate?.toISOString().slice(0, 10) ?? null, note: record.note, updatedAt: record.updatedAt.toISOString() };
+}
+
+function serializeDebtAdjustment(record: { id: string; debtId: string; amount: Prisma.Decimal; reason: string; date: Date; updatedAt: Date }): MobileDebtAdjustment {
+  return { id: record.id, debtId: record.debtId, amount: String(record.amount), reason: record.reason, date: record.date.toISOString().slice(0, 10), updatedAt: record.updatedAt.toISOString() };
+}
+
+function serializeDebtPayment(record: { id: string; debtId: string; amount: Prisma.Decimal; date: Date; note: string | null; updatedAt: Date }): MobileDebtPayment {
+  return { id: record.id, debtId: record.debtId, amount: String(record.amount), date: record.date.toISOString().slice(0, 10), note: record.note, updatedAt: record.updatedAt.toISOString() };
+}
+
+function serializeDebtCashEvent(record: { id: string; debtId: string; paymentId: string | null; accountId: string; amount: Prisma.Decimal; direction: string; date: Date; updatedAt: Date }): MobileDebtCashEvent {
+  return { id: record.id, debtId: record.debtId, paymentId: record.paymentId, accountId: record.accountId, amount: String(record.amount), direction: record.direction as MobileDebtCashEvent['direction'], date: record.date.toISOString().slice(0, 10), updatedAt: record.updatedAt.toISOString() };
+}
+
 async function appendChange(
   tx: Tx,
   userId: string,
   entity: Entity,
   recordId: string,
   operation: 'upsert' | 'delete',
-  record: MobileAccount | MobileCategory | MobileTransaction | MobileBudget | MobileMonthlyBudget | MobileRecurringRule | null,
+  record: MobileAccount | MobileCategory | MobileTransaction | MobileBudget | MobileMonthlyBudget | MobileRecurringRule | MobilePerson | MobileDebt | MobileDebtAdjustment | MobileDebtPayment | MobileDebtCashEvent | null,
 ) {
   return tx.mobileSyncChange.create({
     data: { userId, entity, recordId, operation, data: record === null ? Prisma.JsonNull : json(record) },
@@ -314,6 +345,131 @@ async function applyRecurringRuleUpsert(tx: Tx, userId: string, mutation: Extrac
   return serialized;
 }
 
+async function recalculateDebtStatus(tx: Tx, userId: string, debtId: string) {
+  const debt = await tx.debt.findFirst({
+    where: { id: debtId, userId },
+    include: { adjustments: { select: { amount: true } }, payments: { select: { amount: true } } },
+  });
+  if (!debt) throw new SyncRejection('DEBT_NOT_FOUND', 'Debt was not found');
+  const state = calculateDebtState({
+    originalPrincipal: String(debt.originalPrincipal),
+    adjustments: debt.adjustments.map((adjustment) => ({ amount: String(adjustment.amount) })),
+    payments: debt.payments.map((payment) => ({ amount: String(payment.amount) })),
+    status: debt.status,
+  });
+  if (state.status === debt.status) return debt;
+  return tx.debt.update({ where: { id: debt.id }, data: { status: state.status } });
+}
+
+async function appendDebtStatusChange(tx: Tx, userId: string, debtId: string) {
+  const debt = await tx.debt.findFirst({ where: { id: debtId, userId } });
+  if (debt) await appendChange(tx, userId, 'debt', debt.id, 'upsert', serializeDebt(debt));
+}
+
+async function applyPersonUpsert(tx: Tx, userId: string, mutation: Extract<MobileSyncMutation, { operation: 'upsert' }>) {
+  const record = requireRecord(mobilePersonSchema.safeParse(mutation.record));
+  if (record.id !== mutation.recordId) throw new SyncRejection('INVALID_MUTATION', 'Record ID does not match mutation');
+  if (await tombstoneAfter(tx, userId, 'person', record.id, mutation.baseCursor)) throw new SyncRejection('TOMBSTONED', 'This person was deleted on another device; create a new person instead');
+  const existing = await tx.person.findUnique({ where: { id: record.id }, select: { id: true, userId: true } });
+  isOwned(existing, userId);
+  const saved = existing
+    ? await tx.person.update({ where: { id: record.id }, data: { displayName: record.displayName, contact: record.contact, note: record.note } })
+    : await tx.person.create({ data: { id: record.id, userId, displayName: record.displayName, contact: record.contact, note: record.note } });
+  const serialized = serializePerson(saved);
+  await appendChange(tx, userId, 'person', saved.id, 'upsert', serialized);
+  return serialized;
+}
+
+async function applyDebtUpsert(tx: Tx, userId: string, mutation: Extract<MobileSyncMutation, { operation: 'upsert' }>) {
+  const record = requireRecord(mobileDebtSchema.safeParse(mutation.record));
+  if (record.id !== mutation.recordId) throw new SyncRejection('INVALID_MUTATION', 'Record ID does not match mutation');
+  const person = await tx.person.findFirst({ where: { id: record.personId, userId }, select: { id: true } });
+  if (!person) throw new SyncRejection('PERSON_NOT_FOUND', 'Debt person was not found');
+  const existing = await tx.debt.findUnique({ where: { id: record.id }, select: { id: true, userId: true, personId: true, direction: true, currency: true, originalPrincipal: true } });
+  isOwned(existing, userId);
+  if (existing && (existing.personId !== record.personId || existing.direction !== record.direction || existing.currency.toUpperCase() !== record.currency || !existing.originalPrincipal.equals(record.originalPrincipal))) {
+    throw new SyncRejection('IMMUTABLE_DEBT', 'Debt person, direction, currency, and principal cannot be changed');
+  }
+  const saved = existing
+    ? await tx.debt.update({ where: { id: record.id }, data: { dueDate: record.dueDate ? date(record.dueDate) : null, note: record.note, status: record.status } })
+    : await tx.debt.create({ data: { id: record.id, userId, personId: record.personId, direction: record.direction, originalPrincipal: record.originalPrincipal, currency: record.currency, status: record.status, openedAt: date(record.openedAt), dueDate: record.dueDate ? date(record.dueDate) : null, note: record.note } });
+  const serialized = serializeDebt(saved);
+  await appendChange(tx, userId, 'debt', saved.id, 'upsert', serialized);
+  return serialized;
+}
+
+async function applyDebtAdjustmentUpsert(tx: Tx, userId: string, mutation: Extract<MobileSyncMutation, { operation: 'upsert' }>) {
+  const record = requireRecord(mobileDebtAdjustmentSchema.safeParse(mutation.record));
+  if (record.id !== mutation.recordId) throw new SyncRejection('INVALID_MUTATION', 'Record ID does not match mutation');
+  const debt = await tx.debt.findFirst({ where: { id: record.debtId, userId }, include: { adjustments: { select: { amount: true } }, payments: { select: { amount: true } } } });
+  if (!debt) throw new SyncRejection('DEBT_NOT_FOUND', 'Debt was not found');
+  if (debt.status !== 'open' && debt.status !== 'partially_paid') throw new SyncRejection('DEBT_CLOSED', 'Only open debts can receive adjustments');
+  const existing = await tx.debtAdjustment.findUnique({ where: { id: record.id }, include: { debt: { select: { userId: true } } } });
+  if (existing && existing.debt.userId !== userId) throw new SyncRejection('RECORD_ID_CONFLICT', 'Record ID is already in use');
+  if (existing && existing.debtId !== record.debtId) throw new SyncRejection('IMMUTABLE_DEBT_ENTRY', 'A debt adjustment cannot move to another debt');
+  const outstanding = calculateDebtState({ originalPrincipal: String(debt.originalPrincipal), adjustments: debt.adjustments.map((item) => ({ amount: String(item.amount) })), payments: debt.payments.map((item) => ({ amount: String(item.amount) })), status: debt.status }).outstandingBalance;
+  if (new Prisma.Decimal(outstanding).plus(record.amount).isNegative()) throw new SyncRejection('ADJUSTMENT_EXCEEDS_BALANCE', 'Adjustment cannot reduce the outstanding balance below zero');
+  const saved = existing
+    ? await tx.debtAdjustment.update({ where: { id: record.id }, data: { amount: record.amount, reason: record.reason, date: date(record.date) } })
+    : await tx.debtAdjustment.create({ data: { id: record.id, debtId: record.debtId, amount: record.amount, reason: record.reason, date: date(record.date) } });
+  const serialized = serializeDebtAdjustment(saved);
+  await appendChange(tx, userId, 'debt_adjustment', saved.id, 'upsert', serialized);
+  await recalculateDebtStatus(tx, userId, debt.id);
+  await appendDebtStatusChange(tx, userId, debt.id);
+  return serialized;
+}
+
+async function applyDebtPaymentUpsert(tx: Tx, userId: string, mutation: Extract<MobileSyncMutation, { operation: 'upsert' }>) {
+  const record = requireRecord(mobileDebtPaymentSchema.safeParse(mutation.record));
+  if (record.id !== mutation.recordId) throw new SyncRejection('INVALID_MUTATION', 'Record ID does not match mutation');
+  const debt = await tx.debt.findFirst({ where: { id: record.debtId, userId }, include: { adjustments: { select: { amount: true } }, payments: { select: { amount: true } } } });
+  if (!debt) throw new SyncRejection('DEBT_NOT_FOUND', 'Debt was not found');
+  if (debt.status !== 'open' && debt.status !== 'partially_paid') throw new SyncRejection('DEBT_CLOSED', 'Only open debts can receive payments');
+  const existing = await tx.debtPayment.findUnique({ where: { id: record.id }, include: { debt: { select: { userId: true } } } });
+  if (existing && existing.debt.userId !== userId) throw new SyncRejection('RECORD_ID_CONFLICT', 'Record ID is already in use');
+  if (existing && existing.debtId !== record.debtId) throw new SyncRejection('IMMUTABLE_DEBT_ENTRY', 'A debt payment cannot move to another debt');
+  const outstanding = calculateDebtState({ originalPrincipal: String(debt.originalPrincipal), adjustments: debt.adjustments.map((item) => ({ amount: String(item.amount) })), payments: debt.payments.map((item) => ({ amount: String(item.amount) })), status: debt.status }).outstandingBalance;
+  if (new Prisma.Decimal(record.amount).gt(outstanding)) throw new SyncRejection('PAYMENT_EXCEEDS_BALANCE', 'Payment cannot exceed the outstanding balance');
+  const saved = existing
+    ? await tx.debtPayment.update({ where: { id: record.id }, data: { amount: record.amount, date: date(record.date), note: record.note } })
+    : await tx.debtPayment.create({ data: { id: record.id, debtId: record.debtId, amount: record.amount, date: date(record.date), note: record.note } });
+  const serialized = serializeDebtPayment(saved);
+  await appendChange(tx, userId, 'debt_payment', saved.id, 'upsert', serialized);
+  await recalculateDebtStatus(tx, userId, debt.id);
+  await appendDebtStatusChange(tx, userId, debt.id);
+  return serialized;
+}
+
+async function applyDebtCashEventUpsert(tx: Tx, userId: string, mutation: Extract<MobileSyncMutation, { operation: 'upsert' }>) {
+  const record = requireRecord(mobileDebtCashEventSchema.safeParse(mutation.record));
+  if (record.id !== mutation.recordId) throw new SyncRejection('INVALID_MUTATION', 'Record ID does not match mutation');
+  const [debt, account] = await Promise.all([
+    tx.debt.findFirst({ where: { id: record.debtId, userId } }),
+    ownedAccount(tx, userId, record.accountId),
+  ]);
+  if (!debt) throw new SyncRejection('DEBT_NOT_FOUND', 'Debt was not found');
+  if (!account) throw new SyncRejection('ACCOUNT_NOT_FOUND', 'Cash-event account was not found');
+  if (account.currency.toUpperCase() !== debt.currency.toUpperCase()) throw new SyncRejection('CURRENCY_MISMATCH', 'The selected account must use the debt currency');
+  const payment = record.paymentId ? await tx.debtPayment.findFirst({ where: { id: record.paymentId, debtId: debt.id }, select: { id: true, amount: true, date: true } }) : null;
+  if (record.paymentId && !payment) throw new SyncRejection('PAYMENT_NOT_FOUND', 'Cash-event payment was not found');
+  if (record.direction !== debtCashDirection(debt.direction, payment ? 'payment' : 'opening')) throw new SyncRejection('INVALID_CASH_DIRECTION', 'Cash-event direction does not match the debt');
+  const expectedAmount = payment?.amount ?? debt.originalPrincipal;
+  if (!expectedAmount.equals(record.amount)) throw new SyncRejection('INVALID_CASH_AMOUNT', 'Cash-event amount must match its debt entry');
+  const existing = await tx.debtCashEvent.findUnique({ where: { id: record.id }, include: { debt: { select: { userId: true } } } });
+  if (existing && existing.debt.userId !== userId) throw new SyncRejection('RECORD_ID_CONFLICT', 'Record ID is already in use');
+  if (existing && (existing.debtId !== record.debtId || existing.paymentId !== record.paymentId)) throw new SyncRejection('IMMUTABLE_CASH_EVENT', 'A debt cash event cannot move to another debt entry');
+  if (!record.paymentId) {
+    const opening = await tx.debtCashEvent.findFirst({ where: { debtId: debt.id, paymentId: null, ...(existing ? { id: { not: existing.id } } : {}) }, select: { id: true } });
+    if (opening) throw new SyncRejection('OPENING_CASH_EVENT_EXISTS', 'This debt already has an opening cash event');
+  }
+  const saved = existing
+    ? await tx.debtCashEvent.update({ where: { id: record.id }, data: { accountId: record.accountId, amount: record.amount, direction: record.direction, date: date(record.date) } })
+    : await tx.debtCashEvent.create({ data: { id: record.id, debtId: debt.id, paymentId: record.paymentId, accountId: record.accountId, amount: record.amount, direction: record.direction, date: date(record.date) } });
+  const serialized = serializeDebtCashEvent(saved);
+  await appendChange(tx, userId, 'debt_cash_event', saved.id, 'upsert', serialized);
+  return serialized;
+}
+
 async function applyRecurringOccurrence(tx: Tx, userId: string, mutation: Extract<MobileSyncMutation, { operation: 'approve' | 'skip' }>) {
   const expectedDueDate = date(mutation.expectedDueDate);
   const today = new Date();
@@ -416,6 +572,16 @@ async function deleteRecurringRule(tx: Tx, userId: string, recordId: string) {
   await appendChange(tx, userId, 'recurring_rule', recordId, 'delete', null);
 }
 
+async function deletePerson(tx: Tx, userId: string, recordId: string) {
+  const person = await tx.person.findUnique({ where: { id: recordId }, select: { id: true, userId: true } });
+  isOwned(person, userId);
+  if (!person) return;
+  const debt = await tx.debt.findFirst({ where: { personId: person.id }, select: { id: true } });
+  if (debt) throw new SyncRejection('PERSON_HAS_DEBTS', 'A person with debt history cannot be deleted');
+  await tx.person.delete({ where: { id: person.id } });
+  await appendChange(tx, userId, 'person', person.id, 'delete', null);
+}
+
 async function applyDelete(tx: Tx, userId: string, mutation: Extract<MobileSyncMutation, { operation: 'delete' }>) {
   if (mutation.entity === 'account') await deleteAccount(tx, userId, mutation.recordId);
   if (mutation.entity === 'category') await deleteCategory(tx, userId, mutation.recordId);
@@ -423,6 +589,10 @@ async function applyDelete(tx: Tx, userId: string, mutation: Extract<MobileSyncM
   if (mutation.entity === 'budget') await deleteBudget(tx, userId, mutation.recordId);
   if (mutation.entity === 'monthly_budget') await deleteMonthlyBudget(tx, userId, mutation.recordId);
   if (mutation.entity === 'recurring_rule') await deleteRecurringRule(tx, userId, mutation.recordId);
+  if (mutation.entity === 'person') await deletePerson(tx, userId, mutation.recordId);
+  if (mutation.entity === 'debt' || mutation.entity === 'debt_adjustment' || mutation.entity === 'debt_payment' || mutation.entity === 'debt_cash_event') {
+    throw new SyncRejection('DEBT_DELETION_FORBIDDEN', 'Debt records are retained permanently');
+  }
 }
 
 async function applyMutation(tx: Tx, userId: string, mutation: MobileSyncMutation): Promise<MutationResult> {
@@ -444,7 +614,17 @@ async function applyMutation(tx: Tx, userId: string, mutation: MobileSyncMutatio
           ? await applyBudgetUpsert(tx, userId, mutation)
           : mutation.entity === 'monthly_budget'
             ? await applyMonthlyBudgetUpsert(tx, userId, mutation)
-            : await applyRecurringRuleUpsert(tx, userId, mutation);
+            : mutation.entity === 'recurring_rule'
+              ? await applyRecurringRuleUpsert(tx, userId, mutation)
+              : mutation.entity === 'person'
+                ? await applyPersonUpsert(tx, userId, mutation)
+                : mutation.entity === 'debt'
+                  ? await applyDebtUpsert(tx, userId, mutation)
+                  : mutation.entity === 'debt_adjustment'
+                    ? await applyDebtAdjustmentUpsert(tx, userId, mutation)
+                    : mutation.entity === 'debt_payment'
+                      ? await applyDebtPaymentUpsert(tx, userId, mutation)
+                      : await applyDebtCashEventUpsert(tx, userId, mutation);
   return { mutationId: mutation.mutationId, status: 'accepted', entity: mutation.entity, recordId: mutation.recordId, operation: 'upsert', record };
 }
 
@@ -505,9 +685,33 @@ async function backfillRecurringRuleChanges(userId: string) {
   });
 }
 
+async function backfillDebtLedgerChanges(userId: string) {
+  await prisma.$transaction(async (tx) => {
+    const [persons, debts, adjustments, payments, cashEvents] = await Promise.all([
+      tx.person.findMany({ where: { userId } }),
+      tx.debt.findMany({ where: { userId } }),
+      tx.debtAdjustment.findMany({ where: { debt: { userId } } }),
+      tx.debtPayment.findMany({ where: { debt: { userId } } }),
+      tx.debtCashEvent.findMany({ where: { debt: { userId } } }),
+    ]);
+    const appendMissing = async <T extends { id: string }>(entity: Entity, records: T[], serialize: (record: T) => MobilePerson | MobileDebt | MobileDebtAdjustment | MobileDebtPayment | MobileDebtCashEvent) => {
+      if (!records.length) return;
+      const changes = await tx.mobileSyncChange.findMany({ where: { userId, entity, recordId: { in: records.map((record) => record.id) } }, select: { recordId: true }, distinct: ['recordId'] });
+      const changed = new Set(changes.map((change) => change.recordId));
+      for (const record of records) if (!changed.has(record.id)) await appendChange(tx, userId, entity, record.id, 'upsert', serialize(record));
+    };
+    await appendMissing('person', persons, serializePerson);
+    await appendMissing('debt', debts, serializeDebt);
+    await appendMissing('debt_adjustment', adjustments, serializeDebtAdjustment);
+    await appendMissing('debt_payment', payments, serializeDebtPayment);
+    await appendMissing('debt_cash_event', cashEvents, serializeDebtCashEvent);
+  });
+}
+
 export async function pullMobileChanges(userId: string, afterCursor: string): Promise<{ cursor: string; changes: MobileSyncChange[]; hasMore: boolean }> {
   await backfillBudgetChanges(userId);
   await backfillRecurringRuleChanges(userId);
+  await backfillDebtLedgerChanges(userId);
   const after = cursor(afterCursor);
   const rows = await prisma.mobileSyncChange.findMany({
     where: { userId, cursor: { gt: after } }, orderBy: { cursor: 'asc' }, take: 501,
@@ -525,7 +729,7 @@ export async function pullMobileChanges(userId: string, afterCursor: string): Pr
         ? null
         : row.entity === 'category'
           ? { ...(row.data as object), parentId: null } as MobileCategory
-          : row.data as unknown as MobileAccount | MobileTransaction | MobileBudget | MobileMonthlyBudget | MobileRecurringRule,
+          : row.data as unknown as MobileAccount | MobileTransaction | MobileBudget | MobileMonthlyBudget | MobileRecurringRule | MobilePerson | MobileDebt | MobileDebtAdjustment | MobileDebtPayment | MobileDebtCashEvent,
     })),
   };
 }
@@ -560,6 +764,31 @@ export async function recordCanonicalMobileUpsert(userId: string, entity: Entity
     if (entity === 'recurring_rule') {
       const record = await tx.recurringRule.findFirst({ where: { id: recordId, userId } });
       if (record) await appendChange(tx, userId, entity, record.id, 'upsert', serializeRecurringRule(record));
+      return;
+    }
+    if (entity === 'person') {
+      const record = await tx.person.findFirst({ where: { id: recordId, userId } });
+      if (record) await appendChange(tx, userId, entity, record.id, 'upsert', serializePerson(record));
+      return;
+    }
+    if (entity === 'debt') {
+      const record = await tx.debt.findFirst({ where: { id: recordId, userId } });
+      if (record) await appendChange(tx, userId, entity, record.id, 'upsert', serializeDebt(record));
+      return;
+    }
+    if (entity === 'debt_adjustment') {
+      const record = await tx.debtAdjustment.findFirst({ where: { id: recordId, debt: { userId } } });
+      if (record) await appendChange(tx, userId, entity, record.id, 'upsert', serializeDebtAdjustment(record));
+      return;
+    }
+    if (entity === 'debt_payment') {
+      const record = await tx.debtPayment.findFirst({ where: { id: recordId, debt: { userId } } });
+      if (record) await appendChange(tx, userId, entity, record.id, 'upsert', serializeDebtPayment(record));
+      return;
+    }
+    if (entity === 'debt_cash_event') {
+      const record = await tx.debtCashEvent.findFirst({ where: { id: recordId, debt: { userId } } });
+      if (record) await appendChange(tx, userId, entity, record.id, 'upsert', serializeDebtCashEvent(record));
       return;
     }
     const source = await tx.transaction.findFirst({ where: { id: recordId, userId } });
