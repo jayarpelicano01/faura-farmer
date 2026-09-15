@@ -1,142 +1,179 @@
 <div align="center">
 
-# Faura-Farmer
+<img src="apps/web/public/faura-farm.png" alt="Faura Farmer logo" width="160" />
 
-> A personal finance tracker: a monorepo with a typed Next.js app, Prisma data layer, and OAuth auth.
+# Faura Farmer
+
+> A typed, cross-platform personal finance workspace for understanding where your money goes.
 
 [![Live Demo](https://img.shields.io/badge/live-faura--farmer.vercel.app-FFD700)](https://faura-farmer.vercel.app)
 [![Next.js](https://img.shields.io/badge/Next.js-15-black)](https://nextjs.org)
-[![React](https://img.shields.io/badge/React-19-61dafb)](https://react.dev)
+[![Expo](https://img.shields.io/badge/Expo-55-000020)](https://expo.dev)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5-3178c6)](https://www.typescriptlang.org)
 [![Prisma](https://img.shields.io/badge/Prisma-6-2d3748)](https://www.prisma.io)
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 
 </div>
 
-## What it is
+Faura Farmer is a personal finance tracker built as a pnpm TypeScript monorepo. It
+combines a Next.js web application and an Expo mobile application with a shared API,
+PostgreSQL database, validation layer, and design tokens.
 
-**Faura-Farmer** is a personal finance tracker built as a pnpm monorepo. It lets a user sign in, record transactions, and see where their money goes through charts and summaries. The codebase is fully typed end-to-end, from the database schema to the form inputs.
+Both clients are included in the repository. The web app is deployed at the live demo
+above, while the mobile client is available for local and preview development with
+offline-first storage and synchronization.
 
-## Features
+## Highlights
 
-- **Account auth** via NextAuth v5 with email/password plus Google and Facebook OAuth
-- **Transaction tracking** with typed forms (React Hook Form + Zod validation)
-- **Spending insights** rendered as interactive charts (Recharts)
-- **Typed data layer** with Prisma 6 (schema → client, no loose SQL strings)
-- **Shared design system**: Radix UI primitives + shadcn-style utilities (CVA, `tailwind-merge`, `clsx`)
-- **Monorepo structure**: `apps/web` for the app, `packages/*` for config, database, and shared types
+- **See the full picture:** dashboard totals, account balances, spending reports, and
+  balance timelines.
+- **Record real-world finances:** customizable accounts, categories, income, expenses,
+  transfers, recurring rules, budgets, and debt ledgers.
+- **Move data safely:** CSV transaction import and export plus portable financial backup
+  and restore flows.
+- **Use it across devices:** the Expo client stores workspace data in local SQLite and
+  synchronizes changes through a typed mobile API when connectivity returns.
+- **Keep data separated:** authenticated requests are validated with Zod and scoped to
+  the signed-in user before database access.
+- **Build consistently:** shared TypeScript models, validation contracts, Tailwind
+  design tokens, and Prisma database types are used across the workspace.
 
-## Screenshot
+## Product surfaces
 
-![Faura-Farmer app](apps/web/public/faura-farm.png)
+| Surface | What it provides |
+| --- | --- |
+| Web app | Dashboard, accounts, transactions, budgets, recurring rules, reports, debts, categories, profile, and backup tools |
+| Mobile app | Expo Router client with local SQLite storage, offline CRUD, sync queues, reports, budgets, recurring rules, debts, app locking, and portable backup flows |
 
-## Tech Stack
+## Architecture
 
-| Layer | Technology |
-|-------|------------|
-| Framework | Next.js 15 (App Router) |
-| Language | TypeScript 5 |
-| Styling | Tailwind CSS v3 · Radix UI |
-| Auth | NextAuth v5 (Auth.js) with Google / Facebook OAuth |
-| Database | Prisma 6 (PostgreSQL) |
-| Charts | Recharts |
-| Forms | React Hook Form + Zod |
-| Package mgr | pnpm workspaces (monorepo) |
+```text
+  Next.js web app                 Expo mobile app
+          \                              /
+           \                            /
+            v                          v
+             Next.js API route handlers
+                         |
+                         v
+                 Prisma + PostgreSQL
 
-## Project Structure
-
+  Shared packages: types, validation, database client, and design configuration
 ```
+
+The web app reads through a typed query layer. Client mutations use authenticated Route
+Handlers, validate input at the boundary, scope queries by user, and return serialized
+responses. The mobile app writes locally first, stores pending mutations in an outbox,
+then pushes and pulls canonical changes through the mobile API during synchronization.
+
+## Tech stack
+
+| Area | Technology |
+| --- | --- |
+| Web | Next.js 15 App Router, React 19, Tailwind CSS, Radix UI, Recharts |
+| Mobile | Expo 55, React Native 0.83, Expo Router, NativeWind, SQLite |
+| Language | TypeScript |
+| Authentication | Auth.js v5 with email/password, Google, and Facebook OAuth |
+| Validation | Zod and React Hook Form |
+| Data | Prisma 6 with PostgreSQL, hosted on Supabase in production |
+| Hosting | Vercel for the web application and API |
+| Testing | Vitest for web and Jest with Expo for mobile |
+| Workspace | pnpm workspaces |
+
+## Repository structure
+
+```text
 apps/
-└── web/                  # Next.js app (UI + API routes)
+├── web/                  # Next.js UI and API routes
+└── mobile/               # Expo Router mobile client
 packages/
-├── config/              # Shared config: tailwind, design tokens
-├── database/            # Prisma schema + client
-└── types/               # Shared TypeScript types (date-fns, zod)
+├── config/               # Shared design tokens and Tailwind configuration
+├── database/             # Prisma schema and database client
+└── types/                # Shared models, validation, and mobile contracts
+docs/                     # Authentication and mobile staging runbooks
 ```
 
-## Getting Started
+## Getting started
 
-Requires **Node.js 18+** and **pnpm**.
+Requires Node.js 18+ and pnpm 9.12.0.
 
 ```bash
-# install dependencies
+# Install dependencies
 pnpm install
 
-# set up environment (see .env.example)
+# Create local configuration
 cp .env.example .env.local
 
-# push the database schema
+# Generate the Prisma client
+pnpm db:generate
+
+# Apply the schema to a local development database
 pnpm db:push
 
-# run the dev server
+# Start the web application
 pnpm dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000).
+Open [http://localhost:3000](http://localhost:3000) after the development server starts.
+
+To start the mobile client:
+
+```bash
+pnpm --filter @faura-farmer/mobile start
+```
+
+Set `EXPO_PUBLIC_API_URL` to a local server or an approved Vercel Preview URL before
+using the mobile client. The mobile development boundary and staging requirements are
+documented in [`apps/mobile/README.md`](apps/mobile/README.md) and
+[`docs/mobile-staging.md`](docs/mobile-staging.md).
+
+## Environment configuration
+
+Copy [`.env.example`](.env.example) to `.env.local` and configure the values needed for
+your environment. The main groups are:
+
+- PostgreSQL connection strings: `DATABASE_URL` and `DIRECT_URL`
+- Auth.js and password reset settings: `AUTH_SECRET`, Resend, and rate-limit variables
+- OAuth credentials and public provider flags for Google and Facebook
+- Public application URL: `NEXT_PUBLIC_APP_URL`
+- Mobile Preview settings: `MOBILE_API_ENABLED` and a separate `MOBILE_AUTH_SECRET`
+
+Never commit secrets, production environment files, or provider credentials. For OAuth
+callback URLs, credential rotation, and production checks, see
+[`docs/auth-operations.md`](docs/auth-operations.md).
+
+## Useful commands
+
+| Command | Description |
+| --- | --- |
+| `pnpm dev` | Start the web app in development |
+| `pnpm build` | Build all workspaces |
+| `pnpm lint` | Run workspace lint scripts |
+| `pnpm typecheck` | Type-check all workspaces |
+| `pnpm --filter @faura-farmer/web test` | Run web tests with Vitest |
+| `pnpm --filter @faura-farmer/mobile test` | Run mobile tests with Jest |
+| `pnpm db:generate` | Generate the Prisma client |
+| `pnpm db:push` | Push the schema to a local development database |
+| `pnpm db:studio` | Open Prisma Studio |
 
 ## Deployment
 
-Live at [faura-farmer.vercel.app](https://faura-farmer.vercel.app) (Vercel). To redeploy: push to GitHub and import the repo in [Vercel](https://vercel.com), then set the environment variables from `.env.example`.
+The web application is deployed on [Vercel](https://vercel.com) at
+[faura-farmer.vercel.app](https://faura-farmer.vercel.app). Configure the environment
+variables from [`.env.example`](.env.example) in the intended Vercel environment before
+deploying.
 
-## Commands
-
-| Command | Description |
-| ------- | ----------- |
-| `pnpm dev` | Start the web app in dev |
-| `pnpm build` | Build all workspaces |
-| `pnpm lint` | Lint all workspaces |
-| `pnpm typecheck` | Type-check all workspaces |
-| `pnpm db:push` | Push Prisma schema to the database |
-| `pnpm db:studio` | Open Prisma Studio |
-
-## Environment Variables
-
-Copy `.env.example` to `.env.local` and fill in:
-
-| Var | Description |
-|-----|-------------|
-| `DATABASE_URL` / `DIRECT_URL` | PostgreSQL connection strings |
-| `AUTH_SECRET` | Auth.js session secret |
-| `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | Google OAuth credentials |
-| `FACEBOOK_CLIENT_ID` / `FACEBOOK_CLIENT_SECRET` | Facebook OAuth credentials |
-| `NEXT_PUBLIC_APP_URL` | Public app URL |
-| `NEXT_PUBLIC_GOOGLE_ENABLED` / `NEXT_PUBLIC_FACEBOOK_ENABLED` | Toggle OAuth buttons |
-
-## OAuth setup
-
-OAuth accounts are never linked merely because their email address matches an existing
-Faura-Farmer account. A user who already has an account must sign in with an existing
-method and connect Google or Facebook from **Profile → Sign-in methods**. An account
-cannot remove its last remaining sign-in method.
-
-Create the Google Cloud OAuth client and Meta Facebook Login app yourself, then set the
-credentials in local and Vercel environment settings. Do not commit provider secrets.
-Set each public enable flag to `true` only after its corresponding client ID and secret are
-configured; otherwise the provider button stays hidden.
-
-Register these exact redirect URIs with both providers:
-
-- `http://localhost:3000/api/auth/callback/google`
-- `http://localhost:3000/api/auth/callback/facebook`
-- `https://faura-farmer.vercel.app/api/auth/callback/google`
-- `https://faura-farmer.vercel.app/api/auth/callback/facebook`
-
-Google requests `openid email profile`; Facebook requests `email public_profile`. Provider
-responses without an email are rejected. Before deploying this feature, back up production
-data and rehearse the OAuth identity migration on staging; migration application and Vercel
-environment changes remain separate user-approved release steps.
-
-See [authentication operations](docs/auth-operations.md) for credential rotation,
-production configuration, OAuth acceptance checks, and incident triage.
+The mobile client is intended for local development and approved Preview or staging
+builds. Do not point mobile development builds at the production API. Production database
+migrations, environment changes, and deployment remain deliberate release operations.
 
 ## Author
 
-**Agustin Ronato Pelicano Jr. (Jay Ar)**, Junior & Full-Stack Software Developer
+**Agustin Ronato Pelicano Jr. (Jay Ar)**, Junior and Full-Stack Software Developer
 
-- 💻 GitHub: [@jayarpelicano01](https://github.com/jayarpelicano01)
-- 💼 LinkedIn: [agustin-pelicano-jr-77062a3a6](https://www.linkedin.com/in/agustin-pelicano-jr-77062a3a6/)
-- ✉️ Email: [jayarpelicano01@gmail.com](mailto:jayarpelicano01@gmail.com)
+- GitHub: [@jayarpelicano01](https://github.com/jayarpelicano01)
+- LinkedIn: [agustin-pelicano-jr-77062a3a6](https://www.linkedin.com/in/agustin-pelicano-jr-77062a3a6/)
+- Email: [jayarpelicano01@gmail.com](mailto:jayarpelicano01@gmail.com)
 
 ## License
 
-Released under the [MIT License](LICENSE). See [LICENSE](LICENSE) for details.
+Released under the [MIT License](LICENSE).
