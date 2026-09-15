@@ -28,7 +28,7 @@ offline-first storage and synchronization.
 | App | Download | Choose this when |
 | --- | --- | --- |
 | Faura Farmer 1.0.0 | [Download the production ARM64 APK](https://github.com/jayarpelicano01/faura-farmer/releases/download/v1.0.0/faura-farmer-v1.0.0-arm64.apk) | You want the online app with sign-in and sync. |
-| Faura 1.0.0 Offline Friends | [Download the local-only ARM64 APK](https://github.com/jayarpelicano01/faura-farmer/releases/download/v1.0.0-offline-friends/faura-v1.0.0-offline-friends-arm64.apk) | You want a private local-only app with no online workspace or sync. |
+| Faura 1.0.0 Offline | [Download the local-only ARM64 APK](https://github.com/jayarpelicano01/faura-farmer/releases/download/v1.0.0-offline-friends/faura-v1.0.0-offline-arm64.apk) | You want a private local-only app with no online workspace or sync. |
 
 Both APKs require a modern 64-bit Android phone. The offline app has its own package
 identity and can be installed alongside the production app without sharing data.
