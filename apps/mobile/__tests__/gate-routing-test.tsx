@@ -26,6 +26,11 @@ jest.mock('@/ui/brand', () => {
   const { Text } = require('react-native');
   return { BrandLockup: () => <Text>brand</Text> };
 });
+jest.mock('@/ui/loading', () => {
+  const React = require('react');
+  const { Text } = require('react-native');
+  return { AppLoadingScreen: ({ label }: { label?: string }) => <Text>{label ?? 'Loading Faura Farmer'}</Text> };
+});
 jest.mock('@/ui/primitives', () => {
   const React = require('react');
   const { Text } = require('react-native');
@@ -78,5 +83,11 @@ describe('Gate session routing', () => {
     await renderGate('covered');
     expect(screen.queryByText('route slot')).toBeNull();
     expect(screen.queryByText('app shell')).toBeNull();
+  });
+
+  it('uses the branded loading screen while the session is being restored', async () => {
+    await renderGate('loading');
+    expect(screen.getByText('Opening your finances')).toBeTruthy();
+    expect(screen.queryByText('route slot')).toBeNull();
   });
 });

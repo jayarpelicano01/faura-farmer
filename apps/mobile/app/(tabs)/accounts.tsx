@@ -6,6 +6,7 @@ import { useWorkspace } from '@/data/workspace-provider';
 import { useWorkspaceData } from '@/data/hooks/use-workspace-data';
 import { currentBalance } from '@/data/current-balance';
 import { Badge, Button, Card, ChoiceChip, Empty, Field, Screen, Title, useUiStyles } from '@/ui/primitives';
+import { ContentSkeleton } from '@/ui/loading';
 import { fontFamily, useAppTheme } from '@/ui/theme';
 import { useCurrency } from '@/ui/currency';
 import { useSync } from '@/sync/use-sync';
@@ -32,7 +33,7 @@ export default function AccountsScreen() {
   const ui = useUiStyles();
   const { db } = useWorkspace();
   const { convert, displayCurrency, formatMoney: formatDisplayMoney } = useCurrency();
-  const { accounts, debtCashEvents, loading, reload, transactions } = useWorkspaceData();
+  const { accounts, debtCashEvents, initialLoading, loading, reload, transactions } = useWorkspaceData();
   const [editing, setEditing] = useState<MobileAccount | null>(null);
   const [editingCurrentBalance, setEditingCurrentBalance] = useState('');
   const handledCreateParam = useRef(false);
@@ -52,6 +53,8 @@ export default function AccountsScreen() {
     setEditingCurrentBalance(account.startingBalance);
     router.setParams({ new: undefined });
   }, [createNew, loaded, router]);
+
+  if (initialLoading) return <Screen scrollable><ContentSkeleton variant="cards" /></Screen>;
 
   const save = async () => {
     if (!editing?.label.trim() || !/^\d+(\.\d{1,2})?$/.test(editing.startingBalance)) {

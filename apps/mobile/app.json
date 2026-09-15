@@ -10,6 +10,19 @@
     "plugins": [
       "expo-router",
       [
+        "expo-splash-screen",
+        {
+          "backgroundColor": "#030B26",
+          "image": "./assets/icon.png",
+          "imageWidth": 112,
+          "resizeMode": "contain",
+          "dark": {
+            "backgroundColor": "#030B26",
+            "image": "./assets/icon.png"
+          }
+        }
+      ],
+      [
         "expo-font",
         {
           "fonts": [
@@ -39,7 +52,7 @@
     },
     "android": {
       "package": "com.faura.farmer",
-      "versionCode": 2,
+      "versionCode": 3,
       "softwareKeyboardLayoutMode": "resize",
       "adaptiveIcon": {
         "foregroundImage": "./assets/icon.png",

@@ -7,6 +7,7 @@ import { useWorkspaceData } from '@/data/hooks/use-workspace-data';
 import type { TransactionPageCursor } from '@/data/db';
 import { localDateKey, transactionDateKey } from '@/data/date';
 import { Button, ChoiceChip, Empty, Field, Screen, Title, useUiStyles } from '@/ui/primitives';
+import { ContentSkeleton } from '@/ui/loading';
 import { fontFamily, useAppTheme } from '@/ui/theme';
 import { useCurrency } from '@/ui/currency';
 import { useSync } from '@/sync/use-sync';
@@ -145,7 +146,7 @@ export default function TransactionsScreen() {
         data={transactions}
         keyExtractor={(item) => item.id}
         keyboardShouldPersistTaps="handled"
-        ListEmptyComponent={<Empty>Income, expenses, and transfers work offline.</Empty>}
+        ListEmptyComponent={loaded ? <Empty>Income, expenses, and transfers work offline.</Empty> : <ContentSkeleton variant="rows" />}
         ListFooterComponent={transactions.length > 0 ? (
           <View accessibilityLiveRegion="polite" style={styles.listFooter}>
             {isLoadingMore ? (

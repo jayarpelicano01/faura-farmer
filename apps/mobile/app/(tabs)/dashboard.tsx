@@ -6,6 +6,7 @@ import { useWorkspace } from '@/data/workspace-provider';
 import { useWorkspaceData } from '@/data/hooks/use-workspace-data';
 import { localMonthKey, transactionDateKey } from '@/data/date';
 import { Button, Card, Empty, Screen, SectionTitle, Title, useUiStyles } from '@/ui/primitives';
+import { ContentSkeleton } from '@/ui/loading';
 import { fontFamily, useAppTheme } from '@/ui/theme';
 import { useSync } from '@/sync/use-sync';
 import { useCurrency } from '@/ui/currency';
@@ -19,10 +20,12 @@ export default function DashboardScreen() {
   const styles = useDashboardStyles();
   const ui = useUiStyles();
   const { activeWorkspace } = useWorkspace();
-  const { accounts, debtAdjustments, debtCashEvents, debtPayments, debts, reload, transactions } = useWorkspaceData();
+  const { accounts, debtAdjustments, debtCashEvents, debtPayments, debts, initialLoading, reload, transactions } = useWorkspaceData();
   const { lastSyncFailed, syncNow } = useSync();
   const { convert, displayCurrency, formatMoney, rateDate, rateRefreshedAt, usdPerPhp } = useCurrency();
   useFocusEffect(useCallback(() => { void reload(); }, [reload]));
+
+  if (initialLoading) return <Screen scrollable><ContentSkeleton variant="dashboard" /></Screen>;
 
   const balances = new Map(accounts.map((account) => [account.id, Number(account.startingBalance)]));
   const currentMonth = localMonthKey();

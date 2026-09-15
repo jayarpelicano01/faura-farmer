@@ -5,7 +5,8 @@ import { useFocusEffect } from 'expo-router';
 import { buildBalanceTimeline, buildBudgetVariance, buildCategoryComparison, buildCategorySpending, buildCombinedBalanceTimeline, categorySpendingRange, defaultCategoryAnchor, type BalancePoint, type BalanceTimelinePeriod, type CategorySpendingPeriod } from '@/data/reports';
 import { useWorkspace } from '@/data/workspace-provider';
 import { useWorkspaceData } from '@/data/hooks/use-workspace-data';
-import { Button, Card, ChoiceChip, Empty, Field, Screen, SectionTitle, Spinner, Title, useUiStyles } from '@/ui/primitives';
+import { Button, Card, ChoiceChip, Empty, Field, Screen, SectionTitle, Title, useUiStyles } from '@/ui/primitives';
+import { ContentSkeleton } from '@/ui/loading';
 import { useSync } from '@/sync/use-sync';
 import { fontFamily, useAppTheme } from '@/ui/theme';
 import { useCurrency } from '@/ui/currency';
@@ -36,7 +37,7 @@ export default function ReportsScreen() {
     compactMoney,
     signedMoney,
   } = useCurrency();
-  const { accounts, budgets, categories, debtCashEvents, lastSyncedAt, loading, reload, transactions } = useWorkspaceData();
+  const { accounts, budgets, categories, debtCashEvents, initialLoading, lastSyncedAt, loading, reload, transactions } = useWorkspaceData();
   const [selectedAccountId, setSelectedAccountId] = useState<string | null>(null);
   const [timelinePeriod, setTimelinePeriod] = useState<BalanceTimelinePeriod>('7d');
   const [selectedPoint, setSelectedPoint] = useState<BalancePoint | null>(null);
@@ -78,6 +79,8 @@ export default function ReportsScreen() {
     setCategoryAnchor(categoryAnchorInput);
   };
 
+  if (initialLoading) return <Screen scrollable><ContentSkeleton variant="reports" /></Screen>;
+
   return (
     <Screen scrollable>
       <View style={styles.pageHeader}>
@@ -88,7 +91,6 @@ export default function ReportsScreen() {
       </View>
       <Text style={styles.syncCopy}>{lastSyncedCopy(lastSyncedAt)}</Text>
 
-      {loading && accounts.length === 0 ? <View style={styles.loading}><Spinner size={24} /><Text style={ui.listMeta}>Loading local reports…</Text></View> : null}
       {!loading && accounts.length === 0 ? <Empty>Add an account and transactions to see your reports.</Empty> : null}
 
       {accounts.length > 0 ? <View>

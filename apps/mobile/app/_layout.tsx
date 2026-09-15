@@ -1,19 +1,23 @@
-import { useMemo } from 'react';
+import { useEffect, useMemo } from 'react';
 import { ActivityIndicator, StatusBar, StyleSheet, Text, View } from 'react-native';
 import { useFonts } from 'expo-font';
 import { Redirect, Slot, usePathname } from 'expo-router';
+import * as SplashScreen from 'expo-splash-screen';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { SessionProvider, useSession } from '@/auth/session';
 import { WorkspaceProvider } from '@/data/workspace-provider';
 import { SyncProvider } from '@/sync/use-sync';
 import { BrandLockup } from '@/ui/brand';
 import { AppShell } from '@/ui/app-shell';
+import { AppLoadingScreen } from '@/ui/loading';
 import { Button } from '@/ui/primitives';
 import { fontFamily, ThemeProvider, useAppTheme } from '@/ui/theme';
 import { CurrencyProvider } from '@/ui/currency';
 import { isOfflineBuild } from '@/config/app-mode';
 import { WorkspaceDataProvider } from '@/data/hooks/use-workspace-data';
 import '../global.css';
+
+SplashScreen.preventAutoHideAsync();
 
 function PrivacyCover() {
   const { theme } = useAppTheme();
@@ -43,12 +47,10 @@ function LockScreen() {
 export function Gate() {
   const { status } = useSession();
   const pathname = usePathname();
-  const { theme } = useAppTheme();
-  const styles = useRootStyles();
   if (isOfflineBuild && status === 'signedOut') {
     return pathname === '/welcome' ? <Slot /> : <Redirect href="/welcome" />;
   }
-  if (status === 'loading') return <View style={styles.loading}><ActivityIndicator color={theme.primary} /></View>;
+  if (status === 'loading') return <AppLoadingScreen label="Opening your finances" />;
   if (status === 'covered') return <PrivacyCover />;
   if (status === 'locked') return <LockScreen />;
   if (status === 'offline') return <AppShell><Slot /></AppShell>;
@@ -63,9 +65,13 @@ export function Gate() {
 
 function RootContent({ fontsLoaded, fontError }: { fontsLoaded: boolean; fontError: Error | null }) {
   const { mode, theme } = useAppTheme();
-  const styles = useRootStyles();
+  const appReady = fontsLoaded || Boolean(fontError);
 
-  if (!fontsLoaded && !fontError) return <View style={styles.loading}><ActivityIndicator color={theme.primary} /></View>;
+  useEffect(() => {
+    if (appReady) void SplashScreen.hideAsync();
+  }, [appReady]);
+
+  if (!appReady) return <AppLoadingScreen label="Loading Faura" />;
 
   return (
     <SafeAreaProvider>

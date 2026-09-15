@@ -25,6 +25,7 @@ type WorkspaceData = {
   debtCashEvents: MobileDebtCashEvent[];
   debtPayments: MobileDebtPayment[];
   error: string | null;
+  initialLoading: boolean;
   lastSyncedAt: string | null;
   loading: boolean;
   monthlyBudgets: MobileMonthlyBudget[];
@@ -45,6 +46,7 @@ const emptySnapshot: WorkspaceSnapshot = {
   debtCashEvents: [],
   debtPayments: [],
   error: null,
+  initialLoading: true,
   lastSyncedAt: null,
   loading: true,
   monthlyBudgets: [],
@@ -92,6 +94,7 @@ export function WorkspaceDataProvider({ children }: PropsWithChildren) {
         debtCashEvents,
         debtPayments,
         error: null,
+        initialLoading: false,
         lastSyncedAt,
         loading: false,
         monthlyBudgets,
@@ -105,6 +108,7 @@ export function WorkspaceDataProvider({ children }: PropsWithChildren) {
       setSnapshot((current) => ({
         ...current,
         error: 'Unable to load data saved on this device.',
+        initialLoading: false,
         loading: false,
       }));
       return false;

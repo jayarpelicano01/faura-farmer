@@ -6,6 +6,7 @@ import { calculateDebtState, debtCashDirection, type MobileDebt, type MobileDebt
 import { useWorkspace } from '@/data/workspace-provider';
 import { useWorkspaceData } from '@/data/hooks/use-workspace-data';
 import { Badge, Button, Card, ChoiceChip, Empty, Field, Screen, SectionTitle, Title, useUiStyles } from '@/ui/primitives';
+import { ContentSkeleton } from '@/ui/loading';
 import { fontFamily, useAppTheme } from '@/ui/theme';
 import { useCurrency } from '@/ui/currency';
 import { useSync } from '@/sync/use-sync';
@@ -23,7 +24,7 @@ export default function DebtsScreen() {
   const styles = useDebtStyles();
   const ui = useUiStyles();
   const { activeWorkspace, db } = useWorkspace();
-  const { accounts, debtAdjustments, debtCashEvents, debtPayments, debts, people, reload } = useWorkspaceData();
+  const { accounts, debtAdjustments, debtCashEvents, debtPayments, debts, initialLoading, people, reload } = useWorkspaceData();
   const { formatMoney } = useCurrency();
   const { syncNow } = useSync();
   const [form, setForm] = useState<FormKind>(null);
@@ -119,6 +120,9 @@ export default function DebtsScreen() {
     return [...result.entries()];
   }, [debts, peopleById]);
   const hiddenDebts = useMemo(() => debts.filter((debt) => debt.isHidden), [debts]);
+
+  if (initialLoading) return <Screen scrollable><ContentSkeleton variant="cards" /></Screen>;
+
   const renderDebt = (debt: MobileDebt) => {
     const state = debtState(debt, debtAdjustments, debtPayments);
     const active = debt.status === 'open' || debt.status === 'partially_paid';

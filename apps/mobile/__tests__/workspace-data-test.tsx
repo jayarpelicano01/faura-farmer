@@ -10,8 +10,8 @@ jest.mock('@/sync/use-sync', () => ({ useSync: mockUseSync }));
 const { WorkspaceDataProvider, useWorkspaceData } = require('@/data/hooks/use-workspace-data') as typeof import('@/data/hooks/use-workspace-data');
 
 function Probe() {
-  const { accounts, loading, recurringRules } = useWorkspaceData();
-  return <Text testID="workspace-data">{`${loading}:${accounts.map((account) => account.id).join(',')}:${recurringRules.map((rule) => rule.id).join(',')}`}</Text>;
+  const { accounts, initialLoading, loading, recurringRules } = useWorkspaceData();
+  return <Text testID="workspace-data">{`${initialLoading}:${loading}:${accounts.map((account) => account.id).join(',')}:${recurringRules.map((rule) => rule.id).join(',')}`}</Text>;
 }
 
 describe('WorkspaceDataProvider', () => {
@@ -28,12 +28,12 @@ describe('WorkspaceDataProvider', () => {
     mockUseSync.mockImplementation(() => ({ syncStatus }));
 
     const view = await render(<WorkspaceDataProvider><Probe /></WorkspaceDataProvider>);
-    await waitFor(() => expect(screen.getByTestId('workspace-data').props.children).toBe('false:account-1:rule-1'));
+    await waitFor(() => expect(screen.getByTestId('workspace-data').props.children).toBe('false:false:account-1:rule-1'));
     expect(db.listRecords.mock.calls.map(([entity]) => entity)).toEqual(expectedEntities);
 
     syncStatus = 'success';
     await view.rerender(<WorkspaceDataProvider><Probe /></WorkspaceDataProvider>);
-    await waitFor(() => expect(screen.getByTestId('workspace-data').props.children).toBe('false:account-2:rule-2'));
+    await waitFor(() => expect(screen.getByTestId('workspace-data').props.children).toBe('false:false:account-2:rule-2'));
     expect(db.listRecords.mock.calls.map(([entity]) => entity)).toEqual([...expectedEntities, ...expectedEntities]);
   });
 });

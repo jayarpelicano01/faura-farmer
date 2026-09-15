@@ -11,6 +11,7 @@ import { useWorkspaceData } from '@/data/hooks/use-workspace-data';
 import { useSession } from '@/auth/session';
 import { useSync } from '@/sync/use-sync';
 import { Badge, Button, Card, ChoiceChip, Empty, Field, Screen, SectionTitle, Title, useUiStyles } from '@/ui/primitives';
+import { ContentSkeleton } from '@/ui/loading';
 import { fontFamily, useAppTheme } from '@/ui/theme';
 
 function blankRule(accountId: string, userId: string): MobileRecurringRule {
@@ -26,7 +27,7 @@ export default function RecurringScreen() {
   const router = useRouter();
   const { activeWorkspace, db } = useWorkspace();
   const { session } = useSession();
-  const { accounts, categories, recurringRules, reload } = useWorkspaceData();
+  const { accounts, categories, initialLoading, recurringRules, reload } = useWorkspaceData();
   const { syncNow } = useSync();
   const [editing, setEditing] = useState<MobileRecurringRule | null>(null);
   const styles = useStyles();
@@ -91,6 +92,7 @@ export default function RecurringScreen() {
     })(); } }],
   );
 
+  if (initialLoading) return <Screen scrollable><ContentSkeleton variant="cards" /></Screen>;
   if (!userId) return <Screen><Empty>Sign in to manage recurring rules.</Empty></Screen>;
   return <Screen>
     <View style={styles.header}><View style={styles.heading}><Title>Recurring</Title><Text style={styles.subtitle}>Review and schedule repeating income and expenses.</Text></View><Button size="compact" onPress={() => accounts.length ? setEditing(blankRule(accounts[0].id, userId)) : Alert.alert('Add an account first', 'Recurring rules need an account.')}>New</Button></View>

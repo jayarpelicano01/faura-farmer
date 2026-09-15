@@ -30,8 +30,10 @@
     },
     "offline-friends": {
       "distribution": "internal",
+      "developmentClient": false,
       "env": {
-        "FAURA_APP_MODE": "offline"
+        "FAURA_APP_MODE": "offline",
+        "FAURA_APK_VARIANT": "arm64"
       },
       "android": {
         "buildType": "apk"

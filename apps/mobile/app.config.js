@@ -36,7 +36,7 @@ if (apkVariant) {
 
 module.exports = {
   ...expo,
-  name: appMode === 'offline' ? 'Faura Farmer Offline' : expo.name,
+  name: appMode === 'offline' ? 'Faura' : expo.name,
   slug: expo.slug,
   scheme: appMode === 'offline' ? `${expo.scheme}-offline` : expo.scheme,
   android: {

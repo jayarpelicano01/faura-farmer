@@ -6,6 +6,7 @@ import type { BudgetBucket, MobileBudget, MobileCategory } from '@faura-farmer/t
 import { useWorkspace } from '@/data/workspace-provider';
 import { useWorkspaceData } from '@/data/hooks/use-workspace-data';
 import { Button, Card, ChoiceChip, Empty, Field, Screen, Title, useUiStyles } from '@/ui/primitives';
+import { ContentSkeleton } from '@/ui/loading';
 import { useSync } from '@/sync/use-sync';
 import { fontFamily, useAppTheme } from '@/ui/theme';
 import { useCurrency } from '@/ui/currency';
@@ -31,7 +32,7 @@ export default function BudgetsScreen() {
   const { db } = useWorkspace();
   const { syncNow } = useSync();
   const { convert, displayCurrency, formatMoney: formatDisplayMoney } = useCurrency();
-  const { accounts, budgets, categories, loading, monthlyBudgets, reload, transactions } = useWorkspaceData();
+  const { accounts, budgets, categories, initialLoading, loading, monthlyBudgets, reload, transactions } = useWorkspaceData();
   const [editor, setEditor] = useState<BudgetEditor | null>(null);
   const [monthlyEditor, setMonthlyEditor] = useState(false);
   const [monthlyAmount, setMonthlyAmount] = useState('');
@@ -118,6 +119,8 @@ export default function BudgetsScreen() {
     { text: 'Cancel', style: 'cancel' },
     { text: 'Delete', style: 'destructive', onPress: () => { void db.queueDelete('budget', budget.id).then(reload).then(() => syncNow()); } },
   ]);
+
+  if (initialLoading) return <Screen scrollable><ContentSkeleton variant="cards" /></Screen>;
 
   return (
     <Screen scrollable>
