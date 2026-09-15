@@ -1,5 +1,5 @@
 import { backupFromLocalSnapshot, previewMobileBackup } from '@/backup/financial';
-import { planLocalBackupRestore } from '@/backup/restore';
+import { localRestoreRecords, planLocalBackupRestore } from '@/backup/restore';
 import type { LocalBackupSnapshot } from '@/data/db';
 
 jest.mock('expo-crypto', () => ({ randomUUID: () => '44444444-4444-4444-8444-444444444444' }));
@@ -170,6 +170,48 @@ describe('portable mobile backup', () => {
     })).document;
 
     expect(document.debts[0]?.isHidden).toBe(false);
+  });
+
+  it('preserves a custom debt adjustment reason through parsing and restore mapping', () => {
+    const personId = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+    const debtId = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
+    const document = previewMobileBackup(JSON.stringify({
+      ...backupFromLocalSnapshot(snapshot).document,
+      persons: [{
+        id: personId,
+        displayName: 'Rae',
+        contact: null,
+        note: null,
+        createdAt: '2026-09-14T00:00:00.000Z',
+        updatedAt: '2026-09-14T00:00:00.000Z',
+      }],
+      debts: [{
+        id: debtId,
+        personId,
+        direction: 'receivable',
+        originalPrincipal: '100',
+        currency: 'PHP',
+        status: 'open',
+        openedAt: '2026-09-14',
+        dueDate: null,
+        note: null,
+        isHidden: false,
+        createdAt: '2026-09-14T00:00:00.000Z',
+        updatedAt: '2026-09-14T00:00:00.000Z',
+      }],
+      debtAdjustments: [{
+        id: 'cccccccc-cccc-4ccc-8ccc-cccccccccccc',
+        debtId,
+        amount: '-10',
+        reason: 'other: addition',
+        date: '2026-09-14',
+        createdAt: '2026-09-14T00:00:00.000Z',
+        updatedAt: '2026-09-14T00:00:00.000Z',
+      }],
+    })).document;
+
+    expect(document.debtAdjustments[0]?.reason).toBe('other: addition');
+    expect(localRestoreRecords(document, profile.id).debtAdjustments[0]?.reason).toBe('other: addition');
   });
 
   it('rejects a local restore preview with a missing record reference', () => {

@@ -204,7 +204,7 @@ export async function exportBackupForUser(userId: string): Promise<ExportedBacku
         id: record.id,
         debtId: record.debtId,
         amount: record.amount.toString(),
-        reason: record.reason as 'correction' | 'agreed_reduction' | 'partial_forgiveness' | 'other',
+        reason: record.reason,
         date: dateOnly(record.date),
         createdAt: record.createdAt.toISOString(),
         updatedAt: record.updatedAt.toISOString(),

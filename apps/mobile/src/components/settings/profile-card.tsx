@@ -36,7 +36,7 @@ export function ProfileCard(props: ProfileCardProps) {
       <View style={styles.summary}>
         <View accessibilityLabel="Your initials" style={styles.avatar}><Text style={styles.avatarText}>{initials}</Text></View>
         <View style={styles.copy}>
-          <Text numberOfLines={1} style={ui.listTitle}>{displayedProfile?.name || 'Your profile'}</Text>
+          <Text numberOfLines={1} style={ui.listTitle}>{displayedProfile?.username || displayedProfile?.name || 'Your profile'}</Text>
           <Text numberOfLines={1} style={ui.listMeta}>{activeWorkspace === 'local' ? 'Local account' : (displayedProfile?.email ?? 'Loading profile...')}</Text>
         </View>
       </View>
@@ -44,7 +44,7 @@ export function ProfileCard(props: ProfileCardProps) {
       {displayedProfile && !editingProfile ? <View style={styles.details}>
         <ProfileDetail label="Name" value={displayedProfile.name || 'Not set'} />
         {activeWorkspace === 'online' ? <ProfileDetail label="Email" value={displayedProfile.email} /> : null}
-        {activeWorkspace === 'online' ? <ProfileDetail label="Username" value={displayedProfile.username || 'Not set'} /> : null}
+        <ProfileDetail label="Username" value={displayedProfile.username || 'Not set'} />
         <View style={styles.actions}>
           <Button disabled={profileLoading} size="compact" variant="outline" onPress={beginProfileEdit}>Edit profile</Button>
           {profileError ? <Button disabled={profileLoading} size="compact" variant="ghost" onPress={() => void loadProfile()}>Try again</Button> : null}
@@ -53,10 +53,10 @@ export function ProfileCard(props: ProfileCardProps) {
       {displayedProfile && editingProfile ? <View style={styles.form}>
         <Field label="Name" autoComplete="name" maxLength={120} onChangeText={(name) => setDraft((current) => ({ ...current, name }))} placeholder="Your name" value={draft.name} />
         {activeWorkspace === 'online' ? <Field label="Email" editable={false} value={displayedProfile.email} /> : null}
-        {activeWorkspace === 'online' ? <>
+        <>
           <Field label="Username" autoCapitalize="none" autoCorrect={false} maxLength={30} onChangeText={(username) => setDraft((current) => ({ ...current, username }))} placeholder="username" value={draft.username} />
           <Text style={styles.hint}>3–30 letters, numbers, dots, dashes, or underscores.</Text>
-        </> : null}
+        </>
         <View style={styles.formActions}>
           <Button loading={savingProfile} size="full" onPress={() => void saveProfile()}>{savingProfile ? 'Saving changes…' : 'Save changes'}</Button>
           <Button disabled={savingProfile} variant="outline" onPress={cancelProfileEdit}>Cancel</Button>

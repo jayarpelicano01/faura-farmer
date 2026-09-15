@@ -43,7 +43,7 @@ type UseProfileOptions = {
 
 export function useProfile({ activeSession, profile, setProfile }: UseProfileOptions) {
   const { session, update } = useSession();
-  const { activeWorkspace, db } = useWorkspace();
+  const { activeWorkspace, db, refreshProfile } = useWorkspace();
   const { setPreference } = useCurrency();
   const [profileLoading, setProfileLoading] = useState(true);
   const [profileError, setProfileError] = useState<string | null>(null);
@@ -133,6 +133,7 @@ export function useProfile({ activeSession, profile, setProfile }: UseProfileOpt
       if (activeWorkspace === 'local') {
         const next = { ...displayedProfile, name: draft.name.trim() || null, username: draft.username.trim() || null };
         await db.saveProfileDetails(next);
+        await refreshProfile();
         await setPreference({
           displayCurrency: next.displayCurrency,
           usdPerPhp: next.usdPerPhp,
@@ -160,14 +161,14 @@ export function useProfile({ activeSession, profile, setProfile }: UseProfileOpt
     } finally {
       setSavingProfile(false);
     }
-  }, [activeSession, activeWorkspace, db, displayedProfile, draft, saveRemoteProfile, setPreference, setProfile, update]);
+  }, [activeSession, activeWorkspace, db, displayedProfile, draft, refreshProfile, saveRemoteProfile, setPreference, setProfile, update]);
 
   return {
     beginProfileEdit,
     cancelProfileEdit,
     displayedProfile,
     draft,
-    initials: initialsFor(displayedProfile?.name, displayedProfile?.email),
+    initials: initialsFor(displayedProfile?.username || displayedProfile?.name, displayedProfile?.email),
     editingProfile,
     loadProfile,
     profileError,

@@ -31,6 +31,44 @@ function backup(overrides: Record<string, unknown> = {}) {
   });
 }
 
+function backupWithDebtAdjustment(reason: unknown) {
+  const personId = '55555555-5555-4555-8555-555555555555';
+  const debtId = '66666666-6666-4666-8666-666666666666';
+
+  return backup({
+    persons: [{
+      id: personId,
+      displayName: 'Rae',
+      contact: null,
+      note: null,
+      createdAt: '2026-09-14T00:00:00.000Z',
+      updatedAt: '2026-09-14T00:00:00.000Z',
+    }],
+    debts: [{
+      id: debtId,
+      personId,
+      direction: 'receivable',
+      originalPrincipal: '100',
+      currency: 'PHP',
+      status: 'open',
+      openedAt: '2026-09-14',
+      dueDate: null,
+      note: null,
+      createdAt: '2026-09-14T00:00:00.000Z',
+      updatedAt: '2026-09-14T00:00:00.000Z',
+    }],
+    debtAdjustments: [{
+      id: '77777777-7777-4777-8777-777777777777',
+      debtId,
+      amount: '-10',
+      reason,
+      date: '2026-09-14',
+      createdAt: '2026-09-14T00:00:00.000Z',
+      updatedAt: '2026-09-14T00:00:00.000Z',
+    }],
+  });
+}
+
 describe('validateBackupFile', () => {
   it('returns preview counts for a valid, empty version-one backup', () => {
     expect(validateBackupFile(backup()).entityCounts).toEqual({
@@ -165,5 +203,40 @@ describe('validateBackupFile', () => {
     }));
 
     expect(result.document.debts[0]?.isHidden).toBe(false);
+  });
+
+  it('accepts and preserves a custom debt adjustment reason', () => {
+    const result = validateBackupFile(backupWithDebtAdjustment('other: addition'));
+
+    expect(result.document.debtAdjustments[0]?.reason).toBe('other: addition');
+  });
+
+  it.each(['correction', 'agreed_reduction', 'partial_forgiveness', 'other'])
+    ('accepts canonical debt adjustment reason %s', (reason) => {
+      expect(() => validateBackupFile(backupWithDebtAdjustment(reason))).not.toThrow();
+    });
+
+  it.each(['not-a-reason', 'other:', 'other:   ', 'other:addition'])
+    ('rejects invalid debt adjustment reason %s', (reason) => {
+      expect(() => validateBackupFile(backupWithDebtAdjustment(reason)))
+        .toThrow(/canonical reason or other/i);
+    });
+
+  it('trims surrounding whitespace from a custom debt adjustment reason', () => {
+    const result = validateBackupFile(backupWithDebtAdjustment('  other: addition  '));
+
+    expect(result.document.debtAdjustments[0]?.reason).toBe('other: addition');
+  });
+
+  it('keeps the backup reason length limit', () => {
+    expect(() => validateBackupFile(backupWithDebtAdjustment(`other: ${'a'.repeat(241)}`)))
+      .toThrow(/at most 247/i);
+  });
+
+  it('accepts the existing maximum custom reason description length', () => {
+    const reason = `other: ${'a'.repeat(240)}`;
+
+    expect(validateBackupFile(backupWithDebtAdjustment(reason)).document.debtAdjustments[0]?.reason)
+      .toBe(reason);
   });
 });

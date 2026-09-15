@@ -32,6 +32,15 @@ const exchangeRateDecimal = z.string()
 const zeroDecimal = /^-?0(?:\.0{1,2})?$/;
 const positiveDecimal = decimal.refine((value) => !value.startsWith('-') && !zeroDecimal.test(value), 'Amount must be positive');
 const nonZeroDecimal = decimal.refine((value) => !zeroDecimal.test(value), 'Amount must not be zero');
+const canonicalDebtAdjustmentReasons = new Set<string>(DEBT_ADJUSTMENT_REASONS);
+const otherDebtAdjustmentReasonPrefix = 'other: ';
+const maxDebtAdjustmentReasonDescriptionLength = 240;
+const backupDebtAdjustmentReason = z.string().trim().min(1).max(
+  otherDebtAdjustmentReasonPrefix.length + maxDebtAdjustmentReasonDescriptionLength,
+).refine(
+  (value) => canonicalDebtAdjustmentReasons.has(value) || /^other: \S(?:.*\S)?$/.test(value),
+  'Reason must be a canonical reason or other: followed by a description',
+);
 
 export const backupPreferencesSchema = z.object({
   displayCurrency: z.enum(DISPLAY_CURRENCIES),
@@ -137,7 +146,7 @@ export const backupDebtAdjustmentSchema = z.object({
   id: uuid,
   debtId: uuid,
   amount: nonZeroDecimal,
-  reason: z.enum(DEBT_ADJUSTMENT_REASONS),
+  reason: backupDebtAdjustmentReason,
   date: dateOnly,
   createdAt: timestamp,
   updatedAt: timestamp,

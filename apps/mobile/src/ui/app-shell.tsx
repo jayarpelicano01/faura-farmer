@@ -4,6 +4,7 @@ import { usePathname, useRouter, type Href } from 'expo-router';
 import { ArrowLeftRight, BarChart3, Check, CircleAlert, CloudOff, HandCoins, LayoutDashboard, Menu, Moon, PiggyBank, Repeat, Sun, Tags, Wallet, X, type LucideIcon } from 'lucide-react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useSession } from '@/auth/session';
+import { useWorkspace } from '@/data/workspace-provider';
 import { useSync } from '@/sync/use-sync';
 import { AppChromeProvider } from './primitives';
 import { BrandMark } from './brand';
@@ -41,6 +42,7 @@ export function AppShell({ children }: PropsWithChildren) {
   const pathname = normalizeRoute(usePathname());
   const router = useRouter();
   const { session } = useSession();
+  const { activeWorkspace, profile } = useWorkspace();
   const { syncMessage, syncStatus } = useSync();
   const { mode, theme, toggleMode } = useAppTheme();
   const styles = useShellStyles(theme);
@@ -67,7 +69,9 @@ export function AppShell({ children }: PropsWithChildren) {
   };
 
   const currentLabel = navigationItems.find((item) => isNavigationItemActive(pathname, item.href))?.label ?? (pathname === '/more' ? 'More' : 'Faura-Farmer');
-  const userName = session?.user.name?.trim() || session?.user.email || 'Your profile';
+  const userName = activeWorkspace === 'local'
+    ? profile?.username?.trim() || profile?.name?.trim() || 'Your profile'
+    : session?.user.name?.trim() || session?.user.email || 'Your profile';
   const ThemeIcon = mode === 'dark' ? Sun : Moon;
   const themeLabel = mode === 'dark' ? 'Switch to light mode' : 'Switch to dark mode';
   const SyncIcon = syncStatus === 'success' ? Check : syncStatus === 'offline' ? CloudOff : CircleAlert;

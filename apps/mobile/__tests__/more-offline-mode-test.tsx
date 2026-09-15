@@ -20,6 +20,7 @@ const mockWorkspace = {
     saveProfileDetails: jest.fn(),
   },
   deleteLocalProfile: jest.fn(),
+  refreshProfile: jest.fn(),
   resetToOnline: jest.fn(),
 };
 let resolveLocalProfile: (profile: typeof localProfile) => void;
@@ -88,6 +89,7 @@ beforeEach(() => {
   const localProfilePromise = new Promise<typeof localProfile>((resolve) => { resolveLocalProfile = resolve; });
   mockWorkspace.db.getProfileDetails.mockReturnValue(localProfilePromise);
   mockWorkspace.db.saveProfileDetails.mockResolvedValue(undefined);
+  mockWorkspace.refreshProfile.mockResolvedValue(undefined);
   mockWorkspace.deleteLocalProfile.mockResolvedValue(undefined);
   mockWorkspace.resetToOnline.mockResolvedValue(undefined);
   mockSetPreference.mockResolvedValue(undefined);
@@ -102,7 +104,7 @@ async function loadLocalProfile() {
 }
 
 describe('More screen local-only workspace behavior', () => {
-  it('hides server profile fields and switches online without clearing local data', async () => {
+  it('allows a local profile username to be edited and switches online without clearing local data', async () => {
     await render(<MoreScreen />);
     await loadLocalProfile();
     await waitFor(() => expect(screen.getByText('Local account')).toBeTruthy());
@@ -110,7 +112,13 @@ describe('More screen local-only workspace behavior', () => {
     await act(async () => { fireEvent.press(screen.getByText('Edit profile')); });
     expect(screen.getByText('Name')).toBeTruthy();
     expect(screen.queryByText('Email')).toBeNull();
-    expect(screen.queryByText('Username')).toBeNull();
+    expect(screen.getByText('Username')).toBeTruthy();
+
+    await act(async () => { fireEvent.changeText(screen.getByLabelText('Username'), 'Jayar'); });
+    expect(screen.getByLabelText('Username').props.value).toBe('Jayar');
+    await act(async () => { fireEvent.press(screen.getByText('Save changes')); });
+    await waitFor(() => expect(mockWorkspace.db.saveProfileDetails).toHaveBeenCalledWith(expect.objectContaining({ username: 'Jayar' })));
+    expect(screen.getAllByText('Jayar').length).toBeGreaterThan(0);
 
     await act(async () => { fireEvent.press(screen.getByText('Switch to online')); });
     await waitFor(() => expect(mockWorkspace.resetToOnline).toHaveBeenCalledTimes(1));
