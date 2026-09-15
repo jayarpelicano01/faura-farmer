@@ -7,7 +7,7 @@ export function CsvExportButton() {
   return (
     <Button variant="outline" asChild>
       <a href="/api/transactions/export" download="faura-farmer-transactions.csv">
-        <Download /> Export CSV
+        <Download /> Export transactions
       </a>
     </Button>
   );

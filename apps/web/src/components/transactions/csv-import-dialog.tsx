@@ -113,7 +113,7 @@ export function CsvImportDialog({ accounts, categories, onImported }: { accounts
 
   return (
     <Dialog open={open} onOpenChange={(next) => { setOpen(next); if (!next) reset(); }}>
-      <Button variant="outline" onClick={() => setOpen(true)}><FileUp /> Import CSV</Button>
+      <Button variant="outline" onClick={() => setOpen(true)}><FileUp /> Import transactions</Button>
       <DialogContent className="max-h-[90vh] max-w-3xl overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="font-display">Import transactions</DialogTitle>
