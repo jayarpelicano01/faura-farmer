@@ -6,6 +6,7 @@ import { useSession } from '@/auth/session';
 import { BrandLockup } from '@/ui/brand';
 import { BodyText, Button, InlineNotice, Screen } from '@/ui/primitives';
 import { fontFamily, useAppTheme } from '@/ui/theme';
+import { isOfflineBuild } from '@/config/app-mode';
 
 export default function WelcomeScreen() {
   const [loading, setLoading] = useState(false);
@@ -39,16 +40,16 @@ export default function WelcomeScreen() {
 
         <View style={styles.actions}>
           {error ? <InlineNotice>{error}</InlineNotice> : null}
-          <Button size="full" onPress={() => router.push('/login')}>Sign in</Button>
+          {!isOfflineBuild ? <Button size="full" onPress={() => router.push('/login')}>Sign in</Button> : null}
           <Button variant="secondary" size="full" loading={loading} onPress={() => void goOffline()}>
             Use offline
           </Button>
         </View>
 
-        <View style={styles.footer}>
+        {!isOfflineBuild ? <View style={styles.footer}>
           <Text style={styles.footerText}>No account yet?</Text>
           <Text style={styles.footerLink} onPress={() => router.push('/register')}>Register</Text>
-        </View>
+        </View> : null}
       </View>
     </Screen>
   );

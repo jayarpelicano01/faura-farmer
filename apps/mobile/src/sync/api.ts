@@ -1,5 +1,6 @@
 import type { MobileAuthResponse } from '@faura-farmer/types';
 import { getInstallationId, getStoredSession, type StoredSession } from '@/auth/session';
+import { isOfflineBuild } from '@/config/app-mode';
 
 const REQUEST_TIMEOUT_MS = 10_000;
 
@@ -72,6 +73,9 @@ export function isMobileUnauthorized(error: unknown) {
 }
 
 export async function mobileRequest<T>(path: string, options: RequestInit = {}, accessToken?: string) {
+  if (isOfflineBuild) {
+    throw new MobileConnectionError('mobile_api_disabled', 'This build uses a local workspace only.');
+  }
   const controller = new AbortController();
   let timedOut = false;
   const timeout = setTimeout(() => {

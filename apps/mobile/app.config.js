@@ -6,6 +6,11 @@ const apkVariants = {
 };
 
 const apkVariant = process.env.FAURA_APK_VARIANT;
+const appMode = process.env.FAURA_APP_MODE || 'online';
+
+if (appMode !== 'online' && appMode !== 'offline') {
+  throw new Error(`Unsupported FAURA_APP_MODE "${appMode}". Use "online" or "offline".`);
+}
 
 if (apkVariant && !Object.hasOwn(apkVariants, apkVariant)) {
   throw new Error(
@@ -31,5 +36,23 @@ if (apkVariant) {
 
 module.exports = {
   ...expo,
+  name: appMode === 'offline' ? 'Faura Farmer Offline' : expo.name,
+  slug: expo.slug,
+  scheme: appMode === 'offline' ? `${expo.scheme}-offline` : expo.scheme,
+  android: {
+    ...expo.android,
+    package: appMode === 'offline' ? 'com.faura.farmer.local' : expo.android.package,
+  },
+  ios: {
+    ...expo.ios,
+    bundleIdentifier: appMode === 'offline' ? 'com.faura.farmer.local' : expo.ios.bundleIdentifier,
+  },
   plugins,
+  extra: {
+    ...expo.extra,
+    faura: {
+      ...expo.extra?.faura,
+      appMode,
+    },
+  },
 };

@@ -4,6 +4,7 @@ import * as LocalAuthentication from 'expo-local-authentication';
 import * as SecureStore from 'expo-secure-store';
 import { clearLocalData, getProfile, saveProfile } from '@/data/db';
 import { getActiveWorkspaceId } from '@/data/workspace';
+import { isOfflineBuild } from '@/config/app-mode';
 
 const SESSION_KEY = 'mobile-session-v1';
 const INSTALLATION_KEY = 'mobile-installation-id-v1';
@@ -87,6 +88,13 @@ export function SessionProvider({ children }: PropsWithChildren) {
 
   useEffect(() => {
     void Promise.all([getStoredSession(), getInstallationId(), getLockDelay(), getActiveWorkspaceId()]).then(([stored, installation, delay, workspace]) => {
+      if (isOfflineBuild) {
+        setSession(null);
+        setDeviceId(installation);
+        setLockDelayState(delay);
+        setStatus(workspace === 'local' ? 'offline' : 'signedOut');
+        return;
+      }
       setSession(stored);
       setDeviceId(installation);
       setLockDelayState(delay);

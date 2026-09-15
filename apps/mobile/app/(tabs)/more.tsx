@@ -22,6 +22,7 @@ import { useWorkspaceData } from '@/data/hooks/use-workspace-data';
 import { BodyText, InlineNotice, Screen, Title } from '@/ui/primitives';
 import { useAppTheme } from '@/ui/theme';
 import { useSync } from '@/sync/use-sync';
+import { isOfflineBuild } from '@/config/app-mode';
 
 export default function MoreScreen() {
   const styles = useMoreStyles();
@@ -52,15 +53,15 @@ export default function MoreScreen() {
   return <Screen scrollable><View style={styles.content}>
     <View style={styles.heading}><Title>Profile</Title><BodyText muted>Manage your profile, security, and this device.</BodyText></View>
     {profileState.profileError ? <InlineNotice>{profileState.profileError}</InlineNotice> : null}
-    {activeWorkspace === 'local' ? <OfflineModeCard switchToOnline={switchToOnline} /> : null}
+    {activeWorkspace === 'local' && !isOfflineBuild ? <OfflineModeCard switchToOnline={switchToOnline} /> : null}
     <ProfileCard activeWorkspace={activeWorkspace} profile={profile} {...profileState} />
     {profileState.displayedProfile?.hasPassword && activeWorkspace === 'online' ? <PasswordCard {...passwordState} /> : null}
     <ThemeCard mode={mode === 'dark' ? 'dark' : 'light'} toggleMode={toggleMode} />
     <CurrencyCard activeWorkspace={activeWorkspace} {...currencyState} />
     <BackupCard activeSession={getActiveSession} activeWorkspace={activeWorkspace} db={db} reload={reload} syncNow={syncNow} />
     <AppLockCard lockDelay={lockDelay} setLockDelay={setLockDelay} />
-    {activeWorkspace === 'online' ? <SyncCard lastSyncFailed={lastSyncFailed} syncNow={syncNow} /> : null}
-    <SignOutSection activeWorkspace={activeWorkspace} logout={logout} />
+    {activeWorkspace === 'online' && !isOfflineBuild ? <SyncCard lastSyncFailed={lastSyncFailed} syncNow={syncNow} /> : null}
+    {!isOfflineBuild ? <SignOutSection activeWorkspace={activeWorkspace} logout={logout} /> : null}
   </View></Screen>;
 }
 

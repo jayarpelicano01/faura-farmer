@@ -9,6 +9,7 @@ import {
   getActiveWorkspaceId,
   setActiveWorkspaceId,
 } from '@/data/workspace';
+import { isOfflineBuild } from '@/config/app-mode';
 
 type WorkspaceContextValue = {
   activeWorkspace: WorkspaceId;
@@ -35,62 +36,13 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
   const [localProfileExists, setLocalProfileExists] = useState(false);
   const [ready, setReady] = useState(false);
 
-  useEffect(() => {
-    void (async () => {
-      await onlineDb.initializeDatabase();
-      await localDb.initializeDatabase();
-      const stored = await getActiveWorkspaceId();
-      const localProfile = await localDb.getProfileDetails();
-      setProfile(stored === 'local' ? localProfile : null);
-      setLocalProfileExists(!!localProfile);
-      if (stored === 'local' && localProfile) {
-        setActiveWorkspace('local');
-      } else {
-        setActiveWorkspace('online');
-      }
-      setReady(true);
-    })();
-  }, []);
-
-  const db = activeWorkspace === 'local' ? localDb : onlineDb;
-
-  const refreshProfile = useCallback(async () => {
-    setProfile(await db.getProfileDetails());
-  }, [db]);
-
-  const enterOfflineMode = useCallback(async () => {
+  const ensureLocalProfile = useCallback(async () => {
     const existing = await localDb.getProfileDetails();
-    if (!existing) {
-      const localProfile = {
-        id: LOCAL_PROFILE_ID,
-        email: '',
-        name: 'Local',
-        username: null,
-        hasPassword: false,
-        displayCurrency: 'PHP',
-        usdPerPhp: null,
-        rateDate: null,
-        rateRefreshedAt: null,
-      } satisfies MobileProfile;
-      await localDb.saveProfileDetails(localProfile);
-      setProfile(localProfile);
-      setLocalProfileExists(true);
-    } else {
+    if (existing) {
       setProfile(existing);
+      setLocalProfileExists(true);
+      return existing;
     }
-    setActiveWorkspace('local');
-    await setActiveWorkspaceId('local');
-  }, []);
-
-  const resetToOnline = useCallback(async () => {
-    setActiveWorkspace('online');
-    setProfile(null);
-    await setActiveWorkspaceId('online');
-  }, []);
-
-  const createLocalProfile = useCallback(async () => {
-    const existing = await localDb.getProfileDetails();
-    if (existing) return;
     const localProfile = {
       id: LOCAL_PROFILE_ID,
       email: '',
@@ -105,7 +57,54 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
     await localDb.saveProfileDetails(localProfile);
     setProfile(localProfile);
     setLocalProfileExists(true);
+    return localProfile;
   }, []);
+
+  useEffect(() => {
+    void (async () => {
+      if (!isOfflineBuild) await onlineDb.initializeDatabase();
+      await localDb.initializeDatabase();
+      if (isOfflineBuild) {
+        await ensureLocalProfile();
+        setActiveWorkspace('local');
+        setReady(true);
+        return;
+      }
+      const stored = await getActiveWorkspaceId();
+      const localProfile = await localDb.getProfileDetails();
+      setProfile(stored === 'local' ? localProfile : null);
+      setLocalProfileExists(!!localProfile);
+      if (stored === 'local' && localProfile) {
+        setActiveWorkspace('local');
+      } else {
+        setActiveWorkspace('online');
+      }
+      setReady(true);
+    })();
+  }, [ensureLocalProfile]);
+
+  const db = activeWorkspace === 'local' ? localDb : onlineDb;
+
+  const refreshProfile = useCallback(async () => {
+    setProfile(await db.getProfileDetails());
+  }, [db]);
+
+  const enterOfflineMode = useCallback(async () => {
+    await ensureLocalProfile();
+    setActiveWorkspace('local');
+    await setActiveWorkspaceId('local');
+  }, [ensureLocalProfile]);
+
+  const resetToOnline = useCallback(async () => {
+    if (isOfflineBuild) return;
+    setActiveWorkspace('online');
+    setProfile(null);
+    await setActiveWorkspaceId('online');
+  }, []);
+
+  const createLocalProfile = useCallback(async () => {
+    await ensureLocalProfile();
+  }, [ensureLocalProfile]);
 
   const deleteLocalProfile = useCallback(async () => {
     await localDb.clearLocalData();

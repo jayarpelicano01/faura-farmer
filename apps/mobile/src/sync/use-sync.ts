@@ -6,6 +6,7 @@ import { useWorkspace } from '@/data/workspace-provider';
 import { MobileApiError, MobileConnectionError, isMobileUnauthorized } from './api';
 import { synchronize } from './sync';
 import type { SynchronizeResult } from './sync';
+import { isOfflineBuild } from '@/config/app-mode';
 
 export type SyncStatus = 'idle' | 'syncing' | 'success' | 'offline' | 'attention';
 
@@ -57,6 +58,7 @@ export function SyncProvider({ children }: PropsWithChildren) {
   }, []);
 
   const syncNow = useCallback(async (manual = false) => {
+    if (isOfflineBuild) return { ok: false, warning: 'This build uses a local workspace only.' };
     if (status !== 'ready' || activeWorkspace !== 'online') return { ok: false, warning: 'Sync is not ready. Try again.' };
     if (manual) setLastSyncFailed(false);
     showStatus('syncing', 'Syncing...');
@@ -90,7 +92,7 @@ export function SyncProvider({ children }: PropsWithChildren) {
   }, [activeWorkspace, requireReauthentication, showStatus, status, update]);
 
   useEffect(() => {
-    if (status !== 'ready') {
+    if (isOfflineBuild || status !== 'ready') {
       setLastSyncFailed(false);
       showStatus('idle', null);
       return;

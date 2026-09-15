@@ -2,6 +2,9 @@
   "build": {
     "preview": {
       "distribution": "internal",
+      "env": {
+        "FAURA_APP_MODE": "online"
+      },
       "android": {
         "buildType": "apk"
       }
@@ -9,6 +12,7 @@
     "production": {
       "distribution": "internal",
       "env": {
+        "FAURA_APP_MODE": "online",
         "EXPO_PUBLIC_API_URL": "https://faura-farmer.vercel.app",
         "FAURA_APK_VARIANT": "arm64"
       },
@@ -19,7 +23,18 @@
     "production-compat": {
       "extends": "production",
       "env": {
+        "FAURA_APP_MODE": "online",
+        "EXPO_PUBLIC_API_URL": "https://faura-farmer.vercel.app",
         "FAURA_APK_VARIANT": "compat"
+      }
+    },
+    "offline-friends": {
+      "distribution": "internal",
+      "env": {
+        "FAURA_APP_MODE": "offline"
+      },
+      "android": {
+        "buildType": "apk"
       }
     }
   }

@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { Link, useRouter } from 'expo-router';
+import { Link, Redirect, useRouter } from 'expo-router';
 import { useSession } from '@/auth/session';
 import { asStoredSession, connectionMessage, signIn } from '@/sync/api';
 import { useWorkspace } from '@/data/workspace-provider';
@@ -8,6 +8,7 @@ import { BrandLockup } from '@/ui/brand';
 import { AuthModeSelector } from '@/ui/auth-mode';
 import { BodyText, Button, Card, Field, InlineNotice, Screen } from '@/ui/primitives';
 import { fontFamily, useAppTheme } from '@/ui/theme';
+import { isOfflineBuild } from '@/config/app-mode';
 
 export default function LoginScreen() {
   const [email, setEmail] = useState('');
@@ -18,6 +19,8 @@ export default function LoginScreen() {
   const { enterOfflineMode } = useWorkspace();
   const router = useRouter();
   const styles = useLoginStyles();
+
+  if (isOfflineBuild) return <Redirect href="/welcome" />;
 
   const submit = async () => {
     setSaving(true);

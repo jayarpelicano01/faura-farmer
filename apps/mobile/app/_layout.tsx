@@ -11,6 +11,7 @@ import { AppShell } from '@/ui/app-shell';
 import { Button } from '@/ui/primitives';
 import { fontFamily, ThemeProvider, useAppTheme } from '@/ui/theme';
 import { CurrencyProvider } from '@/ui/currency';
+import { isOfflineBuild } from '@/config/app-mode';
 import { WorkspaceDataProvider } from '@/data/hooks/use-workspace-data';
 import '../global.css';
 
@@ -44,6 +45,9 @@ export function Gate() {
   const pathname = usePathname();
   const { theme } = useAppTheme();
   const styles = useRootStyles();
+  if (isOfflineBuild && status === 'signedOut') {
+    return pathname === '/welcome' ? <Slot /> : <Redirect href="/welcome" />;
+  }
   if (status === 'loading') return <View style={styles.loading}><ActivityIndicator color={theme.primary} /></View>;
   if (status === 'covered') return <PrivacyCover />;
   if (status === 'locked') return <LockScreen />;
