@@ -40,4 +40,7 @@ implementation-plans/
 # Agent reports
 .agents/reports/
 
+# Local Supabase state and configuration
+supabase/
+
 .opencode
