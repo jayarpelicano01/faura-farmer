@@ -261,6 +261,7 @@ export const createDebtAdjustmentSchema = z.object({
 });
 
 export const debtStatusActionSchema = z.object({ action: z.enum(['reopen', 'write_off']) }).strict();
+export const debtVisibilityActionSchema = z.object({ action: z.enum(['hide', 'unhide']) }).strict();
 
 export const accountType = z.enum(ACCOUNT_TYPES);
 export const categoryType = z.enum(CATEGORY_TYPES);
@@ -293,3 +294,4 @@ export type CreateDebtInput = z.infer<typeof createDebtSchema>;
 export type UpdateDebtInput = z.infer<typeof updateDebtSchema>;
 export type CreateDebtPaymentInput = z.infer<typeof createDebtPaymentSchema>;
 export type CreateDebtAdjustmentInput = z.infer<typeof createDebtAdjustmentSchema>;
+export type DebtVisibilityActionInput = z.infer<typeof debtVisibilityActionSchema>;

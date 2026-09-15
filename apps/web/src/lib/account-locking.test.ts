@@ -1,7 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const transaction = vi.fn();
-const lockAccountsInOrder = vi.fn();
+const { transaction, lockAccountsInOrder } = vi.hoisted(() => ({
+  transaction: vi.fn(),
+  lockAccountsInOrder: vi.fn(),
+}));
 
 vi.mock('@faura-farmer/database', () => ({ prisma: { $transaction: transaction } }));
 vi.mock('./queries', () => ({ lockAccountsInOrder }));

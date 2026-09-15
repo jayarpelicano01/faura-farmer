@@ -5,13 +5,28 @@ import { mobileRequest, refreshedSession } from './api';
 
 let inFlight: Promise<{ warning: string | null }> | null = null;
 
+export type SynchronizeResult = {
+  ok: boolean;
+  warning: string | null;
+};
+
 function needsRefresh(session: StoredSession) {
   return new Date(session.accessTokenExpiresAt).getTime() - Date.now() < 60_000;
 }
 
-export async function synchronize(onSessionRefreshed: (next: StoredSession) => Promise<void>) {
-  if (inFlight) return inFlight;
-  inFlight = (async () => {
+export async function synchronize(
+  onSessionRefreshed: (next: StoredSession) => Promise<void>,
+  options: { ensureFreshPull?: boolean } = {},
+): Promise<SynchronizeResult> {
+  if (options.ensureFreshPull) {
+    while (inFlight) {
+      const active = inFlight;
+      await active.catch(() => undefined);
+      if (inFlight === active) inFlight = null;
+    }
+  }
+  if (inFlight) return inFlight.then((result) => ({ ok: result.warning === null, ...result }));
+  const run = (async () => {
     let session = await getStoredSession();
     if (!session) throw new Error('Sign in to synchronize');
     if (needsRefresh(session)) {
@@ -41,6 +56,9 @@ export async function synchronize(onSessionRefreshed: (next: StoredSession) => P
       more = pulled.hasMore;
     }
     return { warning: await takeLastSyncError() };
-  })().finally(() => { inFlight = null; });
-  return inFlight;
+  })();
+  const tracked = run.finally(() => { if (inFlight === tracked) inFlight = null; });
+  inFlight = tracked;
+  const result = await inFlight;
+  return { ok: result.warning === null, ...result };
 }

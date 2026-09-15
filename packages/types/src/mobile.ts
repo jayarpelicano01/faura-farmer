@@ -105,6 +105,8 @@ export const mobileDebtSchema = z.object({
   openedAt: dateString,
   dueDate: dateString.nullable(),
   note: z.string().trim().max(500).nullable(),
+  // Older installed clients omit this. The server preserves existing state when absent.
+  isHidden: z.boolean().optional(),
   updatedAt: z.string().datetime(),
 });
 

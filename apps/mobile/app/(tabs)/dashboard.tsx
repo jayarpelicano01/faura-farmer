@@ -85,17 +85,6 @@ export default function DashboardScreen() {
         ) : null}
       </View>
 
-      <Link href={'/debts' as Href} asChild>
-        <Pressable accessibilityLabel="Open debts" accessibilityRole="link">
-          {({ pressed }) => <View style={pressed ? styles.sectionHeaderPressed : undefined}>
-            <Card>
-              <Text style={styles.metricLabel}>Debt position</Text>
-              {debts.length === 0 ? <Text style={styles.debtEmpty}>No debts yet. Track what people owe you and what you owe them.</Text> : <View style={styles.debtTotals}><View><Text style={styles.debtLabel}>Owed to you</Text><Text style={[styles.debtValue, styles.income]}>{formatMoney(debtSummary.owedToYou)}</Text></View><View><Text style={styles.debtLabel}>You owe</Text><Text style={[styles.debtValue, styles.expense]}>{formatMoney(debtSummary.youOwe)}</Text></View><View><Text style={styles.debtLabel}>Net position</Text><Text style={styles.debtValue}>{formatMoney(debtSummary.netPosition)}</Text></View></View>}
-            </Card>
-          </View>}
-        </Pressable>
-      </Link>
-
       <View style={styles.metrics}>
         <Card>
           <Text style={styles.metricLabel}>Total balance</Text>
@@ -116,6 +105,17 @@ export default function DashboardScreen() {
           </View>
         </View>
       </View>
+
+      <Link href={'/debts' as Href} asChild>
+        <Pressable accessibilityLabel="Open debts" accessibilityRole="link">
+          {({ pressed }) => <View style={pressed ? styles.sectionHeaderPressed : undefined}>
+            <Card>
+              <Text style={styles.metricLabel}>Debt position</Text>
+              {debts.length === 0 ? <Text style={styles.debtEmpty}>No debts yet. Track what people owe you and what you owe them.</Text> : <View style={styles.debtTotals}><View><Text style={styles.debtLabel}>Owed to you</Text><Text style={[styles.debtValue, styles.income]}>{formatMoney(debtSummary.owedToYou)}</Text></View><View><Text style={styles.debtLabel}>You owe</Text><Text style={[styles.debtValue, styles.expense]}>{formatMoney(debtSummary.youOwe)}</Text></View><View><Text style={styles.debtLabel}>Net position</Text><Text style={styles.debtValue}>{formatMoney(debtSummary.netPosition)}</Text></View></View>}
+            </Card>
+          </View>}
+        </Pressable>
+      </Link>
 
       <Link href="/transactions" asChild>
         <Pressable accessibilityHint="Open all transactions" accessibilityLabel="Recent transactions" accessibilityRole="link">

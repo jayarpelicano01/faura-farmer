@@ -1,7 +1,9 @@
 import { auth } from '@/lib/auth';
 import { redirect } from 'next/navigation';
 import { prisma } from '@faura-farmer/database';
+import type { BackupEntityCounts } from '@faura-farmer/types';
 import { ProfileForm } from '@/components/profile/profile-form';
+import { BackupRestoreCard } from '@/components/profile/backup-restore-card';
 
 export default async function ProfilePage() {
   const session = await auth();
@@ -21,6 +23,11 @@ export default async function ProfilePage() {
       rateDate: true,
       rateRefreshedAt: true,
       oauthIdentities: { select: { provider: true } },
+      backupImportReceipts: {
+        orderBy: { importedAt: 'desc' },
+        take: 1,
+        select: { importedAt: true, entityCounts: true, status: true },
+      },
     },
   });
   if (!user) redirect('/login');
@@ -47,6 +54,13 @@ export default async function ProfilePage() {
           rateDate: user.rateDate?.toISOString().slice(0, 10) ?? null,
           rateRefreshedAt: user.rateRefreshedAt?.toISOString() ?? null,
         }}
+      />
+      <BackupRestoreCard
+        initialReceipt={user.backupImportReceipts[0] ? {
+          importedAt: user.backupImportReceipts[0].importedAt.toISOString(),
+          entityCounts: user.backupImportReceipts[0].entityCounts as unknown as BackupEntityCounts,
+          status: user.backupImportReceipts[0].status,
+        } : null}
       />
     </div>
   );

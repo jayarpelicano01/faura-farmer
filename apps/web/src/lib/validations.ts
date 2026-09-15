@@ -25,6 +25,7 @@ export {
   createDebtPaymentSchema,
   createDebtAdjustmentSchema,
   debtStatusActionSchema,
+  debtVisibilityActionSchema,
 } from '@faura-farmer/types';
 
 export type {
@@ -53,4 +54,5 @@ export type {
   UpdateDebtInput,
   CreateDebtPaymentInput,
   CreateDebtAdjustmentInput,
+  DebtVisibilityActionInput,
 } from '@faura-farmer/types';

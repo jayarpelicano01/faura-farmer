@@ -5,6 +5,7 @@ import { useSession } from '@/auth/session';
 import { useWorkspace } from '@/data/workspace-provider';
 import { MobileApiError, MobileConnectionError, isMobileUnauthorized } from './api';
 import { synchronize } from './sync';
+import type { SynchronizeResult } from './sync';
 
 export type SyncStatus = 'idle' | 'syncing' | 'success' | 'offline' | 'attention';
 
@@ -12,9 +13,11 @@ type SyncContextValue = {
   lastSyncFailed: boolean;
   syncing: boolean;
   syncMessage: string | null;
-  syncNow: (manual?: boolean) => Promise<void>;
+  syncNow: (manual?: boolean) => Promise<SyncResult>;
   syncStatus: SyncStatus;
 };
+
+export type SyncResult = SynchronizeResult;
 
 const SyncContext = createContext<SyncContextValue | null>(null);
 const OFFLINE_MESSAGE = 'Changes saved here. Sync when online.';
@@ -38,7 +41,6 @@ export function SyncProvider({ children }: PropsWithChildren) {
   const [lastSyncFailed, setLastSyncFailed] = useState(false);
   const [syncStatus, setSyncStatus] = useState<SyncStatus>('idle');
   const [syncMessage, setSyncMessage] = useState<string | null>(null);
-  const syncingRef = useRef(false);
   const resetTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const showStatus = useCallback((nextStatus: SyncStatus, message: string | null, duration?: number) => {
@@ -55,8 +57,7 @@ export function SyncProvider({ children }: PropsWithChildren) {
   }, []);
 
   const syncNow = useCallback(async (manual = false) => {
-    if (status !== 'ready' || activeWorkspace !== 'online' || syncingRef.current) return;
-    syncingRef.current = true;
+    if (status !== 'ready' || activeWorkspace !== 'online') return { ok: false, warning: 'Sync is not ready. Try again.' };
     if (manual) setLastSyncFailed(false);
     showStatus('syncing', 'Syncing...');
     try {
@@ -64,25 +65,27 @@ export function SyncProvider({ children }: PropsWithChildren) {
       if (connection.isConnected === false) {
         setLastSyncFailed(true);
         showStatus('offline', OFFLINE_MESSAGE, RESULT_STATUS_DURATION_MS);
-        return;
+        return { ok: false, warning: OFFLINE_MESSAGE };
       }
-      const result = await synchronize(update);
+      const result = await synchronize(update, { ensureFreshPull: manual });
       if (result.warning) {
         setLastSyncFailed(true);
         showStatus('attention', result.warning, RESULT_STATUS_DURATION_MS);
+        return result;
       } else {
         setLastSyncFailed(false);
         showStatus('success', 'Synced', RESULT_STATUS_DURATION_MS);
+        return result;
       }
     } catch (error) {
       setLastSyncFailed(true);
       if (isMobileUnauthorized(error)) {
         await requireReauthentication();
-        return;
+        return { ok: false, warning: 'Your session ended. Sign in again to restore your offline data.' };
       }
-      showStatus(error instanceof MobileConnectionError && error.problem === 'server_unavailable' ? 'offline' : 'attention', messageFor(error), RESULT_STATUS_DURATION_MS);
-    } finally {
-      syncingRef.current = false;
+      const warning = messageFor(error);
+      showStatus(error instanceof MobileConnectionError && error.problem === 'server_unavailable' ? 'offline' : 'attention', warning, RESULT_STATUS_DURATION_MS);
+      return { ok: false, warning };
     }
   }, [activeWorkspace, requireReauthentication, showStatus, status, update]);
 

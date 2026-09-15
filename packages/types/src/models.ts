@@ -246,6 +246,7 @@ export interface Debt {
   openedAt: Date;
   dueDate?: Date | null;
   note?: string | null;
+  isHidden: boolean;
   createdAt: Date;
   updatedAt: Date;
 }

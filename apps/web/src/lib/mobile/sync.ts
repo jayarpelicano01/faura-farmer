@@ -125,8 +125,8 @@ function serializePerson(record: { id: string; displayName: string; contact: str
   return { id: record.id, displayName: record.displayName, contact: record.contact, note: record.note, updatedAt: record.updatedAt.toISOString() };
 }
 
-function serializeDebt(record: { id: string; personId: string; direction: string; originalPrincipal: Prisma.Decimal; currency: string; status: string; openedAt: Date; dueDate: Date | null; note: string | null; updatedAt: Date }): MobileDebt {
-  return { id: record.id, personId: record.personId, direction: record.direction as MobileDebt['direction'], originalPrincipal: String(record.originalPrincipal), currency: record.currency as MobileDebt['currency'], status: record.status as MobileDebt['status'], openedAt: record.openedAt.toISOString().slice(0, 10), dueDate: record.dueDate?.toISOString().slice(0, 10) ?? null, note: record.note, updatedAt: record.updatedAt.toISOString() };
+function serializeDebt(record: { id: string; personId: string; direction: string; originalPrincipal: Prisma.Decimal; currency: string; status: string; openedAt: Date; dueDate: Date | null; note: string | null; isHidden: boolean; updatedAt: Date }): MobileDebt {
+  return { id: record.id, personId: record.personId, direction: record.direction as MobileDebt['direction'], originalPrincipal: String(record.originalPrincipal), currency: record.currency as MobileDebt['currency'], status: record.status as MobileDebt['status'], openedAt: record.openedAt.toISOString().slice(0, 10), dueDate: record.dueDate?.toISOString().slice(0, 10) ?? null, note: record.note, isHidden: record.isHidden, updatedAt: record.updatedAt.toISOString() };
 }
 
 function serializeDebtAdjustment(record: { id: string; debtId: string; amount: Prisma.Decimal; reason: string; date: Date; updatedAt: Date }): MobileDebtAdjustment {
@@ -385,14 +385,20 @@ async function applyDebtUpsert(tx: Tx, userId: string, mutation: Extract<MobileS
   if (record.id !== mutation.recordId) throw new SyncRejection('INVALID_MUTATION', 'Record ID does not match mutation');
   const person = await tx.person.findFirst({ where: { id: record.personId, userId }, select: { id: true } });
   if (!person) throw new SyncRejection('PERSON_NOT_FOUND', 'Debt person was not found');
-  const existing = await tx.debt.findUnique({ where: { id: record.id }, select: { id: true, userId: true, personId: true, direction: true, currency: true, originalPrincipal: true } });
+  const existing = await tx.debt.findUnique({ where: { id: record.id }, select: { id: true, userId: true, personId: true, direction: true, currency: true, originalPrincipal: true, status: true, isHidden: true } });
   isOwned(existing, userId);
   if (existing && (existing.personId !== record.personId || existing.direction !== record.direction || existing.currency.toUpperCase() !== record.currency || !existing.originalPrincipal.equals(record.originalPrincipal))) {
     throw new SyncRejection('IMMUTABLE_DEBT', 'Debt person, direction, currency, and principal cannot be changed');
   }
+  if (existing && record.isHidden !== undefined && record.isHidden !== existing.isHidden && existing.status !== 'paid' && existing.status !== 'written_off') {
+    throw new SyncRejection('DEBT_NOT_CLOSED', 'Only paid or written-off debts can be hidden or unhidden');
+  }
+  const nextIsHidden = record.status === 'open' || record.status === 'partially_paid'
+    ? false
+    : record.isHidden;
   const saved = existing
-    ? await tx.debt.update({ where: { id: record.id }, data: { dueDate: record.dueDate ? date(record.dueDate) : null, note: record.note, status: record.status } })
-    : await tx.debt.create({ data: { id: record.id, userId, personId: record.personId, direction: record.direction, originalPrincipal: record.originalPrincipal, currency: record.currency, status: record.status, openedAt: date(record.openedAt), dueDate: record.dueDate ? date(record.dueDate) : null, note: record.note } });
+    ? await tx.debt.update({ where: { id: record.id }, data: { dueDate: record.dueDate ? date(record.dueDate) : null, note: record.note, status: record.status, ...(nextIsHidden === undefined ? {} : { isHidden: nextIsHidden }) } })
+    : await tx.debt.create({ data: { id: record.id, userId, personId: record.personId, direction: record.direction, originalPrincipal: record.originalPrincipal, currency: record.currency, status: record.status, openedAt: date(record.openedAt), dueDate: record.dueDate ? date(record.dueDate) : null, note: record.note, isHidden: record.isHidden ?? false } });
   const serialized = serializeDebt(saved);
   await appendChange(tx, userId, 'debt', saved.id, 'upsert', serialized);
   return serialized;
@@ -732,6 +738,66 @@ export async function pullMobileChanges(userId: string, afterCursor: string): Pr
           : row.data as unknown as MobileAccount | MobileTransaction | MobileBudget | MobileMonthlyBudget | MobileRecurringRule | MobilePerson | MobileDebt | MobileDebtAdjustment | MobileDebtPayment | MobileDebtCashEvent,
     })),
   };
+}
+
+export type BackupRestoreRecordIds = {
+  accounts: string[];
+  categories: string[];
+  transactions: string[];
+  budgets: string[];
+  monthlyBudgets: string[];
+  recurringRules: string[];
+  persons: string[];
+  debts: string[];
+  debtAdjustments: string[];
+  debtPayments: string[];
+  debtCashEvents: string[];
+};
+
+/** Adds imported records to the same user-scoped mobile change feed transaction. */
+export async function appendBackupRestoreChanges(tx: Tx, userId: string, ids: BackupRestoreRecordIds) {
+  const [
+    accounts,
+    categories,
+    recurringRules,
+    transactions,
+    budgets,
+    monthlyBudgets,
+    persons,
+    debts,
+    debtAdjustments,
+    debtPayments,
+    debtCashEvents,
+  ] = await Promise.all([
+    tx.account.findMany({ where: { userId, id: { in: ids.accounts } } }),
+    tx.category.findMany({ where: { userId, id: { in: ids.categories } } }),
+    tx.recurringRule.findMany({ where: { userId, id: { in: ids.recurringRules } } }),
+    tx.transaction.findMany({ where: { userId, id: { in: ids.transactions } } }),
+    tx.budget.findMany({ where: { userId, id: { in: ids.budgets } } }),
+    tx.monthlyBudget.findMany({ where: { userId, id: { in: ids.monthlyBudgets } } }),
+    tx.person.findMany({ where: { userId, id: { in: ids.persons } } }),
+    tx.debt.findMany({ where: { userId, id: { in: ids.debts } } }),
+    tx.debtAdjustment.findMany({ where: { id: { in: ids.debtAdjustments }, debt: { userId } } }),
+    tx.debtPayment.findMany({ where: { id: { in: ids.debtPayments }, debt: { userId } } }),
+    tx.debtCashEvent.findMany({ where: { id: { in: ids.debtCashEvents }, debt: { userId } } }),
+  ]);
+  for (const record of accounts) await appendChange(tx, userId, 'account', record.id, 'upsert', serializeAccount(record));
+  for (const record of categories) await appendChange(tx, userId, 'category', record.id, 'upsert', serializeCategory(record));
+  for (const record of recurringRules) await appendChange(tx, userId, 'recurring_rule', record.id, 'upsert', serializeRecurringRule(record));
+  for (const record of transactions) {
+    if (record.transferGroupId && record.transferRole !== 'outgoing') continue;
+    const incoming = record.transferGroupId
+      ? transactions.find((candidate) => candidate.transferGroupId === record.transferGroupId && candidate.transferRole === 'incoming') ?? null
+      : null;
+    await appendChange(tx, userId, 'transaction', record.id, 'upsert', serializeTransaction(record, incoming?.accountId ?? null));
+  }
+  for (const record of budgets) await appendChange(tx, userId, 'budget', record.id, 'upsert', serializeBudget(record, new Date().toISOString()));
+  for (const record of monthlyBudgets) await appendChange(tx, userId, 'monthly_budget', record.id, 'upsert', serializeMonthlyBudget(record, new Date().toISOString()));
+  for (const record of persons) await appendChange(tx, userId, 'person', record.id, 'upsert', serializePerson(record));
+  for (const record of debts) await appendChange(tx, userId, 'debt', record.id, 'upsert', serializeDebt(record));
+  for (const record of debtAdjustments) await appendChange(tx, userId, 'debt_adjustment', record.id, 'upsert', serializeDebtAdjustment(record));
+  for (const record of debtPayments) await appendChange(tx, userId, 'debt_payment', record.id, 'upsert', serializeDebtPayment(record));
+  for (const record of debtCashEvents) await appendChange(tx, userId, 'debt_cash_event', record.id, 'upsert', serializeDebtCashEvent(record));
 }
 
 /**

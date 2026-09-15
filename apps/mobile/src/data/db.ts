@@ -1,10 +1,42 @@
 import * as Crypto from 'expo-crypto';
 import * as SQLite from 'expo-sqlite';
-import type { MobileAccount, MobileBudget, MobileCategory, MobileDebt, MobileDebtAdjustment, MobileDebtCashEvent, MobileDebtPayment, MobileMonthlyBudget, MobilePerson, MobileProfile, MobileRecurringRule, MobileSyncChange, MobileSyncMutation, MobileTransaction } from '@faura-farmer/types';
+import { emptyBackupEntityCounts, type BackupDocument, type BackupEntityCounts, type BackupRestorePreview, type BackupRestoreResult, type MobileAccount, type MobileBudget, type MobileCategory, type MobileDebt, type MobileDebtAdjustment, type MobileDebtCashEvent, type MobileDebtPayment, type MobileMonthlyBudget, type MobilePerson, type MobileProfile, type MobileRecurringRule, type MobileSyncChange, type MobileSyncMutation, type MobileTransaction } from '@faura-farmer/types';
+import { localRestoreRecords, planLocalBackupRestore, type LocalBackupRestoreRecords } from '@/backup/restore';
 
 export type Entity = 'account' | 'category' | 'transaction' | 'budget' | 'monthly_budget' | 'recurring_rule' | 'person' | 'debt' | 'debt_adjustment' | 'debt_payment' | 'debt_cash_event';
 type RecordFor<E extends Entity> = E extends 'account' ? MobileAccount : E extends 'category' ? MobileCategory : E extends 'transaction' ? MobileTransaction : E extends 'budget' ? MobileBudget : E extends 'monthly_budget' ? MobileMonthlyBudget : E extends 'recurring_rule' ? MobileRecurringRule : E extends 'person' ? MobilePerson : E extends 'debt' ? MobileDebt : E extends 'debt_adjustment' ? MobileDebtAdjustment : E extends 'debt_payment' ? MobileDebtPayment : MobileDebtCashEvent;
 type LocalRecord = MobileAccount | MobileCategory | MobileTransaction | MobileBudget | MobileMonthlyBudget | MobileRecurringRule | MobilePerson | MobileDebt | MobileDebtAdjustment | MobileDebtPayment | MobileDebtCashEvent;
+
+export type LocalBackupSnapshot = {
+  profile: MobileProfile | null;
+  accounts: MobileAccount[];
+  categories: MobileCategory[];
+  transactions: MobileTransaction[];
+  budgets: MobileBudget[];
+  monthlyBudgets: MobileMonthlyBudget[];
+  recurringRules: MobileRecurringRule[];
+  persons: MobilePerson[];
+  debts: MobileDebt[];
+  debtAdjustments: MobileDebtAdjustment[];
+  debtPayments: MobileDebtPayment[];
+  debtCashEvents: MobileDebtCashEvent[];
+  mutations: MobileSyncMutation[];
+  latestPendingChangeAt: string | null;
+};
+
+export type PendingBackupRestoreStage = 'preview-ready' | 'account-restored';
+
+export type PendingBackupRestore = {
+  backupId: string;
+  entityCounts: BackupEntityCounts;
+  file: string;
+  preview: BackupRestorePreview;
+  savedAt: string;
+  workspace: 'local' | 'online';
+  stage: PendingBackupRestoreStage;
+  restoredNotice?: string;
+  successNotice?: string;
+};
 
 export type TransactionPageCursor = {
   updatedAt: string;
@@ -27,6 +59,12 @@ export type DatabaseHandle = {
   getProfileDetails: () => Promise<MobileProfile | null>;
   getLastSyncedAt: () => Promise<string | null>;
   getPendingSyncCount: () => Promise<number>;
+  getBackupSnapshot: () => Promise<LocalBackupSnapshot>;
+  savePendingBackupRestore: (restore: PendingBackupRestore) => Promise<void>;
+  getPendingBackupRestore: () => Promise<PendingBackupRestore | null>;
+  clearPendingBackupRestore: () => Promise<void>;
+  previewBackupRestore: (document: BackupDocument) => Promise<BackupRestorePreview>;
+  restoreBackup: (document: BackupDocument) => Promise<BackupRestoreResult>;
   listRecords: <E extends Entity>(entity: E) => Promise<RecordFor<E>[]>;
   listTransactionPage: (args?: { cursor?: TransactionPageCursor | null; limit?: number }) => Promise<TransactionPage>;
   queueUpsert: <E extends Entity>(entity: E, record: RecordFor<E>) => Promise<void>;
@@ -154,6 +192,10 @@ export function createDatabase(name: string): DatabaseHandle {
 
   async function getProfileDetails() {
     const db = await database();
+    return getProfileDetailsFrom(db);
+  }
+
+  async function getProfileDetailsFrom(db: SQLite.SQLiteDatabase) {
     const profile = await db.getFirstAsync<{
       id: string;
       email: string;
@@ -161,7 +203,7 @@ export function createDatabase(name: string): DatabaseHandle {
       username: string | null;
       has_password: number | null;
       display_currency: 'PHP' | 'USD' | null;
-      usd_per_php: string | null;
+      usd_per_php: string | number | null;
       rate_date: string | null;
       rate_refreshed_at: string | null;
     }>('SELECT id, email, name, username, has_password, display_currency, usd_per_php, rate_date, rate_refreshed_at FROM profile LIMIT 1');
@@ -173,7 +215,7 @@ export function createDatabase(name: string): DatabaseHandle {
       username: profile.username,
       hasPassword: profile.has_password === 1,
       displayCurrency: profile.display_currency === 'USD' ? 'USD' : 'PHP',
-      usdPerPhp: profile.usd_per_php,
+      usdPerPhp: profile.usd_per_php === null ? null : String(profile.usd_per_php),
       rateDate: profile.rate_date,
       rateRefreshedAt: profile.rate_refreshed_at,
     } satisfies MobileProfile;
@@ -196,8 +238,188 @@ export function createDatabase(name: string): DatabaseHandle {
 
   async function listRecords<E extends Entity>(entity: E): Promise<RecordFor<E>[]> {
     const db = await database();
+    return listRecordsFrom(db, entity);
+  }
+
+  async function listRecordsFrom<E extends Entity>(db: SQLite.SQLiteDatabase, entity: E): Promise<RecordFor<E>[]> {
     const rows = await db.getAllAsync<{ data: string }>(`SELECT data FROM ${table(entity)} WHERE deleted_at IS NULL ORDER BY updated_at DESC`);
     return rows.map((row) => JSON.parse(row.data) as RecordFor<E>);
+  }
+
+  async function listBackupRestoreRecordsFrom(db: SQLite.SQLiteDatabase): Promise<LocalBackupRestoreRecords> {
+    const all = async <E extends Entity>(entity: E) => {
+      const rows = await db.getAllAsync<{ data: string }>(`SELECT data FROM ${table(entity)}`);
+      return rows.map((row) => JSON.parse(row.data) as RecordFor<E>);
+    };
+    const [accounts, categories, transactions, budgets, monthlyBudgets, recurringRules, persons, debts, debtAdjustments, debtPayments, debtCashEvents] = await Promise.all([
+      all('account'),
+      all('category'),
+      all('transaction'),
+      all('budget'),
+      all('monthly_budget'),
+      all('recurring_rule'),
+      all('person'),
+      all('debt'),
+      all('debt_adjustment'),
+      all('debt_payment'),
+      all('debt_cash_event'),
+    ]);
+    return { accounts, categories, transactions, budgets, monthlyBudgets, recurringRules, persons, debts, debtAdjustments, debtPayments, debtCashEvents };
+  }
+
+  async function previewBackupRestore(document: BackupDocument) {
+    const db = await database();
+    let preview: BackupRestorePreview | null = null;
+    await db.withTransactionAsync(async () => {
+      preview = planLocalBackupRestore(document, await listBackupRestoreRecordsFrom(db));
+    });
+    if (!preview) throw new Error('Unable to preview this backup.');
+    return preview;
+  }
+
+  async function restoreBackup(document: BackupDocument): Promise<BackupRestoreResult> {
+    const db = await database();
+    let result: BackupRestoreResult | null = null;
+    await db.withTransactionAsync(async () => {
+      const [profile, existing] = await Promise.all([
+        getProfileDetailsFrom(db),
+        listBackupRestoreRecordsFrom(db),
+      ]);
+      if (!profile) throw new Error('Create a local workspace before restoring a backup.');
+
+      const plan = planLocalBackupRestore(document, existing);
+      if (!plan.canRestore) {
+        result = { ...plan, added: emptyBackupEntityCounts() };
+        return;
+      }
+
+      const records = localRestoreRecords(document, profile.id);
+      const present = {
+        accounts: new Set(existing.accounts.map((record) => record.id)),
+        categories: new Set(existing.categories.map((record) => record.id)),
+        transactions: new Set(existing.transactions.map((record) => record.id)),
+        budgets: new Set(existing.budgets.map((record) => record.id)),
+        monthlyBudgets: new Set(existing.monthlyBudgets.map((record) => record.id)),
+        recurringRules: new Set(existing.recurringRules.map((record) => record.id)),
+        persons: new Set(existing.persons.map((record) => record.id)),
+        debts: new Set(existing.debts.map((record) => record.id)),
+        debtAdjustments: new Set(existing.debtAdjustments.map((record) => record.id)),
+        debtPayments: new Set(existing.debtPayments.map((record) => record.id)),
+        debtCashEvents: new Set(existing.debtCashEvents.map((record) => record.id)),
+      };
+      const added = emptyBackupEntityCounts();
+      const add = async <E extends Entity>(entity: E, key: keyof typeof present, rows: RecordFor<E>[]) => {
+        for (const record of rows) {
+          if (present[key].has(record.id)) continue;
+          await upsertRecord(db, entity, record);
+          present[key].add(record.id);
+          const countKey = key as keyof BackupEntityCounts;
+          added[countKey] += 1;
+        }
+      };
+
+      // Dependencies are inserted first. This path intentionally does not touch profile, metadata, or outbox rows.
+      await add('account', 'accounts', records.accounts);
+      await add('category', 'categories', records.categories);
+      await add('recurring_rule', 'recurringRules', records.recurringRules);
+      await add('transaction', 'transactions', records.transactions);
+      await add('budget', 'budgets', records.budgets);
+      await add('monthly_budget', 'monthlyBudgets', records.monthlyBudgets);
+      await add('person', 'persons', records.persons);
+      await add('debt', 'debts', records.debts);
+      await add('debt_adjustment', 'debtAdjustments', records.debtAdjustments);
+      await add('debt_payment', 'debtPayments', records.debtPayments);
+      await add('debt_cash_event', 'debtCashEvents', records.debtCashEvents);
+      result = { ...plan, added };
+    });
+    if (!result) throw new Error('Unable to restore this backup.');
+    return result;
+  }
+
+  async function getBackupSnapshot(): Promise<LocalBackupSnapshot> {
+    const db = await database();
+    let snapshot: LocalBackupSnapshot | null = null;
+    await db.withTransactionAsync(async () => {
+      const [
+        profile,
+        accounts,
+        categories,
+        transactions,
+        budgets,
+        monthlyBudgets,
+        recurringRules,
+        persons,
+        debts,
+        debtAdjustments,
+        debtPayments,
+        debtCashEvents,
+        outbox,
+      ] = await Promise.all([
+        getProfileDetailsFrom(db),
+        listRecordsFrom(db, 'account'),
+        listRecordsFrom(db, 'category'),
+        listRecordsFrom(db, 'transaction'),
+        listRecordsFrom(db, 'budget'),
+        listRecordsFrom(db, 'monthly_budget'),
+        listRecordsFrom(db, 'recurring_rule'),
+        listRecordsFrom(db, 'person'),
+        listRecordsFrom(db, 'debt'),
+        listRecordsFrom(db, 'debt_adjustment'),
+        listRecordsFrom(db, 'debt_payment'),
+        listRecordsFrom(db, 'debt_cash_event'),
+        db.getAllAsync<{ payload: string; created_at: string }>('SELECT payload, created_at FROM outbox ORDER BY created_at ASC'),
+      ]);
+      snapshot = {
+        profile,
+        accounts,
+        categories,
+        transactions,
+        budgets,
+        monthlyBudgets,
+        recurringRules,
+        persons,
+        debts,
+        debtAdjustments,
+        debtPayments,
+        debtCashEvents,
+        mutations: outbox.map((row) => JSON.parse(row.payload) as MobileSyncMutation),
+        latestPendingChangeAt: outbox.at(-1)?.created_at ?? null,
+      };
+    });
+    if (!snapshot) throw new Error('Unable to read the local backup snapshot');
+    return snapshot;
+  }
+
+  async function savePendingBackupRestore(restore: PendingBackupRestore) {
+    const db = await database();
+    await db.runAsync('INSERT OR REPLACE INTO metadata (key, value) VALUES (?, ?)', ['pending_backup_restore', JSON.stringify(restore)]);
+  }
+
+  async function getPendingBackupRestore(): Promise<PendingBackupRestore | null> {
+    const db = await database();
+    const row = await db.getFirstAsync<{ value: string }>('SELECT value FROM metadata WHERE key = ?', ['pending_backup_restore']);
+    if (!row) return null;
+    try {
+      const value = JSON.parse(row.value) as PendingBackupRestore;
+      if (
+        !value ||
+        typeof value.file !== 'string' ||
+        typeof value.backupId !== 'string' ||
+        !value.entityCounts ||
+        !value.preview ||
+        value.preview.backupId !== value.backupId ||
+        (value.stage !== 'preview-ready' && value.stage !== 'account-restored') ||
+        (value.workspace !== 'local' && value.workspace !== 'online')
+      ) return null;
+      return value;
+    } catch {
+      return null;
+    }
+  }
+
+  async function clearPendingBackupRestore() {
+    const db = await database();
+    await db.runAsync('DELETE FROM metadata WHERE key = ?', ['pending_backup_restore']);
   }
 
   async function getPendingSyncCount() {
@@ -362,6 +584,12 @@ export function createDatabase(name: string): DatabaseHandle {
     getProfileDetails,
     getLastSyncedAt,
     getPendingSyncCount,
+    getBackupSnapshot,
+    savePendingBackupRestore,
+    getPendingBackupRestore,
+    clearPendingBackupRestore,
+    previewBackupRestore,
+    restoreBackup,
     listRecords,
     listTransactionPage,
     queueUpsert,

@@ -201,6 +201,7 @@ export function buildBalanceTimeline({
   transactions,
   period,
   preference,
+  anchor,
 }: {
   account: MobileAccount;
   accounts: MobileAccount[];
@@ -209,8 +210,9 @@ export function buildBalanceTimeline({
   transactions: MobileTransaction[];
   period: BalanceTimelinePeriod;
   preference: CurrencyPreference;
+  anchor?: Date;
 }): BalancePoint[] {
-  const buckets = timelineBuckets(period);
+  const buckets = timelineBuckets(period, anchor);
   const ledger = relevantTransactions(transactions, account.id);
   const debtLedger = debtCashEvents.filter((event) => event.accountId === account.id).sort((left, right) => left.date.localeCompare(right.date) || left.updatedAt.localeCompare(right.updatedAt) || left.id.localeCompare(right.id));
   const accountsById = new Map(accounts.map((item) => [item.id, item]));
@@ -272,6 +274,7 @@ export function buildCombinedBalanceTimeline({
   transactions,
   period,
   preference,
+  anchor,
 }: {
   accounts: MobileAccount[];
   categories: MobileCategory[];
@@ -279,8 +282,9 @@ export function buildCombinedBalanceTimeline({
   transactions: MobileTransaction[];
   period: BalanceTimelinePeriod;
   preference: CurrencyPreference;
+  anchor?: Date;
 }): BalancePoint[] {
-  const timelines = accounts.map((account) => buildBalanceTimeline({ account, accounts, categories, debtCashEvents, transactions, period, preference }));
+  const timelines = accounts.map((account) => buildBalanceTimeline({ account, accounts, categories, debtCashEvents, transactions, period, preference, anchor }));
   return timelines[0]?.map((point, index) => ({
     ...point,
     balance: decimal(timelines.reduce((total, timeline) => total + number(timeline[index]?.balance ?? '0'), 0)),

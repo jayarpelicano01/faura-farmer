@@ -88,7 +88,17 @@ describe('mobile profile routes', () => {
     expect(response.status).toBe(200);
     expect(response.headers.get('cache-control')).toBe('private, no-store');
     await expect(response.json()).resolves.toEqual({
-      user: { id: userId, email: 'farmer@example.com', name: 'Faura Farmer', username: 'faura', hasPassword: true },
+      user: {
+        id: userId,
+        email: 'farmer@example.com',
+        name: 'Faura Farmer',
+        username: 'faura',
+        hasPassword: true,
+        displayCurrency: 'PHP',
+        usdPerPhp: null,
+        rateDate: null,
+        rateRefreshedAt: null,
+      },
     });
   });
 

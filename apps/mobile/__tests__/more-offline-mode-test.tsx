@@ -4,6 +4,7 @@ const mockRouterReplace = jest.fn();
 const mockMobileRequest = jest.fn();
 const mockSetPreference = jest.fn();
 const mockSyncNow = jest.fn();
+const mockReload = jest.fn();
 const mockSession = {
   clearOffline: jest.fn(),
   lockDelay: 15,
@@ -29,6 +30,7 @@ jest.mock('@/auth/session', () => ({
   useSession: () => mockSession,
 }));
 jest.mock('@/data/workspace-provider', () => ({ useWorkspace: () => mockWorkspace }));
+jest.mock('@/data/hooks/use-workspace-data', () => ({ useWorkspaceData: () => ({ reload: mockReload }) }));
 jest.mock('@/sync/use-sync', () => ({ useSync: () => ({ lastSyncFailed: false, syncNow: mockSyncNow }) }));
 jest.mock('@/ui/currency', () => ({
   useCurrency: () => ({ displayCurrency: 'PHP', rateDate: null, rateRefreshedAt: null, setPreference: mockSetPreference, usdPerPhp: null }),
@@ -89,6 +91,7 @@ beforeEach(() => {
   mockWorkspace.deleteLocalProfile.mockResolvedValue(undefined);
   mockWorkspace.resetToOnline.mockResolvedValue(undefined);
   mockSetPreference.mockResolvedValue(undefined);
+  mockReload.mockResolvedValue(true);
 });
 
 async function loadLocalProfile() {

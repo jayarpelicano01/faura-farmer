@@ -1,11 +1,13 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { HandCoins, Pencil, Plus, RotateCcw, Trash2, WalletCards } from 'lucide-react';
+import { HandCoins, Pencil, Plus, RotateCcw, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Label } from '@/components/ui/label';
 import { apiFetch } from '@/lib/api';
 import { formatDate, formatMoney, todayISO } from '@/lib/format';
 
@@ -21,6 +23,7 @@ type DebtView = {
   openedAt: string;
   dueDate: string | null;
   note: string | null;
+  isHidden: boolean;
   outstandingBalance: string;
   person: PersonView;
   adjustments: Array<{ id: string; amount: string; reason: string; date: string }>;
@@ -63,9 +66,10 @@ export function DebtManager({ accounts }: { accounts: AccountOption[] }) {
 
   const groups = useMemo(() => {
     const map = new Map<string, DebtView[]>();
-    for (const debt of debts) map.set(debt.person.displayName, [...(map.get(debt.person.displayName) ?? []), debt]);
+    for (const debt of debts.filter((debt) => !debt.isHidden)) map.set(debt.person.displayName, [...(map.get(debt.person.displayName) ?? []), debt]);
     return [...map.entries()];
   }, [debts]);
+  const hiddenDebts = useMemo(() => debts.filter((debt) => debt.isHidden), [debts]);
 
   async function statusAction(debt: DebtView, action: 'reopen' | 'write_off') {
     try {
@@ -74,6 +78,16 @@ export function DebtManager({ accounts }: { accounts: AccountOption[] }) {
       await load();
     } catch (cause) {
       toast.error(cause instanceof Error ? cause.message : 'Unable to update debt');
+    }
+  }
+
+  async function visibilityAction(debt: DebtView, action: 'hide' | 'unhide') {
+    try {
+      await apiFetch(`/api/debts/${debt.id}/visibility`, { method: 'POST', body: JSON.stringify({ action }) });
+      toast.success(action === 'hide' ? 'Debt hidden' : 'Debt restored to the normal list');
+      await load();
+    } catch (cause) {
+      toast.error(cause instanceof Error ? cause.message : 'Unable to update debt visibility');
     }
   }
 
@@ -112,10 +126,17 @@ export function DebtManager({ accounts }: { accounts: AccountOption[] }) {
         <section key={personName} className="space-y-3" aria-label={`${personName}'s debts`}>
           <h2 className="font-display text-lg font-semibold text-foreground">{personName}</h2>
           <div className="grid gap-3 xl:grid-cols-2">
-            {personDebts.map((debt) => <DebtCard key={debt.id} debt={debt} onEntry={setEntry} onStatus={statusAction} onSaved={load} />)}
+            {personDebts.map((debt) => <DebtCard key={debt.id} debt={debt} onEntry={setEntry} onStatus={statusAction} onVisibility={visibilityAction} onSaved={load} />)}
           </div>
         </section>
       ))}
+
+      {hiddenDebts.length > 0 ? <section className="space-y-3" aria-label="Hidden debts">
+        <div><h2 className="font-display text-lg font-semibold text-foreground">Hidden debts</h2><p className="text-sm text-muted-foreground">Closed debts stay in your ledger and dashboard totals. Unhide one to return it to the normal list.</p></div>
+        <div className="grid gap-3 xl:grid-cols-2">
+          {hiddenDebts.map((debt) => <DebtCard key={debt.id} debt={debt} onEntry={setEntry} onStatus={statusAction} onVisibility={visibilityAction} onSaved={load} />)}
+        </div>
+      </section> : null}
 
       <Card>
         <CardHeader className="flex flex-row items-center justify-between gap-3">
@@ -140,7 +161,7 @@ export function DebtManager({ accounts }: { accounts: AccountOption[] }) {
   );
 }
 
-function DebtCard({ debt, onEntry, onStatus, onSaved }: { debt: DebtView; onEntry: (entry: { debt: DebtView; kind: 'payment' | 'adjustment' }) => void; onStatus: (debt: DebtView, action: 'reopen' | 'write_off') => Promise<void>; onSaved: () => Promise<void> }) {
+function DebtCard({ debt, onEntry, onStatus, onVisibility, onSaved }: { debt: DebtView; onEntry: (entry: { debt: DebtView; kind: 'payment' | 'adjustment' }) => void; onStatus: (debt: DebtView, action: 'reopen' | 'write_off') => Promise<void>; onVisibility: (debt: DebtView, action: 'hide' | 'unhide') => Promise<void>; onSaved: () => Promise<void> }) {
   const [editing, setEditing] = useState(false);
   const [dueDate, setDueDate] = useState(debt.dueDate ?? '');
   const [note, setNote] = useState(debt.note ?? '');
@@ -159,7 +180,7 @@ function DebtCard({ debt, onEntry, onStatus, onSaved }: { debt: DebtView; onEntr
       <div className="flex flex-wrap gap-2 text-xs"><span className="rounded-full bg-accent px-2 py-1 text-muted-foreground">{debt.status.replace('_', ' ')}</span><span className="rounded-full bg-accent px-2 py-1 text-muted-foreground">Principal {formatMoney(debt.originalPrincipal, debt.currency)}</span><span className="rounded-full bg-accent px-2 py-1 text-muted-foreground">{debt.payments.length} payment{debt.payments.length === 1 ? '' : 's'}</span></div>
       {debt.note ? <p className="text-sm text-muted-foreground">{debt.note}</p> : null}
       {editing ? <div className="grid gap-2 border-t border-border pt-3 sm:grid-cols-2"><Input type="date" value={dueDate} onChange={(event) => setDueDate(event.target.value)} /><Input value={note} placeholder="Note" onChange={(event) => setNote(event.target.value)} /><div className="flex gap-2"><Button size="sm" onClick={() => void save()}>Save</Button><Button size="sm" variant="ghost" onClick={() => setEditing(false)}>Cancel</Button></div></div> : null}
-      <div className="flex flex-wrap gap-1 border-t border-border pt-3"><Button size="sm" variant="ghost" onClick={() => setEditing(!editing)}><Pencil /> Edit</Button>{isActive ? <><Button size="sm" variant="ghost" onClick={() => onEntry({ debt, kind: 'payment' })}>Record payment</Button><Button size="sm" variant="ghost" onClick={() => onEntry({ debt, kind: 'adjustment' })}>Adjustment</Button><Button size="sm" variant="ghost" className="text-expense" onClick={() => void onStatus(debt, 'write_off')}>Write off</Button></> : <Button size="sm" variant="ghost" onClick={() => void onStatus(debt, 'reopen')}><RotateCcw /> Reopen</Button>}</div>
+      <div className="flex flex-wrap gap-1 border-t border-border pt-3"><Button size="sm" variant="ghost" onClick={() => setEditing(!editing)}><Pencil /> Edit</Button>{isActive ? <><Button size="sm" variant="ghost" onClick={() => onEntry({ debt, kind: 'payment' })}>Record payment</Button><Button size="sm" variant="ghost" onClick={() => onEntry({ debt, kind: 'adjustment' })}>Adjustment</Button><Button size="sm" variant="ghost" className="text-expense" onClick={() => void onStatus(debt, 'write_off')}>Write off</Button></> : <><Button size="sm" variant="ghost" onClick={() => void onStatus(debt, 'reopen')}><RotateCcw /> Reopen</Button><Button size="sm" variant="ghost" onClick={() => void onVisibility(debt, debt.isHidden ? 'unhide' : 'hide')}>{debt.isHidden ? 'Unhide' : 'Hide'}</Button></>}</div>
     </CardContent>
   </Card>;
 }

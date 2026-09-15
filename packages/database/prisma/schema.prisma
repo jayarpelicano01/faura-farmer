@@ -91,6 +91,7 @@ model User {
   mobileSessions      MobileSession[]
   mobileSyncChanges   MobileSyncChange[]
   mobileMutations     MobileMutation[]
+  backupImportReceipts BackupImportReceipt[]
   persons             Person[]
   debts               Debt[]
 
@@ -255,6 +256,7 @@ model Debt {
   openedAt          DateTime      @default(now()) @map("opened_at") @db.Date
   dueDate           DateTime?     @map("due_date") @db.Date
   note              String?
+  isHidden          Boolean       @default(false) @map("is_hidden")
   createdAt         DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt         DateTime      @updatedAt @map("updated_at") @db.Timestamptz(6)
 
@@ -267,6 +269,7 @@ model Debt {
   @@index([userId])
   @@index([personId])
   @@index([userId, status])
+  @@index([userId, isHidden])
   @@unique([id, userId])
   @@map("debts")
 }
@@ -441,4 +444,19 @@ model MobileMutation {
   @@unique([userId, clientMutationId])
   @@index([userId, createdAt])
   @@map("mobile_mutations")
+}
+
+model BackupImportReceipt {
+  id           String   @id @default(uuid()) @db.Uuid
+  userId       String   @map("user_id") @db.Uuid
+  backupId     String   @map("backup_id") @db.Uuid
+  importedAt   DateTime @default(now()) @map("imported_at") @db.Timestamptz(6)
+  entityCounts Json     @map("entity_counts")
+  status       String   @default("success")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, backupId])
+  @@index([userId])
+  @@map("backup_import_receipts")
 }

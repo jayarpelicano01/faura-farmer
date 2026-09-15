@@ -218,8 +218,19 @@ export async function changeDebtStatus(userId: string, debtId: string, action: '
       if (debt.status !== 'paid' && debt.status !== 'written_off') {
         throw new DebtLedgerError('DEBT_NOT_CLOSED', 'Only paid or written-off debts can be reopened');
       }
-      await tx.debt.update({ where: { id: debt.id }, data: { status: 'open' } });
+      await tx.debt.update({ where: { id: debt.id }, data: { status: 'open', isHidden: false } });
     }
+    return debtForUser(tx, userId, debt.id);
+  });
+}
+
+export async function changeDebtVisibility(userId: string, debtId: string, action: 'hide' | 'unhide') {
+  return prisma.$transaction(async (tx) => {
+    const debt = await debtForUser(tx, userId, debtId);
+    if (debt.status !== 'paid' && debt.status !== 'written_off') {
+      throw new DebtLedgerError('DEBT_NOT_CLOSED', 'Only paid or written-off debts can be hidden or unhidden');
+    }
+    await tx.debt.update({ where: { id: debt.id }, data: { isHidden: action === 'hide' } });
     return debtForUser(tx, userId, debt.id);
   });
 }

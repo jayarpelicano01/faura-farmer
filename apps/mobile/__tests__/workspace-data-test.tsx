@@ -16,6 +16,7 @@ function Probe() {
 
 describe('WorkspaceDataProvider', () => {
   it('loads one snapshot and refreshes it after a successful sync', async () => {
+    const expectedEntities = ['account', 'budget', 'category', 'debt', 'debt_adjustment', 'debt_cash_event', 'debt_payment', 'monthly_budget', 'person', 'recurring_rule', 'transaction'];
     let syncStatus: 'idle' | 'success' = 'idle';
     const db = {
       getLastSyncedAt: jest.fn().mockResolvedValue(null),
@@ -28,11 +29,11 @@ describe('WorkspaceDataProvider', () => {
 
     const view = await render(<WorkspaceDataProvider><Probe /></WorkspaceDataProvider>);
     await waitFor(() => expect(screen.getByTestId('workspace-data').props.children).toBe('false:account-1:rule-1'));
-    expect(db.listRecords).toHaveBeenCalledTimes(6);
+    expect(db.listRecords.mock.calls.map(([entity]) => entity)).toEqual(expectedEntities);
 
     syncStatus = 'success';
     await view.rerender(<WorkspaceDataProvider><Probe /></WorkspaceDataProvider>);
     await waitFor(() => expect(screen.getByTestId('workspace-data').props.children).toBe('false:account-2:rule-2'));
-    expect(db.listRecords).toHaveBeenCalledTimes(12);
+    expect(db.listRecords.mock.calls.map(([entity]) => entity)).toEqual([...expectedEntities, ...expectedEntities]);
   });
 });

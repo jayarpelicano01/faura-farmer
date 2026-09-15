@@ -59,7 +59,7 @@ export default function DebtsScreen() {
   }
   async function saveDebt() {
     if (!debtDraft.personId || !/^\d+(\.\d{1,2})?$/.test(debtDraft.originalPrincipal) || Number(debtDraft.originalPrincipal) <= 0) return Alert.alert('Check this debt', 'Choose a person and enter a positive principal with up to two decimal places.');
-    const record: MobileDebt = { id: Crypto.randomUUID(), personId: debtDraft.personId, direction: debtDraft.direction, originalPrincipal: debtDraft.originalPrincipal, currency: debtDraft.currency, status: 'open', openedAt: debtDraft.openedAt, dueDate: debtDraft.dueDate || null, note: debtDraft.note.trim() || null, updatedAt: new Date().toISOString() };
+    const record: MobileDebt = { id: Crypto.randomUUID(), personId: debtDraft.personId, direction: debtDraft.direction, originalPrincipal: debtDraft.originalPrincipal, currency: debtDraft.currency, status: 'open', openedAt: debtDraft.openedAt, dueDate: debtDraft.dueDate || null, note: debtDraft.note.trim() || null, isHidden: false, updatedAt: new Date().toISOString() };
     if (activeWorkspace === 'online') await db.queueUpsert('debt', record); else await db.upsertLocal('debt', record);
     if (debtDraft.openingAccountId) {
       const event: MobileDebtCashEvent = { id: Crypto.randomUUID(), debtId: record.id, paymentId: null, accountId: debtDraft.openingAccountId, amount: record.originalPrincipal, direction: debtCashDirection(record.direction, 'opening'), date: record.openedAt, updatedAt: new Date().toISOString() };
@@ -95,14 +95,36 @@ export default function DebtsScreen() {
     closeEntry(); await done();
   }
   function closeEntry() { setAmount(''); setDate(today()); setNote(''); setAccountId(''); setReason('correction'); setOtherReason(''); setSelectedDebt(null); setForm(null); }
-  async function changeStatus(debt: MobileDebt, status: MobileDebt['status']) { const next = { ...debt, status, updatedAt: new Date().toISOString() }; if (activeWorkspace === 'online') await db.queueUpsert('debt', next); else await db.upsertLocal('debt', next); await done(); }
+  async function changeStatus(debt: MobileDebt, status: MobileDebt['status']) { const next = { ...debt, status, isHidden: status === 'open' ? false : debt.isHidden, updatedAt: new Date().toISOString() }; if (activeWorkspace === 'online') await db.queueUpsert('debt', next); else await db.upsertLocal('debt', next); await done(); }
+  async function changeVisibility(debt: MobileDebt, isHidden: boolean) {
+    if (debt.status !== 'paid' && debt.status !== 'written_off') return Alert.alert('Close this debt first', 'Only paid or written-off debts can be hidden or unhidden.');
+    const next = { ...debt, isHidden, updatedAt: new Date().toISOString() };
+    if (activeWorkspace === 'online') await db.queueUpsert('debt', next); else await db.upsertLocal('debt', next);
+    await done();
+  }
+  async function deletePerson(person: MobilePerson) {
+    if (debts.some((debt) => debt.personId === person.id)) return;
+    if (activeWorkspace === 'online') await db.queueDelete('person', person.id); else await db.deleteLocal('person', person.id);
+    await done();
+  }
 
   const peopleById = useMemo(() => new Map(people.map((person) => [person.id, person])), [people]);
   const groups = useMemo(() => {
     const result = new Map<string, MobileDebt[]>();
-    for (const debt of debts) { const name = peopleById.get(debt.personId)?.displayName ?? 'Unknown person'; result.set(name, [...(result.get(name) ?? []), debt]); }
+    for (const debt of debts.filter((debt) => !debt.isHidden)) { const name = peopleById.get(debt.personId)?.displayName ?? 'Unknown person'; result.set(name, [...(result.get(name) ?? []), debt]); }
     return [...result.entries()];
   }, [debts, peopleById]);
+  const hiddenDebts = useMemo(() => debts.filter((debt) => debt.isHidden), [debts]);
+  const renderDebt = (debt: MobileDebt) => {
+    const state = debtState(debt, debtAdjustments, debtPayments);
+    const active = debt.status === 'open' || debt.status === 'partially_paid';
+    return <Card key={debt.id}>
+      <View style={styles.row}><View style={styles.copy}><Text style={ui.listTitle}>{debt.direction === 'receivable' ? 'They owe you' : 'You owe them'}</Text><Text style={ui.listMeta}>Opened {debt.openedAt}{debt.dueDate ? ` · Due ${debt.dueDate}` : ''}</Text></View><Text style={[styles.amount, debt.direction === 'receivable' ? styles.income : styles.expense]}>{formatMoney(state.outstandingBalance, debt.currency)}</Text></View>
+      <View style={styles.meta}><Badge variant="muted">{debt.status.replace('_', ' ')}</Badge><Text style={ui.listMeta}>Principal {formatMoney(debt.originalPrincipal, debt.currency)}</Text></View>
+      {debt.note ? <Text style={ui.listMeta}>{debt.note}</Text> : null}
+      <View style={styles.actions}>{active ? <><Button size="compact" variant="outline" onPress={() => { setSelectedDebt(debt); setForm('payment'); }}>Payment</Button><Button size="compact" variant="outline" onPress={() => { setSelectedDebt(debt); setForm('adjustment'); }}>Adjust</Button><Button size="compact" variant="outline" onPress={() => void changeStatus(debt, 'written_off')}>Write off</Button></> : <><Button size="compact" variant="outline" onPress={() => void changeStatus(debt, 'open')}>Reopen</Button><Button size="compact" variant="outline" onPress={() => void changeVisibility(debt, !debt.isHidden)}>{debt.isHidden ? 'Unhide' : 'Hide'}</Button></>}</View>
+    </Card>;
+  };
 
   return <Screen scrollable><View style={styles.header}><View><Title>Debts</Title><Text style={styles.subtitle}>What you owe and what people owe you.</Text></View><Button size="compact" onPress={() => { setDebtDraft(blankDebt(people[0]?.id ?? '')); setForm('debt'); }}>New</Button></View>{pending > 0 && activeWorkspace === 'online' ? <Badge variant="outline">Pending sync</Badge> : null}
     {debts.length === 0 ? <Empty>Create your first debt to keep your full financial picture in one place.</Empty> : groups.map(([name, group]) => <View key={name} style={styles.group}><SectionTitle>{name}</SectionTitle>{group.map((debt) => { const state = debtState(debt, debtAdjustments, debtPayments); const active = debt.status === 'open' || debt.status === 'partially_paid'; return <Card key={debt.id}><View style={styles.row}><View style={styles.copy}><Text style={ui.listTitle}>{debt.direction === 'receivable' ? 'They owe you' : 'You owe them'}</Text><Text style={ui.listMeta}>Opened {debt.openedAt}{debt.dueDate ? ` · Due ${debt.dueDate}` : ''}</Text></View><Text style={[styles.amount, debt.direction === 'receivable' ? styles.income : styles.expense]}>{formatMoney(state.outstandingBalance, debt.currency)}</Text></View><View style={styles.meta}><Badge variant="muted">{debt.status.replace('_', ' ')}</Badge><Text style={ui.listMeta}>Principal {formatMoney(debt.originalPrincipal, debt.currency)}</Text></View>{debt.note ? <Text style={ui.listMeta}>{debt.note}</Text> : null}<View style={styles.actions}>{active ? <><Button size="compact" variant="outline" onPress={() => { setSelectedDebt(debt); setForm('payment'); }}>Payment</Button><Button size="compact" variant="outline" onPress={() => { setSelectedDebt(debt); setForm('adjustment'); }}>Adjust</Button><Button size="compact" variant="outline" onPress={() => void changeStatus(debt, 'written_off')}>Write off</Button></> : <Button size="compact" variant="outline" onPress={() => void changeStatus(debt, 'open')}>Reopen</Button>}</View></Card>; })}</View>)}

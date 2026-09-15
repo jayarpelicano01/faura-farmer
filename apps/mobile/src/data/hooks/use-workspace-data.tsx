@@ -30,7 +30,7 @@ type WorkspaceData = {
   monthlyBudgets: MobileMonthlyBudget[];
   people: MobilePerson[];
   recurringRules: MobileRecurringRule[];
-  reload: () => Promise<void>;
+  reload: () => Promise<boolean>;
   transactions: MobileTransaction[];
 };
 
@@ -60,14 +60,14 @@ export function WorkspaceDataProvider({ children }: PropsWithChildren) {
   const { syncStatus } = useSync();
   const [snapshot, setSnapshot] = useState<WorkspaceSnapshot>(emptySnapshot);
   const requestVersion = useRef(0);
-  const inFlight = useRef<{ db: DatabaseHandle; promise: Promise<void> } | null>(null);
+  const inFlight = useRef<{ db: DatabaseHandle; promise: Promise<boolean> } | null>(null);
 
   const reload = useCallback(() => {
     if (inFlight.current?.db === db) return inFlight.current.promise;
 
     const version = ++requestVersion.current;
     setSnapshot((current) => ({ ...current, loading: true, error: null }));
-    let promise: Promise<void>;
+    let promise: Promise<boolean>;
     promise = Promise.all([
       db.listRecords('account'),
       db.listRecords('budget'),
@@ -82,7 +82,7 @@ export function WorkspaceDataProvider({ children }: PropsWithChildren) {
       db.listRecords('recurring_rule'),
       db.listRecords('transaction'),
     ]).then(([accounts, budgets, categories, debts, debtAdjustments, debtCashEvents, debtPayments, lastSyncedAt, monthlyBudgets, people, recurringRules, transactions]) => {
-      if (version !== requestVersion.current) return;
+      if (version !== requestVersion.current) return false;
       setSnapshot({
         accounts,
         budgets,
@@ -99,13 +99,15 @@ export function WorkspaceDataProvider({ children }: PropsWithChildren) {
         recurringRules,
         transactions,
       });
+      return true;
     }).catch(() => {
-      if (version !== requestVersion.current) return;
+      if (version !== requestVersion.current) return false;
       setSnapshot((current) => ({
         ...current,
         error: 'Unable to load data saved on this device.',
         loading: false,
       }));
+      return false;
     }).finally(() => {
       if (inFlight.current?.promise === promise) inFlight.current = null;
     });

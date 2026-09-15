@@ -5,6 +5,7 @@ import type { MobileProfile } from '@faura-farmer/types';
 import { useSession } from '@/auth/session';
 import { OfflineModeCard } from '@/components/settings/offline-mode-card';
 import { AppLockCard } from '@/components/settings/app-lock-card';
+import { BackupCard } from '@/components/settings/backup-card';
 import { CurrencyCard } from '@/components/settings/currency-card';
 import { PasswordCard } from '@/components/settings/password-card';
 import { ProfileCard } from '@/components/settings/profile-card';
@@ -17,6 +18,7 @@ import { useLogout } from '@/data/hooks/use-logout';
 import { usePassword } from '@/data/hooks/use-password';
 import { useProfile } from '@/data/hooks/use-profile';
 import { useWorkspace } from '@/data/workspace-provider';
+import { useWorkspaceData } from '@/data/hooks/use-workspace-data';
 import { BodyText, InlineNotice, Screen, Title } from '@/ui/primitives';
 import { useAppTheme } from '@/ui/theme';
 import { useSync } from '@/sync/use-sync';
@@ -25,7 +27,8 @@ export default function MoreScreen() {
   const styles = useMoreStyles();
   const { mode, toggleMode } = useAppTheme();
   const { clearOffline, lockDelay, session, setLockDelay, update } = useSession();
-  const { activeWorkspace, resetToOnline } = useWorkspace();
+  const { activeWorkspace, db, resetToOnline } = useWorkspace();
+  const { reload } = useWorkspaceData();
   const { lastSyncFailed, syncNow } = useSync();
   const router = useRouter();
   const [profile, setProfile] = useState<MobileProfile | null>(null);
@@ -54,6 +57,7 @@ export default function MoreScreen() {
     {profileState.displayedProfile?.hasPassword && activeWorkspace === 'online' ? <PasswordCard {...passwordState} /> : null}
     <ThemeCard mode={mode === 'dark' ? 'dark' : 'light'} toggleMode={toggleMode} />
     <CurrencyCard activeWorkspace={activeWorkspace} {...currencyState} />
+    <BackupCard activeSession={getActiveSession} activeWorkspace={activeWorkspace} db={db} reload={reload} syncNow={syncNow} />
     <AppLockCard lockDelay={lockDelay} setLockDelay={setLockDelay} />
     {activeWorkspace === 'online' ? <SyncCard lastSyncFailed={lastSyncFailed} syncNow={syncNow} /> : null}
     <SignOutSection activeWorkspace={activeWorkspace} logout={logout} />
